@@ -1,16 +1,24 @@
-# ============================================
-# app.js - 主应用控制器
-# ============================================
-
-app_js = '''// ==================== 纪年·守望者 - 主应用控制器 ====================
-
 const GameApp = {
   // ---------- 初始化 ----------
   init: function() {
     // 检查是否有存档
-    if (GameState.hasSave()) {
-      document.getElementById('btn-continue').style.display = 'inline-block';
+    const hasSave = GameState.hasSave();
+    const savePanel = document.getElementById('save-panel');
+    const createPanel = document.getElementById('create-panel');
+    const gamePanel = document.getElementById('game-panel');
+    const btnContinue = document.getElementById('btn-continue');
+
+    // 确保面板状态正确
+    if (savePanel) savePanel.classList.remove('hidden');
+    if (createPanel) createPanel.classList.add('hidden');
+    if (gamePanel) gamePanel.classList.add('hidden');
+
+    // 显示/隐藏继续按钮
+    if (btnContinue) {
+      btnContinue.style.display = hasSave ? 'inline-block' : 'none';
     }
+
+    console.log('GameApp initialized. Has save:', hasSave);
   },
 
   // ---------- 新游戏 ----------
@@ -21,14 +29,18 @@ const GameApp = {
     }
     document.getElementById('save-panel').classList.add('hidden');
     document.getElementById('create-panel').classList.remove('hidden');
+    document.getElementById('game-panel').classList.add('hidden');
   },
 
   // ---------- 创建角色 ----------
   createCharacter: function() {
-    const name = document.getElementById('player-name').value.trim() || '酒馆少年';
+    const nameInput = document.getElementById('player-name');
+    const name = nameInput ? nameInput.value.trim() : '酒馆少年';
+    
     GameState.initNew(name);
 
     document.getElementById('create-panel').classList.add('hidden');
+    document.getElementById('save-panel').classList.add('hidden');
     document.getElementById('game-panel').classList.remove('hidden');
 
     log('<b>' + name + '</b> 锁上酒馆的门，背起父亲的旧短剑，踏上了旅程。', 'narrative');
@@ -52,6 +64,7 @@ const GameApp = {
     }
 
     document.getElementById('save-panel').classList.add('hidden');
+    document.getElementById('create-panel').classList.add('hidden');
     document.getElementById('game-panel').classList.remove('hidden');
 
     log('欢迎回来，' + data.player.name, 'narrative');
@@ -83,6 +96,7 @@ const GameApp = {
     reader.onload = function(e) {
       if (GameState.importSave(e.target.result)) {
         document.getElementById('save-panel').classList.add('hidden');
+        document.getElementById('create-panel').classList.add('hidden');
         document.getElementById('game-panel').classList.remove('hidden');
         UIRenderer.renderAll();
         GameState.startAutoSave();
@@ -99,7 +113,8 @@ const GameApp = {
     }
     if (!confirm('确定要删除存档吗？此操作不可恢复！')) return;
     GameState.deleteSave();
-    document.getElementById('btn-continue').style.display = 'none';
+    const btnContinue = document.getElementById('btn-continue');
+    if (btnContinue) btnContinue.style.display = 'none';
     log('存档已删除', 'system');
   }
 };
