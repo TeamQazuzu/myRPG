@@ -1,3 +1,4 @@
+// ==================== 纪年·守望者 - 战斗系统 ====================
 
 const CombatSystem = {
   inCombat: false,
@@ -229,7 +230,7 @@ const CombatSystem = {
 
   // ---------- 玩家被击败 ----------
   onPlayerDefeated: function(enemy) {
-    p = GameState.data.player;
+    const p = GameState.data.player;
     p.hp = 0;
 
     if (enemy.isGatekeeper) {
