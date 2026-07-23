@@ -1,44 +1,203 @@
-<!DOCTYPE html>
+# ============================================
+# index.html - 主入口页面
+# ============================================
+
+index_html = '''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chronicle Keeper - 我的RPG游戏</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #1a1a2e;
-            color: #eee;
-            font-family: 'Microsoft YaHei', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-        }
-        h1 { color: #e94560; margin-bottom: 10px; }
-        .subtitle { color: #888; margin-bottom: 40px; }
-        .start-btn {
-            padding: 15px 50px;
-            font-size: 20px;
-            background: #e94560;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            text-decoration: none;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .start-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>纪年·守望者</title>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <h1>⚔️ Chronicle Keeper</h1>
-    <p class="subtitle">welcome to my fantasy world</p>
-    <a href="chronicle_keeper_v0.2.html" class="start-btn">开始游戏</a>
+
+<!-- 标题 -->
+<h1>🗡️ 纪年·守望者</h1>
+<div class="subtitle">v0.3 · 灰烟村</div>
+
+<!-- 存档管理 -->
+<div id="save-panel" class="panel">
+  <h2>📁 存档</h2>
+  <div id="save-buttons" style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button class="btn btn-success" onclick="GameApp.newGame()">🎮 新游戏</button>
+    <button class="btn" id="btn-continue" onclick="GameApp.continueGame()" style="display:none;">📂 继续游戏</button>
+    <button class="btn" onclick="GameApp.exportSave()">💾 导出存档</button>
+    <button class="btn" onclick="GameApp.importSavePrompt()">📥 导入存档</button>
+    <button class="btn btn-danger" onclick="GameApp.deleteSavePrompt()">🗑️ 删除存档</button>
+  </div>
+  <input type="file" id="import-file" style="display:none;" accept=".json" onchange="GameApp.importSaveFile(event)">
+</div>
+
+<!-- 角色创建 -->
+<div id="create-panel" class="panel hidden">
+  <h2>🎭 创建角色</h2>
+  <p class="small">"故事开始之前，你得先告诉我是谁。"</p>
+  <div style="margin:12px 0;">
+    <label>你的名字：</label>
+    <input id="player-name" type="text" value="酒馆少年" maxlength="8"
+      style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px;">
+  </div>
+  <p class="small">你是酒馆老板的儿子。你父亲叫埃德蒙，母亲叫莉娜。你十六岁那年他们去世了。</p>
+  <p class="small">这是第五纪元·守望之年。你十九岁了。</p>
+  <div class="center" style="margin-top:12px;">
+    <button class="btn btn-success" onclick="GameApp.createCharacter()">✨ 开始旅程</button>
+  </div>
+</div>
+
+<!-- 主游戏面板 -->
+<div id="game-panel" class="hidden">
+
+  <!-- 场景面板 -->
+  <div class="panel">
+    <h2>🗺️ <span id="scene-name">酒馆</span></h2>
+    <p id="scene-desc" class="small">你家的酒馆。艾琳常来帮忙。</p>
+    <div id="scene-exits" style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;"></div>
+    <div id="scene-interact" style="margin-top:8px;"></div>
+    <div id="scene-npcs"></div>
+  </div>
+
+  <!-- 战斗面板（战斗中显示） -->
+  <div id="combat-panel" class="hidden"></div>
+
+  <!-- 角色状态 -->
+  <div class="panel">
+    <h2>👤 <span id="char-name"></span> <span class="small">Lv.<span id="char-lvl"></span></span></h2>
+    <div class="flex-row" style="justify-content:space-between;">
+      <div style="flex:1;">
+        <div class="stat-row"><span class="stat-name">❤️ 生命</span><span class="stat-val"><span id="hp-val"></span>/<span id="max-hp-val"></span></span></div>
+        <div class="hp-bar"><div class="hp-fill" id="hp-bar" style="width:100%"></div></div>
+        <div class="stat-row" style="margin-top:6px;"><span class="stat-name">💧 法力</span><span class="stat-val"><span id="mp-val"></span>/<span id="max-mp-val"></span></span></div>
+        <div class="mp-bar"><div class="mp-fill" id="mp-bar" style="width:100%"></div></div>
+      </div>
+      <div style="flex:1;margin-left:20px;">
+        <div class="stat-row"><span class="stat-name">💪 力量</span><span class="stat-val" id="attr-str"></span></div>
+        <div class="stat-row"><span class="stat-name">⚡ 敏捷</span><span class="stat-val" id="attr-agi"></span></div>
+        <div class="stat-row"><span class="stat-name">🔮 智力</span><span class="stat-val" id="attr-int"></span></div>
+        <div class="stat-row"><span class="stat-name">🛡️ 体质</span><span class="stat-val" id="attr-vit"></span></div>
+        <div class="stat-row"><span class="stat-name">🗿 坚韧</span><span class="stat-val" id="attr-ten"></span></div>
+        <div class="stat-row"><span class="stat-name">✨ 精神</span><span class="stat-val" id="attr-spi"></span></div>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:0.8rem;color:var(--text2);">
+      物理攻击: <span id="stat-patk" style="color:var(--accent)"></span> |
+      法术攻击: <span id="stat-matk" style="color:var(--purple)"></span> |
+      物理护甲: <span id="stat-pdef" style="color:var(--green)"></span> |
+      法术护甲: <span id="stat-mdef" style="color:var(--green)"></span> |
+      命中: <span id="stat-hit" style="color:var(--yellow)"></span> |
+      闪避: <span id="stat-dodge" style="color:var(--yellow)"></span> |
+      暴击: <span id="stat-crit" style="color:var(--red)"></span>%
+    </div>
+  </div>
+
+  <!-- 装备 -->
+  <div class="panel">
+    <h2>⚔️ 装备</h2>
+    <div id="equipment-list"></div>
+  </div>
+
+  <!-- 背包系统 -->
+  <div class="panel">
+    <div style="display:flex;gap:4px;margin-bottom:10px;">
+      <button class="tab-btn active" onclick="UIRenderer.switchTab('inventory')" id="tab-inventory">🎒 背包</button>
+      <button class="tab-btn" onclick="UIRenderer.switchTab('storage')" id="tab-storage">🏛️ 仓库</button>
+      <button class="tab-btn" onclick="UIRenderer.switchTab('forge')" id="tab-forge">🔨 锻造</button>
+      <button class="tab-btn" onclick="UIRenderer.switchTab('enchant')" id="tab-enchant">✨ 附魔</button>
+      <button class="tab-btn" onclick="UIRenderer.switchTab('socket')" id="tab-socket">💎 镶嵌</button>
+    </div>
+
+    <div id="content-inventory" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span class="small">📦 <span id="inv-count">0</span>/<span id="inv-cap">20</span>格 | 💰 <span id="inv-gold">0</span>金币</span>
+        <div style="display:flex;gap:4px;">
+          <select id="filter-quality" onchange="UIRenderer.renderInventory()">
+            <option value="">全部品质</option>
+            <option value="white">⚪ 普通</option>
+            <option value="green">🟢 优秀</option>
+            <option value="blue">🔵 精良</option>
+            <option value="purple">🟣 史诗</option>
+            <option value="orange">🟠 传说</option>
+            <option value="red">🔴 神话</option>
+          </select>
+          <select id="filter-type" onchange="UIRenderer.renderInventory()">
+            <option value="">全部类型</option>
+            <option value="equipment">⚔️ 装备</option>
+            <option value="material">📦 材料</option>
+            <option value="consumable">🧪 消耗品</option>
+          </select>
+          <select id="sort-mode" onchange="UIRenderer.renderInventory()">
+            <option value="default">默认</option>
+            <option value="quality">品质</option>
+            <option value="name">名称</option>
+            <option value="level">等级</option>
+          </select>
+          <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="document.getElementById('filter-quality').value='';document.getElementById('filter-type').value='';UIRenderer.renderInventory();">清除</button>
+        </div>
+      </div>
+      <div id="item-grid" class="item-grid"></div>
+      <div id="item-detail" class="detail-box hidden"></div>
+    </div>
+
+    <div id="content-storage" class="tab-content hidden">
+      <div class="small" style="margin-bottom:8px;">🏛️ 仓库 <span id="storage-count">0</span>/<span id="storage-cap">50</span>格</div>
+      <div id="storage-grid" class="item-grid"></div>
+      <div id="storage-detail" class="detail-box hidden"></div>
+    </div>
+
+    <div id="content-forge" class="tab-content hidden">
+      <div class="small" style="margin-bottom:8px;">🔨 选择装备升级品质（词条将重随机）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div class="small" style="margin-bottom:6px;">可锻造装备:</div>
+          <div id="forge-list" style="max-height:250px;overflow-y:auto;"></div>
+        </div>
+        <div id="forge-detail"></div>
+      </div>
+    </div>
+
+    <div id="content-enchant" class="tab-content hidden">
+      <div class="small" style="margin-bottom:8px;">✨ 消耗精华随机附加属性（每件装备限1条）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div class="small" style="margin-bottom:6px;">选择装备:</div>
+          <div id="enchant-list" style="max-height:250px;overflow-y:auto;"></div>
+        </div>
+        <div id="enchant-detail"></div>
+      </div>
+    </div>
+
+    <div id="content-socket" class="tab-content hidden">
+      <div class="small" style="margin-bottom:8px;">💎 镶嵌宝石/符文，3孔装备可激活符文之语</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div class="small" style="margin-bottom:6px;">带孔装备:</div>
+          <div id="socket-equip-list" style="max-height:150px;overflow-y:auto;"></div>
+          <div class="small" style="margin:10px 0 6px;">可用宝石:</div>
+          <div id="socket-gem-list" style="max-height:120px;overflow-y:auto;"></div>
+        </div>
+        <div id="socket-detail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 日志 -->
+  <div class="panel">
+    <h2>📜 旅程记录</h2>
+    <div id="game-log" class="log"></div>
+  </div>
+
+</div>
+
+<!-- 脚本加载 -->
+<script src="core/data.js"></script>
+<script src="core/utils.js"></script>
+<script src="core/state.js"></script>
+<script src="systems/inventory.js"></script>
+<script src="systems/equipment.js"></script>
+<script src="systems/scene.js"></script>
+<script src="systems/combat.js"></script>
+<script src="ui/renderer.js"></script>
+<script src="app.js"></script>
+
 </body>
 </html>
