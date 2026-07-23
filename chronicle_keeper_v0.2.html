@@ -202,6 +202,7 @@
     margin-top: 8px;
   }
 </style>
+<base target="_blank">
 </head>
 <body>
 
@@ -805,7 +806,7 @@ function updateUI() {
     equipHtml += '<div class="equip-slot">';
     equipHtml += '<span class="slot-name">' + SLOTS[slot] + '</span>';
     if (item) {
-      equipHtml += '<span class="slot-item" style="color:' + getQC(item.quality) + '" onclick="unequipItem('' + slot + '')">' + item.name + '</span>';
+      equipHtml += '<span class="slot-item" style="color:' + getQC(item.quality) + '" onclick="unequipItem(\'' + slot + '\')">' + item.name + '</span>';
     } else {
       equipHtml += '<span class="slot-empty">（空）</span>';
     }
