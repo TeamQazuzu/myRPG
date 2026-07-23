@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>纪年·守望者 - 背包系统测试 v0.2</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --bg2: #16213e;
+    --bg3: #0f3460;
+    --accent: #e94560;
+    --accent2: #ff6b6b;
+    --text: #eee;
+    --text2: #aaa;
+    --text3: #666;
+    --green: #4ecdc4;
+    --yellow: #f7b731;
+    --purple: #a55eea;
+    --orange: #fa8231;
+    --red: #eb3b5a;
+    --border: #2d3436;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+  }
+  h1 { color: var(--accent); margin-bottom: 10px; font-size: 1.6rem; }
+  h2 { color: var(--yellow); margin: 15px 0 8px; font-size: 1.1rem; }
+  .subtitle { color: var(--text2); font-size: 0.85rem; margin-bottom: 20px; }
+  .panel {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin: 8px 0;
+    width: 100%;
+    max-width: 700px;
+  }
+  .btn {
+    background: var(--bg3);
+    color: var(--text);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin: 3px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    display: inline-block;
+  }
+  .btn:hover { background: var(--accent); color: #fff; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--text3); }
+  .btn-danger { border-color: var(--red); }
+  .btn-danger:hover { background: var(--red); }
+  .btn-success { border-color: var(--green); }
+  .btn-success:hover { background: var(--green); color: #1a1a2e; }
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-name { color: var(--text2); }
+  .stat-val { color: var(--green); font-weight: bold; }
+  .hp-bar, .mp-bar {
+    height: 8px;
+    border-radius: 4px;
+    margin-top: 2px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .hp-fill { height: 100%; background: linear-gradient(90deg, var(--red), var(--accent)); transition: width 0.3s; }
+  .mp-fill { height: 100%; background: linear-gradient(90deg, var(--bg3), var(--purple)); transition: width 0.3s; }
+  .log {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    border: 1px solid var(--border);
+  }
+  .log-entry { margin: 3px 0; padding: 2px 0; }
+  .log-damage { color: var(--red); }
+  .log-heal { color: var(--green); }
+  .log-loot { color: var(--yellow); }
+  .log-info { color: var(--text2); }
+  .log-narrative { color: #c8a2c8; font-style: italic; }
+  .log-system { color: var(--purple); }
+  .item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    margin: 2px;
+    font-size: 0.8rem;
+    border: 1px solid;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .item:hover { transform: translateY(-1px); }
+  .item-white { color: #ccc; border-color: #666; background: #2a2a3e; }
+  .item-green { color: #4ecdc4; border-color: #4ecdc4; background: #1a2e2e; }
+  .item-blue { color: #54a0ff; border-color: #54a0ff; background: #1a1e3e; }
+  .item-purple { color: #a55eea; border-color: #a55eea; background: #2a1a3e; }
+  .item-orange { color: #fa8231; border-color: #fa8231; background: #3e2a1a; }
+  .item-red { color: #eb3b5a; border-color: #eb3b5a; background: #3e1a2a; }
+  .equip-slot {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    margin: 2px 0;
+    background: var(--bg);
+    border-radius: 6px;
+    font-size: 0.85rem;
+  }
+  .equip-slot .slot-name { color: var(--text3); }
+  .equip-slot .slot-item { color: var(--yellow); cursor: pointer; }
+  .equip-slot .slot-item:hover { text-decoration: underline; }
+  .equip-slot .slot-empty { color: var(--text3); font-style: italic; }
+  .hidden { display: none !important; }
+  .flex-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .center { text-align: center; }
+  .small { font-size: 0.75rem; color: var(--text3); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.4s ease; }
+  .tab-btn {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 6px 12px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font-size: 0.8rem;
+    border-bottom: none;
+  }
+  .tab-btn.active {
+    background: var(--bg2);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  .tab-content {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 0 8px 8px 8px;
+    padding: 12px;
+  }
+  select {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
+  .item-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 6px;
+    min-height: 80px;
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 4px;
+  }
+  .detail-box {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    margin-top: 10px;
+  }
+  .affix-line {
+    padding: 3px 8px;
+    margin: 2px 0;
+    background: var(--bg2);
+    border-radius: 4px;
+    font-size: 0.78rem;
+  }
+  .compare-box {
+    background: linear-gradient(135deg, #1a2e1a, #1a1a2e);
+    border: 1px solid var(--green);
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 8px;
+  }
+  .runeword-box {
+    background: linear-gradient(135deg, #3e2a1a, #2a1a3e);
+    border: 1px solid var(--orange);
+    border-radius: 8px;
+    padding: 8px;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🗡️ 纪年·守望者</h1>
+<div class="subtitle">背包系统测试 v0.2 · 装备/材料/镶嵌/附魔/锻造</div>
+
+<!-- 角色创建 -->
+<div id="create-panel" class="panel">
+  <h2>🎭 创建角色</h2>
+  <p class="small">"故事开始之前，你得先告诉我是谁。"</p>
+  <div style="margin: 12px 0;">
+    <label>你的名字：</label>
+    <input id="player-name" type="text" value="酒馆少年" maxlength="8" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:160px;">
+  </div>
+  <p class="small">你是酒馆老板的儿子。你父亲叫埃德蒙，母亲叫莉娜。你十六岁那年他们去世了。</p>
+  <p class="small">这是第五纪元·守望之年。你十九岁了。</p>
+  <div class="center" style="margin-top:12px;">
+    <button class="btn btn-success" onclick="createCharacter()">✨ 开始旅程</button>
+  </div>
+</div>
+
+<!-- 主游戏面板 -->
+<div id="game-panel" class="hidden">
+
+  <!-- 角色状态 -->
+  <div class="panel">
+    <h2>👤 <span id="char-name"></span> <span class="small">Lv.<span id="char-lvl"></span></span></h2>
+    <div class="flex-row" style="justify-content:space-between;">
+      <div style="flex:1;">
+        <div class="stat-row"><span class="stat-name">❤️ 生命</span><span class="stat-val"><span id="hp-val"></span>/<span id="max-hp-val"></span></span></div>
+        <div class="hp-bar"><div class="hp-fill" id="hp-bar" style="width:100%"></div></div>
+        <div class="stat-row" style="margin-top:6px;"><span class="stat-name">💧 法力</span><span class="stat-val"><span id="mp-val"></span>/<span id="max-mp-val"></span></span></div>
+        <div class="mp-bar"><div class="mp-fill" id="mp-bar" style="width:100%"></div></div>
+      </div>
+      <div style="flex:1;margin-left:20px;">
+        <div class="stat-row"><span class="stat-name">💪 力量</span><span class="stat-val" id="attr-str"></span></div>
+        <div class="stat-row"><span class="stat-name">⚡ 敏捷</span><span class="stat-val" id="attr-agi"></span></div>
+        <div class="stat-row"><span class="stat-name">🔮 智力</span><span class="stat-val" id="attr-int"></span></div>
+        <div class="stat-row"><span class="stat-name">🛡️ 体质</span><span class="stat-val" id="attr-vit"></span></div>
+        <div class="stat-row"><span class="stat-name">🗿 坚韧</span><span class="stat-val" id="attr-ten"></span></div>
+        <div class="stat-row"><span class="stat-name">✨ 精神</span><span class="stat-val" id="attr-spi"></span></div>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:0.8rem;color:var(--text2);">
+      物理攻击: <span id="stat-patk" style="color:var(--accent)"></span> | 
+      法术攻击: <span id="stat-matk" style="color:var(--purple)"></span> | 
+      物理护甲: <span id="stat-pdef" style="color:var(--green)"></span> | 
+      法术护甲: <span id="stat-mdef" style="color:var(--green)"></span> | 
+      命中: <span id="stat-hit" style="color:var(--yellow)"></span> | 
+      闪避: <span id="stat-dodge" style="color:var(--yellow)"></span> | 
+      暴击: <span id="stat-crit" style="color:var(--red)"></span>%
+    </div>
+  </div>
+
+  <!-- 装备 -->
+  <div class="panel">
+    <h2>⚔️ 装备</h2>
+    <div id="equipment-list"></div>
+  </div>
+
+  <!-- 背包系统 -->
+  <div class="panel">
+    <div style="display:flex;gap:4px;margin-bottom:10px;">
+      <button class="tab-btn active" onclick="switchTab('inventory')" id="tab-inventory">🎒 背包</button>
+      <button class="tab-btn" onclick="switchTab('storage')" id="tab-storage">🏛️ 仓库</button>
+      <button class="tab-btn" onclick="switchTab('forge')" id="tab-forge">🔨 锻造</button>
+      <button class="tab-btn" onclick="switchTab('enchant')" id="tab-enchant">✨ 附魔</button>
+      <button class="tab-btn" onclick="switchTab('socket')" id="tab-socket">💎 镶嵌</button>
+    </div>
+
+    <div id="content-inventory" class="tab-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span class="small">📦 <span id="inv-count">0</span>/<span id="inv-cap">20</span>格 | 💰 <span id="inv-gold">0</span>金币</span>
+        <div style="display:flex;gap:4px;">
+          <select id="filter-quality" onchange="applyFilters()">
+            <option value="">全部品质</option>
+            <option value="white">⚪ 普通</option>
+            <option value="green">🟢 优秀</option>
+            <option value="blue">🔵 精良</option>
+            <option value="purple">🟣 史诗</option>
+            <option value="orange">🟠 传说</option>
+            <option value="red">🔴 神话</option>
+          </select>
+          <select id="filter-type" onchange="applyFilters()">
+            <option value="">全部类型</option>
+            <option value="equipment">⚔️ 装备</option>
+            <option value="material">📦 材料</option>
+            <option value="consumable">🧪 消耗品</option>
+          </select>
+          <select id="sort-mode" onchange="applySort()">
+            <option value="default">默认</option>
+            <option value="quality">品质</option>
+            <option value="name">名称</option>
+            <option value="level">等级</option>
+          </select>
+          <button class="btn" style="padding:4px 8px;font-size:0.75rem;" onclick="clearFilters()">清除</button>
+        </div>
+      </div>
+      <div id="item-grid" class="item-grid"></div>
+      <div id="item-detail" class="detail-box hidden"></div>
+    </div>
+
+    <div id="content-storage" class="tab-content hidden">
+      <div class="small" style="margin-bottom:8px;">🏛️ 仓库 <span id="storage-count">0</span>/<span id="storage-cap">50</span>格</div>
+      <div id="storage-grid" class="item-grid"></div>
+      <div id="storage-detail" class="detail-box hidden"></div>
+    </div>
+
+    <div id="content-forge" class="tab-content hidden">
+      <div class="small" style="margin-bottom:8px;">🔨 选择装备升级品质（词条将重随机）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div class="small" style="margin-bottom:6px;">可锻造装备:</div>
+          <div id="forge-list" style="max-height:250px;overflow-y:auto;"></div>
+        </div>
+        <div id="forge-detail"></div>
+      </div>
+    </div>
+
+    <div id="content-enchant" class="tab-content hidden">
+      <div class="small" style="margin-bottom:8px;">✨ 消耗精华随机附加属性（每件装备限1条）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div class="small" style="margin-bottom:6px;">选择装备:</div>
+          <div id="enchant-list" style="max-height:250px;overflow-y:auto;"></div>
+        </div>
+        <div id="enchant-detail"></div>
+      </div>
+    </div>
+
+    <div id="content-socket" class="tab-content hidden">
+      <div class="small" style="margin-bottom:8px;">💎 镶嵌宝石/符文，3孔装备可激活符文之语</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div class="small" style="margin-bottom:6px;">带孔装备:</div>
+          <div id="socket-equip-list" style="max-height:150px;overflow-y:auto;"></div>
+          <div class="small" style="margin:10px 0 6px;">可用宝石:</div>
+          <div id="socket-gem-list" style="max-height:120px;overflow-y:auto;"></div>
+        </div>
+        <div id="socket-detail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 日志 -->
+  <div class="panel">
+    <h2>📜 旅程记录</h2>
+    <div id="game-log" class="log"></div>
+  </div>
+
+</div>
+
+<script>
+
+// ==================== 工具函数 ====================
+function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function randFloat() { return Math.random(); }
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+function log(msg, type) {
+  const entry = document.createElement('div');
+  entry.className = 'log-entry log-' + (type || 'info') + ' fade-in';
+  entry.innerHTML = msg;
+  const logEl = document.getElementById('game-log');
+  if (logEl) {
+    logEl.appendChild(entry);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
+const QUALITY_ORDER = { white: 0, green: 1, blue: 2, purple: 3, orange: 4, red: 5 };
+
+function getQualityColor(q) {
+  return { white: '#cccccc', green: '#4ecdc4', blue: '#54a0ff', purple: '#a55eea', orange: '#fa8231', red: '#eb3b5a' }[q] || '#ccc';
+}
+function getQualityClass(q) { return 'item-' + q; }
+function getQualityName(q) {
+  return { white: '普通', green: '优秀', blue: '精良', purple: '史诗', orange: '传说', red: '神话' }[q] || '';
+}
+function getMaxQuality(level) {
+  if (level <= 20) return 'blue';
+  if (level <= 40) return 'purple';
+  if (level <= 60) return 'orange';
+  return 'red';
+}
+
+// ==================== 简化版完整游戏 ====================
+
+// 工具函数
+function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function randFloat() { return Math.random(); }
+
+function log(msg, type) {
+  const entry = document.createElement('div');
+  entry.className = 'log-entry log-' + (type || 'info') + ' fade-in';
+  entry.innerHTML = msg;
+  const logEl = document.getElementById('game-log');
+  if (logEl) {
+    logEl.appendChild(entry);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+}
+
+const Q_ORDER = { white: 0, green: 1, blue: 2, purple: 3, orange: 4, red: 5 };
+const Q_COLOR = { white: '#cccccc', green: '#4ecdc4', blue: '#54a0ff', purple: '#a55eea', orange: '#fa8231', red: '#eb3b5a' };
+const Q_NAME = { white: '普通', green: '优秀', blue: '精良', purple: '史诗', orange: '传说', red: '神话' };
+
+function getQC(q) { return Q_COLOR[q] || '#ccc'; }
+function getQN(q) { return Q_NAME[q] || ''; }
+function getMaxQ(lv) { if (lv <= 20) return 'blue'; if (lv <= 40) return 'purple'; if (lv <= 60) return 'orange'; return 'red'; }
+
+// 150条词条（简化定义，只保留关键信息）
+const AFFIXES = [
+  {n:'锋锐',e:'物理攻击+2%',q:'green'},{n:'重击',e:'物理攻击+4%',q:'blue'},{n:'碎甲',e:'物理攻击+6%',q:'purple'},{n:'裂刃',e:'物理攻击+8%',q:'orange'},{n:'断钢',e:'物理攻击+10%',q:'red'},
+  {n:'精准',e:'命中率+2%',q:'green'},{n:'鹰眼',e:'命中率+4%',q:'blue'},{n:'凝视',e:'命中率+6%',q:'purple'},{n:'破绽',e:'暴击率+2%',q:'blue'},{n:'致命',e:'暴击率+4%',q:'purple'},
+  {n:'一击',e:'暴击率+6%',q:'orange'},{n:'狂暴',e:'暴击伤害+10%',q:'purple'},{n:'毁灭',e:'暴击伤害+20%',q:'orange'},{n:'法术之力',e:'法术攻击+2%',q:'green'},{n:'法术涌动',e:'法术攻击+4%',q:'blue'},
+  {n:'法术专注',e:'法术攻击+6%',q:'purple'},{n:'法术穿透',e:'法术攻击+8%',q:'orange'},{n:'法术湮灭',e:'法术攻击+10%',q:'red'},{n:'火焰亲和',e:'火焰伤害+5%',q:'blue'},{n:'寒冰亲和',e:'冰霜伤害+5%',q:'blue'},
+  {n:'雷电亲和',e:'雷电伤害+5%',q:'blue'},{n:'暗影亲和',e:'暗影伤害+5%',q:'blue'},{n:'奥术亲和',e:'奥术伤害+5%',q:'blue'},{n:'箭矢+1',e:'额外攻击1目标',q:'blue'},{n:'箭矢+2',e:'额外攻击2目标',q:'orange'},
+  {n:'穿透射击',e:'无视15%护甲',q:'purple'},{n:'猛力挥击',e:'10%溅射伤害',q:'blue'},{n:'连击',e:'15%概率二次攻击',q:'purple'},{n:'斩杀',e:'低血量+20%伤',q:'orange'},{n:'破法',e:'对高法甲+15%伤',q:'purple'},
+  {n:'坚固',e:'物理护甲+5%',q:'green'},{n:'铁壁',e:'物理护甲+10%',q:'blue'},{n:'钢铸',e:'物理护甲+15%',q:'purple'},{n:'堡垒',e:'物理护甲+20%',q:'orange'},{n:'不朽',e:'物理护甲+25%',q:'red'},
+  {n:'抗魔',e:'法术护甲+5%',q:'green'},{n:'魔障',e:'法术护甲+10%',q:'blue'},{n:'镜面',e:'法术护甲+15%',q:'purple'},{n:'虚无',e:'法术护甲+20%',q:'orange'},{n:'冥思',e:'法术护甲+25%',q:'red'},
+  {n:'生命',e:'生命上限+5%',q:'green'},{n:'生机',e:'生命上限+10%',q:'blue'},{n:'蓬勃',e:'生命上限+15%',q:'purple'},{n:'不息',e:'生命上限+20%',q:'orange'},{n:'永恒',e:'生命上限+25%',q:'red'},
+  {n:'格挡',e:'格挡值+5',q:'green'},{n:'盾墙',e:'格挡值+10',q:'blue'},{n:'铁门',e:'格挡值+15',q:'purple'},{n:'壁垒',e:'格挡值+20',q:'orange'},{n:'护盾大师',e:'格挡减免+5%',q:'purple'},
+  {n:'韧性',e:'暴击抵抗+5%',q:'blue'},{n:'坚毅',e:'暴击抵抗+10%',q:'purple'},{n:'不屈',e:'暴击抵抗+15%',q:'orange'},{n:'回复',e:'生命恢复+2/回合',q:'green'},{n:'再生',e:'生命恢复+5/回合',q:'blue'},
+  {n:'愈合',e:'生命恢复+10/回合',q:'purple'},{n:'守护',e:'全护甲+5%',q:'blue'},{n:'圣盾',e:'全护甲+10%',q:'purple'},{n:'庇护',e:'受击8%获护盾',q:'orange'},{n:'反伤',e:'反弹5%伤害',q:'purple'},
+  {n:'经验',e:'经验获取+3%',q:'green'},{n:'勤学',e:'经验获取+6%',q:'blue'},{n:'博闻',e:'经验获取+10%',q:'purple'},{n:'富足',e:'金币获取+5%',q:'green'},{n:'贪婪',e:'金币获取+10%',q:'blue'},
+  {n:'聚财',e:'金币获取+20%',q:'purple'},{n:'效率',e:'采集速度+10%',q:'green'},{n:'疾行',e:'采集速度+20%',q:'blue'},{n:'敏锐',e:'高品质材料+5%',q:'purple'},{n:'锻造之魂',e:'锻造成功率+2%',q:'blue'},
+  {n:'锻造之心',e:'锻造成功率+5%',q:'purple'},{n:'工匠',e:'稀有词条+5%',q:'orange'},{n:'附魔之触',e:'附魔品质+1',q:'purple'},{n:'附魔之眼',e:'附魔品质+1',q:'orange'},{n:'镶嵌之手',e:'宝石效果+10%',q:'blue'},
+  {n:'炼金之智',e:'药剂效果+10%',q:'blue'},{n:'药草亲和',e:'草药数量+20%',q:'green'},{n:'矿物亲和',e:'采矿数量+20%',q:'green'},{n:'木材亲和',e:'伐木数量+20%',q:'green'},{n:'坚韧之魂',e:'死亡经验损失-5%',q:'purple'},
+  {n:'顽强',e:'死亡经验损失-10%',q:'orange'},{n:'不灭',e:'硬核免死一次',q:'red'},{n:'复生',e:'首次归零恢复20%',q:'orange'},{n:'战友',e:'随从属性+5%',q:'blue'},{n:'领袖',e:'随从属性+10%',q:'purple'},
+  {n:'统帅',e:'随从属性+15%',q:'orange'},{n:'好感',e:'随从好感+10%',q:'green'},{n:'信赖',e:'随从好感+20%',q:'blue'},{n:'羁绊',e:'随从好感+30%',q:'purple'},{n:'守护之约',e:'随从保护+10%',q:'purple'},
+  {n:'灼烧',e:'攻击5%灼烧',q:'blue'},{n:'寒冰',e:'攻击5%冰冻',q:'blue'},{n:'麻痹',e:'攻击5%麻痹',q:'blue'},{n:'中毒',e:'攻击5%中毒',q:'blue'},{n:'暗影蚀',e:'攻击5%暗影腐蚀',q:'purple'},
+  {n:'火焰爆炸',e:'攻击8%火爆炸AOE',q:'orange'},{n:'冰霜新星',e:'受击8%冰新星',q:'orange'},{n:'连锁闪电',e:'攻击8%连锁闪电',q:'orange'},{n:'召唤骷髅',e:'击杀5%召骷髅',q:'orange'},{n:'生命偷取',e:'攻击恢复5%生命',q:'purple'},
+  {n:'法力偷取',e:'攻击恢复3%法力',q:'purple'},{n:'护盾生成',e:'开场获30护盾',q:'orange'},{n:'护盾强化',e:'护盾吸收+50%',q:'red'},{n:'疾风步',e:'闪避后+20%伤',q:'purple'},{n:'破釜沉舟',e:'低血+25%伤',q:'orange'},
+  {n:'绝境反击',e:'濒死+50%伤',q:'red'},{n:'战吼',e:'首击+30%伤',q:'blue'},{n:'嗜血',e:'击杀恢复15%',q:'purple'},{n:'处刑人',e:'低血必暴击',q:'orange'},{n:'无畏',e:'免疫恐惧',q:'purple'},
+  {n:'专注',e:'免疫沉默',q:'purple'},{n:'净化',e:'回合开始30%清负面',q:'orange'},{n:'回溯',e:'致命伤10%恢复50%',q:'red'},{n:'镜像',e:'攻击5%召镜像',q:'red'},{n:'时间缓流',e:'受击5%延迟目标',q:'orange'},
+  {n:'重力场',e:'攻击5%目标无法闪避',q:'purple'},{n:'虚弱诅咒',e:'攻击5%降目标攻击',q:'purple'},{n:'迟缓诅咒',e:'攻击5%降目标命中',q:'purple'},{n:'破甲诅咒',e:'攻击5%降目标护甲',q:'purple'},{n:'暗影步',e:'闪避立即反击',q:'orange'},
+  {n:'龙之怒',e:'攻击3%300%伤',q:'orange'},{n:'龙之鳞',e:'受击3%免疫',q:'orange'},{n:'龙之息',e:'开场50全体伤',q:'orange'},{n:'先祖之力',e:'全属性+3%',q:'orange'},{n:'先祖之魂',e:'全属性+5%',q:'red'},
+  {n:'传奇之力',e:'全伤害+8%',q:'red'},{n:'传奇之盾',e:'全抗性+8%',q:'red'},{n:'传奇之速',e:'行动优先+1',q:'red'},{n:'神佑',e:'每场免疫致命一次',q:'red'},{n:'神罚',e:'每场必暴击一次',q:'red'},
+  {n:'神速',e:'每场额外行动一次',q:'red'},{n:'堕落之血',e:'半血全属性+10%',q:'orange'},{n:'觉醒之魂',e:'满血伤害+15%',q:'orange'},{n:'寂静之刃',e:'对法职+25%伤',q:'orange'},{n:'破城之锤',e:'对坦克+25%伤',q:'orange'},
+  {n:'猎杀者',e:'对野兽+30%伤',q:'orange'},{n:'驱魔人',e:'对暗影+30%伤',q:'orange'},{n:'焚火者',e:'对火系+30%伤',q:'orange'},{n:'冰封之心',e:'攻击5%冻结2回合',q:'red'},{n:'暗影领域',e:'每回合5暗影AOE',q:'red'},
+  {n:'光之领域',e:'每回合恢复5生命',q:'red'},{n:'时间裂隙',e:'攻击3%跳过回合',q:'red'},{n:'空间撕裂',e:'攻击3%真实伤害',q:'red'},{n:'命运扭转',e:'死亡10%完全恢复',q:'red'},{n:'灵魂绑定',e:'与随从共享生命',q:'red'},
+  {n:'虚空行者',e:'闪避+15%生命-10%',q:'orange'},{n:'血誓者',e:'伤害+20%每回合-5血',q:'orange'},{n:'沉默者',e:'攻击5%沉默3回合',q:'red'},{n:'混沌之刃',e:'伤害80%-120%浮动',q:'orange'}
+];
+
+// 装备模板
+const E_TEMPLATES = {
+  weapon: [
+    {p:'生锈的',b:'短剑',min:1,max:10,patk:[8,15],matk:[0,2]},{p:'父亲的旧',b:'短剑',min:5,max:15,patk:[12,20],matk:[0,3]},
+    {p:'精钢',b:'长剑',min:10,max:25,patk:[18,30],matk:[0,5]},{p:'猎人之',b:'弓',min:8,max:20,patk:[15,25],matk:[0,2]},
+    {p:'学徒的',b:'法杖',min:10,max:25,patk:[3,8],matk:[15,28]},{p:'暗影',b:'匕首',min:15,max:30,patk:[20,35],matk:[2,8]}
+  ],
+  chest: [{p:'粗布',b:'背心',min:1,max:10,pdef:[3,8],mdef:[1,4]},{p:'皮制',b:'胸甲',min:8,max:20,pdef:[8,15],mdef:[3,8]},{p:'锁子',b:'甲',min:20,max:40,pdef:[18,30],mdef:[5,12]}],
+  helmet: [{p:'布质',b:'头巾',min:1,max:10,pdef:[1,4],mdef:[1,3]},{p:'皮制',b:'帽',min:5,max:20,pdef:[3,8],mdef:[2,6]},{p:'铁制',b:'头盔',min:20,max:45,pdef:[10,20],mdef:[3,10]}],
+  legs: [{p:'粗布',b:'裤子',min:1,max:10,pdef:[2,5],mdef:[1,3]},{p:'皮制',b:'护腿',min:8,max:25,pdef:[5,12],mdef:[2,6]}],
+  boots: [{p:'旧',b:'皮靴',min:1,max:10,pdef:[1,4],mdef:[0,2]},{p:'轻便',b:'皮靴',min:10,max:25,pdef:[4,10],mdef:[2,5]}],
+  gloves: [{p:'皮制',b:'手套',min:1,max:10,pdef:[1,3],mdef:[0,2]},{p:'铁制',b:'护手',min:15,max:35,pdef:[5,12],mdef:[2,6]}],
+  necklace: [{p:'铜制',b:'项链',min:10,max:30,pdef:[0,3],mdef:[3,10]},{p:'银制',b:'吊坠',min:25,max:50,pdef:[2,6],mdef:[8,18]}],
+  ring: [{p:'铁',b:'指环',min:5,max:20,pdef:[1,3],mdef:[1,3]},{p:'铜',b:'戒指',min:20,max:45,pdef:[3,8],mdef:[3,8]}],
+  offhand: [{p:'木制',b:'盾牌',min:5,max:20,pdef:[5,12],mdef:[2,6]},{p:'铁制',b:'圆盾',min:20,max:45,pdef:[15,28],mdef:[5,12]},{p:'法术',b:'卷轴',min:15,max:40,pdef:[0,3],matk:[10,20]}]
+};
+
+const SLOTS = {weapon:'主手',offhand:'副手',helmet:'头盔',chest:'胸甲',legs:'护腿',boots:'靴子',gloves:'护手',necklace:'项链',ring1:'戒指',ring2:'戒指'};
+const Q_MULTI = {white:1.0,green:1.15,blue:1.35,purple:1.6,orange:2.0,red:2.5};
+const Q_WEIGHTS = {green:40,blue:30,purple:20,orange:8,red:2};
+
+// 生成装备
+function genEquip(slot, lv, forcedQ) {
+  const ts = E_TEMPLATES[slot]; if(!ts) return null;
+  const valid = ts.filter(function(t){return lv>=t.min&&lv<=t.max});
+  const t = valid.length>0?valid[rand(0,valid.length-1)]:ts[ts.length-1];
+  let q = forcedQ;
+  if(!q){
+    const maxQ=getMaxQ(lv),maxV=Q_ORDER[maxQ];
+    const cands=Object.keys(Q_WEIGHTS).filter(function(k){return Q_ORDER[k]<=maxV});
+    const ws=cands.map(function(k){return Q_WEIGHTS[k]});
+    const tot=ws.reduce(function(a,b){return a+b},0);
+    let r=randFloat()*tot;
+    for(let i=0;i<cands.length;i++){r-=ws[i];if(r<=0){q=cands[i];break;}}
+    q=q||'white';
+  }
+  const ratio=Math.min(1,Math.max(0,(lv-t.min)/(t.max-t.min)));
+  const bp=t.patk?Math.floor((t.patk[0]+(t.patk[1]-t.patk[0])*ratio)*Q_MULTI[q]):0;
+  const bm=t.matk?Math.floor((t.matk[0]+(t.matk[1]-t.matk[0])*ratio)*Q_MULTI[q]):0;
+  const bpd=t.pdef?Math.floor((t.pdef[0]+(t.pdef[1]-t.pdef[0])*ratio)*Q_MULTI[q]):0;
+  const bmd=t.mdef?Math.floor((t.mdef[0]+(t.mdef[1]-t.mdef[0])*ratio)*Q_MULTI[q]):0;
+  const item={id:Date.now()+rand(0,99999),name:t.p+t.b,slot:slot,quality:q,level:lv,basePatk:bp,baseMatk:bm,basePdef:bpd,baseMdef:bmd,affixes:[],sockets:[],enchant:null,desc:'Lv.'+lv+' '+getQN(q)+SLOTS[slot],stackable:false,type:'equipment'};
+  const ac={white:0,green:rand(1,2),blue:rand(2,3),purple:rand(3,4),orange:rand(4,5),red:6};
+  const cnt=ac[q]||0;
+  if(cnt>0){
+    const used=new Set();
+    const pool=AFFIXES.filter(function(a){return Q_ORDER[a.q]<=Q_ORDER[getMaxQ(lv)]&&!used.has(a.n)});
+    for(let i=0;i<cnt&&pool.length>0;i++){
+      const idx=rand(0,pool.length-1);
+      item.affixes.push({n:pool[idx].n,e:pool[idx].e,q:pool[idx].q});
+      used.add(pool[idx].n);
+      pool.splice(idx,1);
+    }
+  }
+  const sc={white:0,green:0.1,blue:0.25,purple:0.4,orange:0.6,red:0.8};
+  for(let i=0;i<3;i++)if(randFloat()<(sc[q]||0))item.sockets.push({gem:null});
+  return item;
+}
+
+// 生成材料
+function genMat(cat,q){
+  const mats={herb:[{n:'野草药',q:'white',d:'普通草药',m:99},{n:'银叶草',q:'green',d:'微光叶子',m:99},{n:'龙血草',q:'blue',d:'龙血沾染',m:50}],
+    ore:[{n:'铜矿石',q:'white',d:'普通铜矿',m:99},{n:'铁矿石',q:'green',d:'好铁矿',m:99},{n:'秘银矿石',q:'blue',d:'银白光芒',m:50}],
+    gem:[{n:'碎裂红宝石',q:'white',d:'破碎碎片',m:99,g:'red'},{n:'红宝石',q:'green',d:'温暖光芒',m:99,g:'red'},{n:'蓝宝石',q:'green',d:'深邃如海',m:99,g:'blue'},{n:'绿宝石',q:'green',d:'翠绿欲滴',m:99,g:'green'},{n:'紫水晶',q:'blue',d:'神秘力量',m:50,g:'purple'},{n:'钻石',q:'purple',d:'纯净无瑕',m:50,g:'diamond'},{n:'琥珀',q:'blue',d:'远古昆虫',m:50,g:'amber'}],
+    rune:[{n:'火焰符文',q:'blue',d:'火焰印记',m:50,r:'fire'},{n:'冰霜符文',q:'blue',d:'冰霜印记',m:50,r:'ice'},{n:'雷电符文',q:'blue',d:'雷电印记',m:50,r:'lightning'},{n:'暗影符文',q:'purple',d:'暗影印记',m:50,r:'shadow'},{n:'奥术符文',q:'purple',d:'奥术印记',m:50,r:'arcane'}],
+    essence:[{n:'魔法精华',q:'green',d:'微弱魔力',m:99},{n:'奥术精华',q:'blue',d:'浓缩奥术',m:50},{n:'灵魂精华',q:'purple',d:'灵魂力量',m:50}]};
+  const pool=mats[cat]||[];
+  const t=q?pool.find(function(x){return x.q===q})||pool[0]:pool[rand(0,pool.length-1)];
+  return{id:Date.now()+rand(0,99999),name:t.n,type:'material',category:cat,quality:t.q,desc:t.d,stackable:true,stackCount:1,stackMax:t.m,gemType:t.g||null,runeType:t.r||null};
+}
+
+// 生成消耗品
+function genCon(cat,q){
+  const cons={potion_hp:[{n:'小型生命药水',q:'white',hp:30,d:'恢复30生命',m:20},{n:'生命药水',q:'green',hp:80,d:'恢复80生命',m:20},{n:'大型生命药水',q:'blue',hp:200,d:'恢复200生命',m:20}],
+    potion_mp:[{n:'小型法力药水',q:'white',mp:20,d:'恢复20法力',m:20},{n:'法力药水',q:'green',mp:50,d:'恢复50法力',m:20}],
+    buff:[{n:'力量药剂',q:'green',b:{s:'str',v:0.1},d:'力量+10%',m:10},{n:'敏捷药剂',q:'green',b:{s:'agi',v:0.1},d:'敏捷+10%',m:10}]};
+  const pool=cons[cat]||[];
+  const t=q?pool.find(function(x){return x.q===q})||pool[0]:pool[rand(0,pool.length-1)];
+  return{id:Date.now()+rand(0,99999),name:t.n,type:'consumable',category:cat,quality:t.q,desc:t.d,stackable:true,stackCount:1,stackMax:t.m,effect:{healHp:t.hp||0,healMp:t.mp||0,buff:t.b||null}};
+}
+
+// 符文之语
+const RUNEWORDS={
+  fury:{n:'怒火',c:['red','red','fire'],e:'攻击10%火焰爆炸'},
+  frost:{n:'冰霜',c:['blue','blue','ice'],e:'攻击10%冰冻目标'},
+  immortal:{n:'不朽',c:['amber','diamond','amber'],e:'低血获护盾'},
+  shadow:{n:'暗影',c:['green','purple','shadow'],e:'暴击恢复5%生命'},
+  thunder:{n:'雷霆',c:['blue','green','lightning'],e:'攻击10%连锁闪电'},
+  holyshield:{n:'圣盾',c:['diamond','amber','amber'],e:'受暴击减免50%'},
+  berserk:{n:'狂战',c:['red','red','green'],e:'半血伤害+20%'},
+  sage:{n:'智者',c:['purple','blue','arcane'],e:'施法15%不耗蓝'}
+};
+
+function checkRW(item){
+  if(!item.sockets||item.sockets.length<3)return null;
+  const gems=item.sockets.map(function(s){return s.gem}).filter(function(g){return g});
+  if(gems.length<3)return null;
+  const types=gems.map(function(g){return g.gemType});
+  for(var k in RUNEWORDS){var rw=RUNEWORDS[k];var match=true;for(var i=0;i<rw.c.length;i++)if(types[i]!==rw.c[i]){match=false;break;}if(match)return rw;}
+  return null;
+}
+
+// 装备对比
+function compareEq(eq,cand){
+  if(!eq)return{isBetter:true,diffs:[]};
+  if(!cand)return{isBetter:false,diffs:[]};
+  var diffs=[],score=0;
+  var stats=[['basePatk','物理攻击'],['baseMatk','法术攻击'],['basePdef','物理护甲'],['baseMdef','法术护甲']];
+  stats.forEach(function(s){var d=(cand[s[0]]||0)-(eq[s[0]]||0);if(d!==0){diffs.push({n:s[1],d:d,b:d>0});score+=d;}});
+  var ca=(cand.affixes||[]).length,ea=(eq.affixes||[]).length;if(ca!==ea)diffs.push({n:'词条数',d:ca-ea,b:ca>ea});
+  var cs=(cand.sockets||[]).length,es=(eq.sockets||[]).length;if(cs!==es)diffs.push({n:'镶嵌孔',d:cs-es,b:cs>es});
+  return{isBetter:score>0||ca>ea,diffs:diffs};
+}
+
+// 锻造
+function doForge(item){
+  var qo=['white','green','blue','purple','orange','red'];
+  var ci=qo.indexOf(item.quality);
+  if(ci>=qo.length-1)return{ok:false,msg:'已达最高品质'};
+  var nq=qo[ci+1];
+  var mq=getMaxQ(item.level);
+  if(Q_ORDER[nq]>Q_ORDER[mq])return{ok:false,msg:'当前等级段最高'+mq.toUpperCase()};
+  item.quality=nq;
+  var om=Q_MULTI[qo[ci]],nm=Q_MULTI[nq],r=nm/om;
+  if(item.basePatk)item.basePatk=Math.floor(item.basePatk*r);
+  if(item.baseMatk)item.baseMatk=Math.floor(item.baseMatk*r);
+  if(item.basePdef)item.basePdef=Math.floor(item.basePdef*r);
+  if(item.baseMdef)item.baseMdef=Math.floor(item.baseMdef*r);
+  var ac={white:0,green:rand(1,2),blue:rand(2,3),purple:rand(3,4),orange:rand(4,5),red:6};
+  var cnt=ac[nq]||0;
+  item.affixes=[];
+  if(cnt>0){
+    var used=new Set();
+    var pool=AFFIXES.filter(function(a){return Q_ORDER[a.q]<=Q_ORDER[getMaxQ(item.level)]&&!used.has(a.n)});
+    for(var i=0;i<cnt&&pool.length>0;i++){var idx=rand(0,pool.length-1);item.affixes.push({n:pool[idx].n,e:pool[idx].e,q:pool[idx].q});used.add(pool[idx].n);pool.splice(idx,1);}
+  }
+  item.enchant=null;
+  return{ok:true,msg:item.name+'升级为'+getQN(nq)+'！词条已重随机。'};
+}
+
+// 附魔
+function doEnchant(item){
+  if(item.enchant)return{ok:false,msg:'已有附魔，需先清除'};
+  var types=['物理','魔法','生命','功能','特殊'];
+  var t=types[rand(0,types.length-1)];
+  var qnames=['普通','优秀','稀有','史诗','传说'];
+  var qw=[50,30,15,4,1];
+  var tot=qw.reduce(function(a,b){return a+b},0);
+  var r=randFloat()*tot,qidx=0;
+  for(var i=0;i<qw.length;i++){r-=qw[i];if(r<=0){qidx=i;break;}}
+  var val=Math.floor(rand(5,15)*[1.0,1.3,1.7,2.2,3.0][qidx]);
+  item.enchant={t:t,q:qnames[qidx],v:val,desc:t+'·'+qnames[qidx]+'：属性+'+val};
+  return{ok:true,msg:'附魔成功！['+item.enchant.desc+']'};
+}
+
+// 镶嵌
+function doSocket(item,idx,gem){
+  if(!item.sockets||idx>=item.sockets.length)return{ok:false};
+  var old=item.sockets[idx].gem;
+  item.sockets[idx].gem={name:gem.name,quality:gem.quality,gemType:gem.gemType||gem.runeType};
+  return{ok:true,old:old,msg:gem.name+'已镶嵌'};
+}
+function doUnsocket(item,idx){
+  if(!item.sockets||idx>=item.sockets.length)return{ok:false};
+  var g=item.sockets[idx].gem;if(!g)return{ok:false,msg:'空孔'};
+  item.sockets[idx].gem=null;
+  return{ok:true,gem:g};
+}
+
+// ==================== 游戏状态 ====================
+var player = null;
+var playerStorage = [];
+var currentTab = 'inventory';
+var selectedItem = null;
+var selectedEquip = null;
+var selectedSocketEquip = null;
+var selectedSocketIdx = null;
+var selectedGem = null;
+
+// ==================== 角色创建 ====================
+function createCharacter() {
+  var name = document.getElementById('player-name').value.trim() || '酒馆少年';
+  var attrs = { str: 14, agi: 12, int: 10, vit: 13, ten: 10, spi: 9 };
+
+  player = {
+    name: name,
+    level: 10,
+    exp: 0,
+    expToNext: 500,
+    gold: 120,
+    attributes: attrs,
+    hp: 0, maxHp: 0, mp: 0, maxMp: 0,
+    inventory: [],
+    inventoryCapacity: 20,
+    equipment: { weapon: null, offhand: null, helmet: null, chest: null, legs: null, boots: null, gloves: null, necklace: null, ring1: null, ring2: null },
+    skills: ['slash', 'fireball'],
+    location: 'village-gate',
+    buffs: []
+  };
+
+  // 初始装备
+  var initEquips = [
+    { slot: 'weapon', name: '父亲的旧短剑', quality: 'green', level: 5, basePatk: 15, baseMatk: 0, basePdef: 0, baseMdef: 0, affixes: [{n:'锋锐',e:'物理攻击+2%',q:'green'}], sockets: [] },
+    { slot: 'chest', name: '粗布背心', quality: 'white', level: 1, basePatk: 0, baseMatk: 0, basePdef: 5, baseMdef: 2, affixes: [], sockets: [] },
+    { slot: 'boots', name: '旧皮靴', quality: 'green', level: 3, basePatk: 0, baseMatk: 0, basePdef: 3, baseMdef: 1, affixes: [{n:'精准',e:'命中率+2%',q:'green'}], sockets: [] },
+    { slot: 'helmet', name: '皮帽', quality: 'white', level: 2, basePatk: 0, baseMatk: 0, basePdef: 2, baseMdef: 1, affixes: [], sockets: [] },
+    { slot: 'gloves', name: '皮手套', quality: 'blue', level: 8, basePatk: 0, baseMatk: 0, basePdef: 4, baseMdef: 2, affixes: [{n:'重击',e:'物理攻击+4%',q:'blue'},{n:'鹰眼',e:'命中率+4%',q:'blue'}], sockets: [] }
+  ];
+
+  initEquips.forEach(function(item) {
+    item.id = Date.now() + rand(0, 9999);
+    item.type = 'equipment';
+    item.stackable = false;
+    item.desc = 'Lv.' + item.level + ' ' + getQN(item.quality) + SLOTS[item.slot];
+    player.equipment[item.slot] = item;
+  });
+
+  recalcStats();
+  player.hp = player.maxHp;
+  player.mp = player.maxMp;
+
+  // 初始背包物品
+  for (var i = 0; i < 5; i++) player.inventory.push(genMat('ore'));
+  for (var i = 0; i < 3; i++) player.inventory.push(genMat('herb'));
+  for (var i = 0; i < 2; i++) player.inventory.push(genMat('gem'));
+  for (var i = 0; i < 2; i++) player.inventory.push(genMat('essence'));
+  for (var i = 0; i < 3; i++) player.inventory.push(genCon('potion_hp'));
+  for (var i = 0; i < 2; i++) player.inventory.push(genCon('potion_mp'));
+  player.inventory.push(genCon('buff', 'green'));
+
+  // 测试装备
+  player.inventory.push(genEquip('weapon', 10, 'green'));
+  player.inventory.push(genEquip('chest', 10, 'blue'));
+  player.inventory.push(genEquip('boots', 10, 'green'));
+
+  // 带孔装备
+  var socketed = genEquip('weapon', 12, 'blue');
+  socketed.sockets = [{gem: null}, {gem: null}, {gem: null}];
+  player.inventory.push(socketed);
+
+  // 宝石
+  var rg = genMat('gem'); rg.gemType = 'red'; rg.name = '红宝石'; rg.quality = 'green';
+  player.inventory.push(rg);
+  var bg = genMat('gem'); bg.gemType = 'blue'; bg.name = '蓝宝石'; bg.quality = 'green';
+  player.inventory.push(bg);
+  var fr = genMat('rune'); fr.runeType = 'fire'; fr.name = '火焰符文'; fr.quality = 'blue';
+  player.inventory.push(fr);
+
+  document.getElementById('create-panel').classList.add('hidden');
+  document.getElementById('game-panel').classList.remove('hidden');
+
+  log('<b>' + name + '</b> 锁上酒馆的门，背起父亲的旧短剑，踏上了旅程。', 'narrative');
+  log('第五纪元·守望之年。你十九岁了。', 'narrative');
+
+  updateUI();
+  renderInventory();
+  renderStorage();
+  renderForge();
+  renderEnchant();
+  renderSocket();
+}
+
+function recalcStats() {
+  var a = player.attributes;
+  var s = {
+    patk: a.str * 2 + a.agi * 0.5,
+    matk: a.int * 2 + a.spi * 0.3,
+    pdef: a.str * 1 + a.ten * 3,
+    mdef: a.int * 1 + a.spi * 2 + a.ten * 1,
+    maxHp: a.vit * 10 + a.ten * 5,
+    maxMp: a.spi * 5 + a.int * 2,
+    hit: a.agi * 1.5 + 5,
+    dodge: a.agi * 1 + 2,
+    crit: a.agi * 0.8 + 1,
+    hpRegen: a.vit * 0.3,
+    mpRegen: a.spi * 0.2,
+    critDmg: 1.5
+  };
+
+  Object.values(player.equipment).forEach(function(item) {
+    if (!item) return;
+    s.patk += item.basePatk || 0;
+    s.matk += item.baseMatk || 0;
+    s.pdef += item.basePdef || 0;
+    s.mdef += item.baseMdef || 0;
+  });
+
+  player.stats = s;
+  player.maxHp = Math.floor(s.maxHp);
+  player.maxMp = Math.floor(s.maxMp);
+  player.hp = Math.min(player.hp, player.maxHp);
+  player.mp = Math.min(player.mp, player.maxMp);
+}
+
+function equipItem(item) {
+  if (!item || !item.slot) return;
+  var slot = item.slot;
+  if (slot === 'ring') slot = player.equipment.ring1 ? 'ring2' : 'ring1';
+  if (player.equipment[slot]) {
+    player.inventory.push(player.equipment[slot]);
+  }
+  player.equipment[slot] = item;
+  var idx = player.inventory.findIndex(function(i) { return i.id === item.id; });
+  if (idx >= 0) player.inventory.splice(idx, 1);
+  selectedItem = null;
+  recalcStats();
+  updateUI();
+  renderInventory();
+}
+
+function unequipItem(slot) {
+  var item = player.equipment[slot];
+  if (!item) return;
+  if (player.inventory.length >= player.inventoryCapacity) {
+    log('背包已满，无法卸下装备！', 'system');
+    return;
+  }
+  player.inventory.push(item);
+  player.equipment[slot] = null;
+  recalcStats();
+  updateUI();
+  renderInventory();
+}
+
+// ==================== UI更新 ====================
+function updateUI() {
+  if (!player) return;
+  document.getElementById('char-name').textContent = player.name;
+  document.getElementById('char-lvl').textContent = player.level;
+  document.getElementById('hp-val').textContent = Math.floor(player.hp);
+  document.getElementById('max-hp-val').textContent = player.maxHp;
+  document.getElementById('mp-val').textContent = Math.floor(player.mp);
+  document.getElementById('max-mp-val').textContent = player.maxMp;
+  document.getElementById('hp-bar').style.width = (player.hp / player.maxHp * 100) + '%';
+  document.getElementById('mp-bar').style.width = (player.mp / player.maxMp * 100) + '%';
+
+  document.getElementById('attr-str').textContent = player.attributes.str;
+  document.getElementById('attr-agi').textContent = player.attributes.agi;
+  document.getElementById('attr-int').textContent = player.attributes.int;
+  document.getElementById('attr-vit').textContent = player.attributes.vit;
+  document.getElementById('attr-ten').textContent = player.attributes.ten;
+  document.getElementById('attr-spi').textContent = player.attributes.spi;
+
+  document.getElementById('stat-patk').textContent = Math.floor(player.stats.patk);
+  document.getElementById('stat-matk').textContent = Math.floor(player.stats.matk);
+  document.getElementById('stat-pdef').textContent = Math.floor(player.stats.pdef);
+  document.getElementById('stat-mdef').textContent = Math.floor(player.stats.mdef);
+  document.getElementById('stat-hit').textContent = Math.floor(player.stats.hit);
+  document.getElementById('stat-dodge').textContent = Math.floor(player.stats.dodge);
+  document.getElementById('stat-crit').textContent = player.stats.crit.toFixed(1);
+
+  // 装备列表
+  var equipHtml = '';
+  for (var slot in SLOTS) {
+    var item = player.equipment[slot];
+    equipHtml += '<div class="equip-slot">';
+    equipHtml += '<span class="slot-name">' + SLOTS[slot] + '</span>';
+    if (item) {
+      equipHtml += '<span class="slot-item" style="color:' + getQC(item.quality) + '" onclick="unequipItem('' + slot + '')">' + item.name + '</span>';
+    } else {
+      equipHtml += '<span class="slot-empty">（空）</span>';
+    }
+    equipHtml += '</div>';
+  }
+  document.getElementById('equipment-list').innerHTML = equipHtml;
+
+  // 背包计数
+  document.getElementById('inv-count').textContent = player.inventory.length;
+  document.getElementById('inv-cap').textContent = player.inventoryCapacity;
+  document.getElementById('inv-gold').textContent = player.gold;
+}
+
+// ==================== 标签切换 ====================
+function switchTab(tab) {
+  currentTab = tab;
+  var btns = document.querySelectorAll('.tab-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  var contents = document.querySelectorAll('.tab-content');
+  for (var i = 0; i < contents.length; i++) contents[i].classList.add('hidden');
+  document.getElementById('content-' + tab).classList.remove('hidden');
+
+  if (tab === 'inventory') renderInventory();
+  if (tab === 'storage') renderStorage();
+  if (tab === 'forge') renderForge();
+  if (tab === 'enchant') renderEnchant();
+  if (tab === 'socket') renderSocket();
+}
+
+// ==================== 物品详情渲染 ====================
+function renderItemDetail(item, context) {
+  var html = '';
+  html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+  html += '<div><div style="font-size:1.15rem;font-weight:bold;color:' + getQC(item.quality) + '">' + item.name + '</div>';
+  html += '<div class="small">' + (item.desc || '') + '</div></div>';
+  html += '<div style="text-align:right;"><span class="small" style="color:' + getQC(item.quality) + '">' + getQN(item.quality) + '</span>';
+  if (item.level) html += '<div class="small">Lv.' + item.level + '</div>';
+  html += '</div></div>';
+
+  if (item.type === 'equipment') {
+    html += '<div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:0.85rem;">';
+    if (item.basePatk) html += '<div>⚔️ 物理攻击: <span style="color:var(--accent)">+' + item.basePatk + '</span></div>';
+    if (item.baseMatk) html += '<div>🔮 法术攻击: <span style="color:var(--purple)">+' + item.baseMatk + '</span></div>';
+    if (item.basePdef) html += '<div>🛡️ 物理护甲: <span style="color:var(--green)">+' + item.basePdef + '</span></div>';
+    if (item.baseMdef) html += '<div>✨ 法术护甲: <span style="color:var(--green)">+' + item.baseMdef + '</span></div>';
+    html += '</div>';
+
+    if (item.affixes && item.affixes.length > 0) {
+      html += '<div style="margin-top:8px;"><b style="font-size:0.85rem;">词条 (' + item.affixes.length + '条):</b></div>';
+      html += '<div style="display:flex;flex-direction:column;gap:2px;margin-top:4px;">';
+      item.affixes.forEach(function(aff) {
+        html += '<div class="affix-line" style="color:' + getQC(aff.q) + '">• ' + aff.n + ': ' + aff.e + '</div>';
+      });
+      html += '</div>';
+    }
+
+    if (item.sockets && item.sockets.length > 0) {
+      html += '<div style="margin-top:8px;"><b style="font-size:0.85rem;">镶嵌孔:</b></div>';
+      html += '<div style="display:flex;gap:6px;margin-top:4px;">';
+      item.sockets.forEach(function(socket) {
+        if (socket.gem) {
+          html += '<div style="padding:4px 8px;background:var(--bg2);border-radius:4px;border:1px solid ' + getQC(socket.gem.quality) + ';font-size:0.75rem;">💎 ' + socket.gem.name + '</div>';
+        } else {
+          html += '<div style="padding:4px 8px;background:var(--bg2);border-radius:4px;border:1px dashed var(--text3);font-size:0.75rem;color:var(--text3);">○ 空孔</div>';
+        }
+      });
+      html += '</div>';
+
+      var rw = checkRW(item);
+      if (rw) {
+        html += '<div class="runeword-box"><div style="color:var(--orange);font-weight:bold;font-size:0.85rem;">✦ 符文之语: ' + rw.n + '</div><div class="small">' + rw.e + '</div></div>';
+      }
+    }
+
+    if (item.enchant) {
+      html += '<div style="margin-top:8px;padding:6px;background:var(--bg2);border-radius:6px;border:1px solid var(--purple);"><div style="color:var(--purple);font-weight:bold;font-size:0.85rem;">✨ 附魔: ' + item.enchant.desc + '</div></div>';
+    }
+
+    if (item.slot) {
+      var equipped = player.equipment[item.slot];
+      if (!equipped && item.slot === 'ring') equipped = player.equipment.ring1 || player.equipment.ring2;
+      if (equipped && equipped.id !== item.id) {
+        var cmp = compareEq(equipped, item);
+        html += '<div class="compare-box"><div style="font-size:0.8rem;font-weight:bold;margin-bottom:4px;">📊 与当前装备对比:</div>';
+        html += '<div style="font-size:0.75rem;color:var(--text3);">已装备: ' + equipped.name + '</div>';
+        if (cmp.diffs.length > 0) {
+          html += '<div style="display:flex;flex-direction:column;gap:2px;margin-top:4px;">';
+          cmp.diffs.forEach(function(d) {
+            var color = d.b ? 'var(--green)' : 'var(--red)';
+            var sign = d.d > 0 ? '+' : '';
+            html += '<div style="font-size:0.75rem;color:' + color + '">' + d.n + ': ' + sign + d.d + '</div>';
+          });
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+    }
+  }
+
+  if (item.type === 'consumable' && item.effect) {
+    html += '<div style="margin-top:8px;font-size:0.85rem;">';
+    if (item.effect.healHp) html += '<div>❤️ 恢复生命: <span style="color:var(--green)">+' + item.effect.healHp + '</span></div>';
+    if (item.effect.healMp) html += '<div>💧 恢复法力: <span style="color:var(--purple)">+' + item.effect.healMp + '</span></div>';
+    if (item.effect.buff) html += '<div>⚡ 增益: ' + item.effect.buff.s + ' +' + (item.effect.buff.v * 100).toFixed(0) + '%</div>';
+    html += '</div>';
+  }
+
+  html += '<div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">';
+  if (item.type === 'equipment' && item.slot) {
+    var isEquipped = false;
+    for (var s in player.equipment) {
+      if (player.equipment[s] && player.equipment[s].id === item.id) { isEquipped = true; break; }
+    }
+    if (isEquipped) {
+      html += '<button class="btn" onclick="unequipFromDetail()">卸下</button>';
+    } else {
+      html += '<button class="btn btn-success" onclick="equipFromDetail()">装备</button>';
+    }
+  }
+  if (item.type === 'consumable') {
+    html += '<button class="btn btn-success" onclick="useFromDetail()">使用</button>';
+  }
+  if (item.stackable && item.stackCount > 1) {
+    html += '<button class="btn" onclick="splitFromDetail()">拆分</button>';
+  }
+  if (context === 'inventory') {
+    html += '<button class="btn" onclick="moveToStorageFromDetail()">存入仓库</button>';
+  } else if (context === 'storage') {
+    html += '<button class="btn" onclick="moveToInventoryFromDetail()">取回背包</button>';
+  }
+  html += '<button class="btn btn-danger" onclick="discardFromDetail()">丢弃</button>';
+  html += '</div>';
+
+  return html;
+}
+
+// ==================== 背包渲染 ====================
+function renderInventory() {
+  var grid = document.getElementById('item-grid');
+  var detail = document.getElementById('item-detail');
+
+  var items = player.inventory;
+  var qualityFilter = document.getElementById('filter-quality').value;
+  var typeFilter = document.getElementById('filter-type').value;
+  var sortMode = document.getElementById('sort-mode').value;
+
+  if (qualityFilter) items = items.filter(function(i) { return i.quality === qualityFilter; });
+  if (typeFilter) items = items.filter(function(i) { return i.type === typeFilter; });
+
+  if (sortMode === 'quality') {
+    items = items.slice().sort(function(a, b) { return Q_ORDER[b.quality] - Q_ORDER[a.quality]; });
+  } else if (sortMode === 'name') {
+    items = items.slice().sort(function(a, b) { return a.name.localeCompare(b.name); });
+  } else if (sortMode === 'level') {
+    items = items.slice().sort(function(a, b) { return (b.level || 0) - (a.level || 0); });
+  }
+
+  if (items.length === 0) {
+    grid.innerHTML = '<div class="small" style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);">背包空空如也...</div>';
+  } else {
+    grid.innerHTML = items.map(function(item) {
+      var isSelected = selectedItem && selectedItem.id === item.id;
+      var borderColor = isSelected ? 'var(--accent)' : getQC(item.quality);
+      var stackText = item.stackable && item.stackCount > 1 ? ' x' + item.stackCount : '';
+      var icon = item.type === 'equipment' ? '⚔️' : item.type === 'material' ? '📦' : '🧪';
+      return '<div class="item ' + getQualityClass(item.quality) + '" style="border-color:' + borderColor + ';' + (isSelected ? 'box-shadow:0 0 8px ' + borderColor : '') + '" onclick="selectInventoryItem(' + item.id + ')">' +
+        '<span>' + icon + '</span><span>' + item.name + stackText + '</span>' +
+        (item.level ? '<span class="small">Lv.' + item.level + '</span>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  if (selectedItem && currentTab === 'inventory') {
+    detail.innerHTML = renderItemDetail(selectedItem, 'inventory');
+    detail.classList.remove('hidden');
+  } else {
+    detail.classList.add('hidden');
+  }
+}
+
+function selectInventoryItem(itemId) {
+  selectedItem = player.inventory.find(function(i) { return i.id === itemId; });
+  renderInventory();
+}
+
+function equipFromDetail() {
+  if (!selectedItem) return;
+  equipItem(selectedItem);
+}
+
+function unequipFromDetail() {
+  if (!selectedItem) return;
+  for (var s in player.equipment) {
+    if (player.equipment[s] && player.equipment[s].id === selectedItem.id) {
+      unequipItem(s);
+      return;
+    }
+  }
+}
+
+function useFromDetail() {
+  if (!selectedItem || selectedItem.type !== 'consumable') return;
+  var item = selectedItem;
+  if (item.effect.healHp) {
+    player.hp = Math.min(player.hp + item.effect.healHp, player.maxHp);
+    log('使用了 ' + item.name + '，恢复 ' + item.effect.healHp + ' 点生命！', 'heal');
+  }
+  if (item.effect.healMp) {
+    player.mp = Math.min(player.mp + item.effect.healMp, player.maxMp);
+    log('使用了 ' + item.name + '，恢复 ' + item.effect.healMp + ' 点法力！', 'heal');
+  }
+  if (item.effect.buff) {
+    player.buffs.push({ stat: item.effect.buff.s, value: item.effect.buff.v, appliedAt: Date.now() });
+    log('获得增益: ' + item.effect.buff.s + ' +' + (item.effect.buff.v * 100).toFixed(0) + '%', 'info');
+  }
+  var idx = player.inventory.findIndex(function(i) { return i.id === item.id; });
+  if (idx >= 0) {
+    if (player.inventory[idx].stackCount > 1) {
+      player.inventory[idx].stackCount--;
+    } else {
+      player.inventory.splice(idx, 1);
+    }
+  }
+  selectedItem = null;
+  recalcStats();
+  updateUI();
+  renderInventory();
+}
+
+function splitFromDetail() {
+  if (!selectedItem || !selectedItem.stackable || selectedItem.stackCount <= 1) return;
+  var count = Math.floor(selectedItem.stackCount / 2);
+  if (count < 1) return;
+  if (player.inventory.length >= player.inventoryCapacity) {
+    log('背包已满，无法拆分！', 'system');
+    return;
+  }
+  selectedItem.stackCount -= count;
+  var newItem = JSON.parse(JSON.stringify(selectedItem));
+  newItem.id = Date.now() + rand(0, 99999);
+  newItem.stackCount = count;
+  player.inventory.push(newItem);
+  selectedItem = null;
+  renderInventory();
+}
+
+function discardFromDetail() {
+  if (!selectedItem) return;
+  if (!confirm('确定要丢弃 ' + selectedItem.name + ' 吗？')) return;
+  var idx = player.inventory.findIndex(function(i) { return i.id === selectedItem.id; });
+  if (idx >= 0) player.inventory.splice(idx, 1);
+  selectedItem = null;
+  renderInventory();
+}
+
+function moveToStorageFromDetail() {
+  if (!selectedItem) return;
+  if (playerStorage.length >= 50) {
+    log('仓库已满！', 'system');
+    return;
+  }
+  playerStorage.push(selectedItem);
+  var idx = player.inventory.findIndex(function(i) { return i.id === selectedItem.id; });
+  if (idx >= 0) player.inventory.splice(idx, 1);
+  log(selectedItem.name + ' 已存入仓库', 'info');
+  selectedItem = null;
+  renderInventory();
+  renderStorage();
+}
+
+function moveToInventoryFromDetail() {
+  if (!selectedItem) return;
+  if (player.inventory.length >= player.inventoryCapacity) {
+    log('背包已满！', 'system');
+    return;
+  }
+  player.inventory.push(selectedItem);
+  var idx = playerStorage.findIndex(function(i) { return i.id === selectedItem.id; });
+  if (idx >= 0) playerStorage.splice(idx, 1);
+  log(selectedItem.name + ' 已取回背包', 'info');
+  selectedItem = null;
+  renderStorage();
+  renderInventory();
+}
+
+function applyFilters() { renderInventory(); }
+function applySort() { renderInventory(); }
+function clearFilters() {
+  document.getElementById('filter-quality').value = '';
+  document.getElementById('filter-type').value = '';
+  renderInventory();
+}
+
+// ==================== 仓库渲染 ====================
+function renderStorage() {
+  var grid = document.getElementById('storage-grid');
+  var detail = document.getElementById('storage-detail');
+
+  document.getElementById('storage-count').textContent = playerStorage.length;
+
+  if (playerStorage.length === 0) {
+    grid.innerHTML = '<div class="small" style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);">仓库空空如也...</div>';
+  } else {
+    grid.innerHTML = playerStorage.map(function(item) {
+      var isSelected = selectedItem && selectedItem.id === item.id;
+      var borderColor = isSelected ? 'var(--accent)' : getQC(item.quality);
+      var stackText = item.stackable && item.stackCount > 1 ? ' x' + item.stackCount : '';
+      var icon = item.type === 'equipment' ? '⚔️' : item.type === 'material' ? '📦' : '🧪';
+      return '<div class="item ' + getQualityClass(item.quality) + '" style="border-color:' + borderColor + ';' + (isSelected ? 'box-shadow:0 0 8px ' + borderColor : '') + '" onclick="selectStorageItem(' + item.id + ')">' +
+        '<span>' + icon + '</span><span>' + item.name + stackText + '</span>' +
+        (item.level ? '<span class="small">Lv.' + item.level + '</span>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  if (selectedItem && currentTab === 'storage') {
+    detail.innerHTML = renderItemDetail(selectedItem, 'storage');
+    detail.classList.remove('hidden');
+  } else {
+    detail.classList.add('hidden');
+  }
+}
+
+function selectStorageItem(itemId) {
+  selectedItem = playerStorage.find(function(i) { return i.id === itemId; });
+  renderStorage();
+}
+
+// ==================== 锻造渲染 ====================
+function renderForge() {
+  var list = document.getElementById('forge-list');
+  var detail = document.getElementById('forge-detail');
+
+  var equips = player.inventory.filter(function(i) { return i.type === 'equipment' && i.quality !== 'red'; });
+  if (equips.length === 0) {
+    list.innerHTML = '<div class="small">没有可锻造的装备</div>';
+  } else {
+    list.innerHTML = equips.map(function(item) {
+      var isSelected = selectedEquip && selectedEquip.id === item.id;
+      return '<div class="item ' + getQualityClass(item.quality) + '" style="margin:2px 0;cursor:pointer;' + (isSelected ? 'border-color:var(--accent);box-shadow:0 0 6px var(--accent);' : '') + '" onclick="selectForgeItem(' + item.id + ')">' +
+        '⚔️ ' + item.name + ' <span class="small">[' + item.quality.toUpperCase() + ']</span></div>';
+    }).join('');
+  }
+
+  if (selectedEquip) {
+    var item = selectedEquip;
+    var qo = ['white', 'green', 'blue', 'purple', 'orange', 'red'];
+    var nq = qo[qo.indexOf(item.quality) + 1];
+
+    var html = '<div style="padding:10px;background:var(--bg);border-radius:8px;">';
+    html += '<div style="font-weight:bold;color:' + getQC(item.quality) + '">' + item.name + '</div>';
+    html += '<div class="small">当前品质: ' + getQN(item.quality) + '</div>';
+
+    if (nq) {
+      html += '<div style="margin-top:8px;">';
+      html += '<div>→ 升级为 <span style="color:' + getQC(nq) + ';font-weight:bold;">' + getQN(nq) + '</span></div>';
+      html += '<div class="small" style="margin-top:4px;color:var(--yellow)">⚠️ 锻造后词条将重随机！</div>';
+      html += '<button class="btn btn-success" style="margin-top:10px;" onclick="forgeItem()">🔨 开始锻造</button>';
+      html += '</div>';
+    } else {
+      html += '<div style="color:var(--text3);">已达最高品质</div>';
+    }
+    html += '</div>';
+    detail.innerHTML = html;
+  } else {
+    detail.innerHTML = '<div class="small" style="color:var(--text3);">选择一件装备查看锻造详情</div>';
+  }
+}
+
+function selectForgeItem(itemId) {
+  selectedEquip = player.inventory.find(function(i) { return i.id === itemId; });
+  renderForge();
+}
+
+function forgeItem() {
+  if (!selectedEquip) return;
+  var result = doForge(selectedEquip);
+  if (result.ok) {
+    log(result.msg, 'system');
+    selectedEquip = null;
+    renderForge();
+    updateUI();
+  } else {
+    log(result.msg, 'system');
+  }
+}
+
+// ==================== 附魔渲染 ====================
+function renderEnchant() {
+  var list = document.getElementById('enchant-list');
+  var detail = document.getElementById('enchant-detail');
+
+  var equips = player.inventory.filter(function(i) { return i.type === 'equipment'; });
+  if (equips.length === 0) {
+    list.innerHTML = '<div class="small">没有可附魔的装备</div>';
+  } else {
+    list.innerHTML = equips.map(function(item) {
+      var isSelected = selectedEquip && selectedEquip.id === item.id;
+      return '<div class="item ' + getQualityClass(item.quality) + '" style="margin:2px 0;cursor:pointer;' + (isSelected ? 'border-color:var(--accent);box-shadow:0 0 6px var(--accent);' : '') + '" onclick="selectEnchantItem(' + item.id + ')">' +
+        '⚔️ ' + item.name + (item.enchant ? ' ✨' : '') + '</div>';
+    }).join('');
+  }
+
+  if (selectedEquip) {
+    var item = selectedEquip;
+    var html = '<div style="padding:10px;background:var(--bg);border-radius:8px;">';
+    html += '<div style="font-weight:bold;color:' + getQC(item.quality) + '">' + item.name + '</div>';
+
+    if (item.enchant) {
+      html += '<div style="margin-top:6px;padding:6px;background:var(--bg2);border-radius:4px;">';
+      html += '<div style="color:var(--purple);font-size:0.85rem;">✨ 当前附魔: ' + item.enchant.desc + '</div>';
+      html += '</div>';
+      html += '<button class="btn btn-danger" style="margin-top:8px;" onclick="clearEnchantItem()">清除附魔</button>';
+    } else {
+      html += '<div style="margin-top:8px;">';
+      html += '<div class="small">消耗: 魔法精华 x5</div>';
+      html += '<div class="small" style="color:var(--text3);">随机附加一条属性</div>';
+      html += '<button class="btn btn-success" style="margin-top:8px;" onclick="enchantItemNow()">✨ 开始附魔</button>';
+      html += '</div>';
+    }
+    html += '</div>';
+    detail.innerHTML = html;
+  } else {
+    detail.innerHTML = '<div class="small" style="color:var(--text3);">选择一件装备查看附魔详情</div>';
+  }
+}
+
+function selectEnchantItem(itemId) {
+  selectedEquip = player.inventory.find(function(i) { return i.id === itemId; });
+  renderEnchant();
+}
+
+function enchantItemNow() {
+  if (!selectedEquip) return;
+  var result = doEnchant(selectedEquip);
+  if (result.ok) {
+    log(result.msg, 'system');
+    renderEnchant();
+    updateUI();
+  } else {
+    log(result.msg, 'system');
+  }
+}
+
+function clearEnchantItem() {
+  if (!selectedEquip) return;
+  selectedEquip.enchant = null;
+  log('附魔已清除', 'info');
+  renderEnchant();
+  updateUI();
+}
+
+// ==================== 镶嵌渲染 ====================
+function renderSocket() {
+  var equipList = document.getElementById('socket-equip-list');
+  var gemList = document.getElementById('socket-gem-list');
+  var detail = document.getElementById('socket-detail');
+
+  var equips = player.inventory.filter(function(i) { return i.type === 'equipment' && i.sockets && i.sockets.length > 0; });
+  if (equips.length === 0) {
+    equipList.innerHTML = '<div class="small">没有带孔装备</div>';
+  } else {
+    equipList.innerHTML = equips.map(function(item) {
+      var isSelected = selectedSocketEquip && selectedSocketEquip.id === item.id;
+      return '<div class="item ' + getQualityClass(item.quality) + '" style="margin:2px 0;cursor:pointer;' + (isSelected ? 'border-color:var(--accent);box-shadow:0 0 6px var(--accent);' : '') + '" onclick="selectSocketEquip(' + item.id + ')">' +
+        '⚔️ ' + item.name + ' [' + item.sockets.length + '孔]</div>';
+    }).join('');
+  }
+
+  var gems = player.inventory.filter(function(i) { return i.gemType || i.runeType; });
+  if (gems.length === 0) {
+    gemList.innerHTML = '<div class="small">没有宝石/符文</div>';
+  } else {
+    gemList.innerHTML = gems.map(function(gem) {
+      var isSelected = selectedGem && selectedGem.id === gem.id;
+      return '<div class="item ' + getQualityClass(gem.quality) + '" style="margin:2px 0;cursor:pointer;font-size:0.75rem;' + (isSelected ? 'border-color:var(--accent);' : '') + '" onclick="selectSocketGem(' + gem.id + ')">' +
+        '💎 ' + gem.name + '</div>';
+    }).join('');
+  }
+
+  if (selectedSocketEquip) {
+    var item = selectedSocketEquip;
+    var html = '<div style="padding:10px;background:var(--bg);border-radius:8px;">';
+    html += '<div style="font-weight:bold;color:' + getQC(item.quality) + '">' + item.name + '</div>';
+
+    html += '<div style="margin-top:8px;">';
+    item.sockets.forEach(function(socket, idx) {
+      var isSelected = selectedSocketIdx === idx;
+      if (socket.gem) {
+        html += '<div style="padding:6px;margin:2px 0;background:var(--bg2);border-radius:4px;border:1px solid ' + getQC(socket.gem.quality) + ';cursor:pointer;' + (isSelected ? 'border-color:var(--accent);box-shadow:0 0 6px var(--accent);' : '') + '" onclick="selectSocketIdx(' + idx + ')">' +
+          '💎 ' + socket.gem.name +
+          (isSelected ? ' <button class="btn btn-danger" style="float:right;padding:2px 6px;font-size:0.7rem;" onclick="unsocketNow(event)">取出</button>' : '') +
+          '</div>';
+      } else {
+        html += '<div style="padding:6px;margin:2px 0;background:var(--bg2);border-radius:4px;border:1px dashed var(--text3);cursor:pointer;' + (isSelected ? 'border-color:var(--accent);box-shadow:0 0 6px var(--accent);' : '') + '" onclick="selectSocketIdx(' + idx + ')">' +
+          '○ 空孔位 #' + (idx + 1) +
+          (isSelected && selectedGem ? ' <button class="btn btn-success" style="float:right;padding:2px 6px;font-size:0.7rem;" onclick="socketNow(event)">镶嵌</button>' : '') +
+          '</div>';
+      }
+    });
+    html += '</div>';
+
+    var rw = checkRW(item);
+    if (rw) {
+      html += '<div class="runeword-box"><div style="color:var(--orange);font-weight:bold;font-size:0.85rem;">✦ 符文之语已激活: ' + rw.n + '</div><div class="small">' + rw.e + '</div></div>';
+    } else if (item.sockets.length >= 3) {
+      html += '<div style="margin-top:6px;font-size:0.75rem;color:var(--text3);">💡 提示: 怒火=红+红+火 冰霜=蓝+蓝+冰 不朽=琥珀+钻石+琥珀</div>';
+    }
+
+    html += '</div>';
+    detail.innerHTML = html;
+  } else {
+    detail.innerHTML = '<div class="small" style="color:var(--text3);">选择一件有孔装备</div>';
+  }
+}
+
+function selectSocketEquip(itemId) {
+  selectedSocketEquip = player.inventory.find(function(i) { return i.id === itemId; });
+  selectedSocketIdx = null;
+  renderSocket();
+}
+
+function selectSocketGem(gemId) {
+  selectedGem = player.inventory.find(function(i) { return i.id === gemId; });
+  renderSocket();
+}
+
+function selectSocketIdx(idx) {
+  selectedSocketIdx = idx;
+  renderSocket();
+}
+
+function socketNow(e) {
+  e.stopPropagation();
+  if (!selectedSocketEquip || selectedSocketIdx === null || !selectedGem) return;
+
+  var result = doSocket(selectedSocketEquip, selectedSocketIdx, selectedGem);
+  if (result.ok) {
+    var gemIdx = player.inventory.findIndex(function(i) { return i.id === selectedGem.id; });
+    if (gemIdx >= 0) {
+      if (player.inventory[gemIdx].stackCount > 1) {
+        player.inventory[gemIdx].stackCount--;
+      } else {
+        player.inventory.splice(gemIdx, 1);
+      }
+    }
+    if (result.old) {
+      player.inventory.push(result.old);
+    }
+    log(result.msg, 'system');
+
+    var rw = checkRW(selectedSocketEquip);
+    if (rw) {
+      log('✦ 符文之语 [' + rw.n + '] 已激活！' + rw.e, 'system');
+    }
+
+    selectedGem = null;
+    selectedSocketIdx = null;
+    renderSocket();
+    updateUI();
+  }
+}
+
+function unsocketNow(e) {
+  e.stopPropagation();
+  if (!selectedSocketEquip || selectedSocketIdx === null) return;
+
+  var result = doUnsocket(selectedSocketEquip, selectedSocketIdx);
+  if (result.ok && result.gem) {
+    player.inventory.push(result.gem);
+    log('取出了 ' + result.gem.name, 'info');
+    renderSocket();
+    updateUI();
+  }
+}
+</script>
+</body>
+</html>
