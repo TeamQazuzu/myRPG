@@ -118,7 +118,7 @@ const SceneSystem = {
       // 野狗刷新配置
       respawn: {
         enemies: [
-          { name: "野狗", type: "normal", level: 1, count: 2, hp: 30, atk: 5, def: 2, speed: 12, exp: 15, gold: 3 },
+          { name: "野狗", type: "normal", level: 1, count: 6, hp: 30, atk: 5, def: 2, speed: 12, exp: 15, gold: 3 },
         ],
         cooldown: 120, // 2分钟（秒）
         lastDefeated: null,
@@ -343,11 +343,16 @@ const SceneSystem = {
           critDmg: 1.5,
           exp: template.exp,
           gold: template.gold,
+          skills: [
+            { name: "普通攻击", cost: 0, type: "active", target: "single", dmgType: "physical", power: 1.0 },
+            { name: "猛击", cost: 10, type: "active", target: "single", dmgType: "physical", power: 1.5, cd: 3 },
+          ],
           drops: [
             { type: "dog_fang", name: "狗牙", chance: 0.5 },
             { type: "dog_hide", name: "狗皮", chance: 0.3 },
           ],
           statusEffects: [],
+          ai: true,
         });
       }
     }
