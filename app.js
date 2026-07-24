@@ -1,5 +1,5 @@
 // ============================================
-// 《寻亲风云录》主入口 — 小地图移动+当前帧操作版
+// 《寻亲风云录》主入口 — 荒地测试版
 // ============================================
 
 const Game = {
@@ -7,6 +7,7 @@ const Game = {
   currentScreen: "main",
   combatInstance: null,
   autoSaveTimer: null,
+  idleTimer: null, // 挂机计时器
 
   init() {
     const saved = SaveManager.load();
@@ -99,6 +100,7 @@ const Game = {
 
   enterGame() {
     this.currentScreen = "main";
+    this.stopIdle(); // 停止挂机
     Renderer.renderMain(this.state);
     this.bindMainEvents();
   },
@@ -117,10 +119,11 @@ const Game = {
       });
     });
 
-    // 场景交互按钮（NPC对话/物品交互/休息）
+    // 场景交互按钮
     container.querySelectorAll(".action-btn[data-action]").forEach(btn => {
       btn.addEventListener("click", () => {
         const action = btn.dataset.action;
+        if (action === "none") return;
         this.handleSceneAction(action);
       });
     });
@@ -165,6 +168,8 @@ const Game = {
         const objResult = SceneSystem.interact(this.state, target);
         if (objResult.ok) {
           this.state.narrative.dialogueHistory.push(objResult.message);
+        } else {
+          this.state.narrative.dialogueHistory.push(objResult.reason);
         }
         Renderer.renderMain(this.state);
         this.bindMainEvents();
@@ -180,7 +185,271 @@ const Game = {
         Renderer.renderMain(this.state);
         this.bindMainEvents();
         break;
+
+      // ===== 荒地特殊操作 =====
+      case "wasteland_combat":
+        this.startWastelandCombat();
+        break;
+
+      case "idle_mine":
+        this.startIdleMining();
+        break;
     }
+  },
+
+  // ========== 荒地战斗 ==========
+
+  startWastelandCombat() {
+    const enemyStatus = SceneSystem.getWastelandEnemies(this.state);
+    if (!enemyStatus.canSpawn) {
+      Renderer.showMessage(enemyStatus.message);
+      return;
+    }
+
+    const enemies = enemyStatus.enemies;
+    if (enemies.length === 0) {
+      Renderer.showMessage("这里没有敌人。");
+      return;
+    }
+
+    this.combatInstance = CombatEngine.initBattle(this.state, enemies, {
+      wave: 1,
+      totalWaves: 1,
+    });
+
+    this.currentScreen = "combat";
+    this.combatLoop();
+  },
+
+  // ========== 挂机采集石头 ==========
+
+  startIdleMining() {
+    if (this.idleTimer) {
+      this.stopIdle();
+      return;
+    }
+
+    const scene = SceneSystem.getCurrentScene(this.state);
+    if (scene.id !== "greyVillage_wasteland") {
+      Renderer.showMessage("只有荒地可以采集石头。");
+      return;
+    }
+
+    this.state.narrative.dialogueHistory.push("你开始挂机采集石头……（点击停止）");
+    Renderer.renderMain(this.state);
+    this.bindMainEvents();
+
+    // 每3秒采集一次
+    let count = 0;
+    this.idleTimer = setInterval(() => {
+      const stone = {
+        id: Utils.uuid(),
+        name: "石头",
+        type: "stone",
+        rarity: "white",
+        level: 1,
+        stackable: true,
+        stack: Utils.randInt(1, 2),
+      };
+      const result = InventorySystem.addToInventory(this.state, stone);
+      if (result.ok) {
+        count++;
+        // 每10次显示一次提示
+        if (count % 10 === 0) {
+          this.state.narrative.dialogueHistory.push(`已采集 ${count} 批石头……`);
+          Renderer.renderMain(this.state);
+          this.bindMainEvents();
+        }
+      } else {
+        this.state.narrative.dialogueHistory.push("背包已满，挂机停止。");
+        this.stopIdle();
+        Renderer.renderMain(this.state);
+        this.bindMainEvents();
+      }
+    }, 3000);
+
+    // 更新按钮为"停止挂机"
+    const btn = document.querySelector('[data-action="idle_mine"]');
+    if (btn) btn.textContent = "⏹️ 停止挂机";
+  },
+
+  stopIdle() {
+    if (this.idleTimer) {
+      clearInterval(this.idleTimer);
+      this.idleTimer = null;
+    }
+  },
+
+  // ========== 战斗系统 ==========
+
+  combatLoop() {
+    if (!this.combatInstance) return;
+    const combat = this.combatInstance;
+
+    if (combat.phase !== "battle") {
+      this.resolveCombatEnd();
+      return;
+    }
+
+    if (combat.order.length === 0 || combat.currentActorIndex >= combat.order.length) {
+      CombatEngine.startTurn(combat);
+    }
+
+    Renderer.renderCombat(this.state, combat);
+    this.bindCombatEvents();
+
+    const actor = CombatEngine.getCurrentActor(combat);
+    if (actor && actor.ai) {
+      setTimeout(() => {
+        const action = CombatEngine.decideAIAction(combat, actor);
+        this.executeCombatAction(actor.id, action);
+      }, 800);
+    }
+  },
+
+  executeCombatAction(actorId, action) {
+    if (!this.combatInstance) return;
+    const combat = this.combatInstance;
+    
+    let targetId = action.targetId;
+    if (!targetId) {
+      const enemies = combat.units.filter(u => u.side !== combat.units.find(a => a.id === actorId)?.side && u.hp > 0);
+      targetId = enemies[0]?.id;
+    }
+
+    const result = CombatEngine.executeAction(combat, actorId, action, targetId);
+    
+    if (result && result.type === "battle_end") {
+      this.resolveCombatEnd();
+      return;
+    }
+
+    setTimeout(() => this.combatLoop(), 500);
+  },
+
+  bindCombatEvents() {
+    const container = Renderer.container;
+    if (!container) return;
+
+    container.querySelectorAll(".skill-btn:not(.disabled)").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const skillName = btn.dataset.skill;
+        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
+        const targetId = enemies[0]?.id;
+        this.executeCombatAction("player", { type: "skill", skillName }, targetId);
+      });
+    });
+
+    container.querySelectorAll(".combat-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const action = btn.dataset.action;
+        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
+        const targetId = enemies[0]?.id;
+        this.executeCombatAction("player", { type: action }, targetId);
+      });
+    });
+
+    // 撤退
+    container.querySelectorAll("[data-action='flee-combat']").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
+        const targetId = enemies[0]?.id;
+        this.executeCombatAction("player", { type: "flee" }, targetId);
+      });
+    });
+  },
+
+  resolveCombatEnd() {
+    const combat = this.combatInstance;
+    if (!combat) return;
+
+    switch (combat.phase) {
+      case "victory":
+        // 分配经验
+        const expResult = StateUtils.addExp(this.state, combat.rewards.exp);
+        if (expResult.locked) {
+          Renderer.showExpLock(expResult.message);
+        }
+        // 金币
+        StateUtils.addGold(this.state, combat.rewards.gold);
+        // 物品
+        for (const item of combat.rewards.items) {
+          InventorySystem.addToInventory(this.state, item);
+        }
+        // 野狗掉落
+        for (const unit of combat.units) {
+          if (unit.side === "enemy" && unit.hp <= 0 && unit.drops) {
+            for (const drop of unit.drops) {
+              if (Utils.chance(drop.chance)) {
+                const dropItem = {
+                  id: Utils.uuid(),
+                  name: drop.name,
+                  type: drop.type,
+                  rarity: "white",
+                  level: 1,
+                  stackable: true,
+                  stack: 1,
+                };
+                InventorySystem.addToInventory(this.state, dropItem);
+                this.state.narrative.dialogueHistory.push(`获得: ${drop.name}`);
+              }
+            }
+          }
+        }
+
+        this.state.narrative.dialogueHistory.push(
+          `战斗胜利！获得 ${combat.rewards.exp} 经验，${combat.rewards.gold} 金币。`
+        );
+
+        // 记录击败时间（触发刷新冷却）
+        SceneSystem.recordDefeat(this.state);
+        break;
+
+      case "defeat":
+        const deathResult = StateUtils.handleDeath(this.state, this.state.player.zone);
+        this.state.narrative.dialogueHistory.push(deathResult.message);
+        if (deathResult.mode === "epitaph" || deathResult.mode === "retired") {
+          this.showEpitaph();
+          return;
+        }
+        break;
+
+      case "draw":
+        this.state.player.hp = 1;
+        this.state.player.mp = 0;
+        const goldLoss = Math.floor(this.state.player.gold * 0.05);
+        StateUtils.spendGold(this.state, goldLoss);
+        this.state.narrative.dialogueHistory.push(
+          `双方僵持不下，你狼狈撤退。损失 ${goldLoss} 金币。`
+        );
+        break;
+
+      case "fled":
+        this.state.narrative.dialogueHistory.push("你成功逃脱了！");
+        break;
+    }
+
+    // 保存随从状态
+    for (const comp of this.state.companions) {
+      const combatUnit = combat.units.find(u => u.id === comp.id);
+      if (combatUnit) {
+        comp.hp = Math.max(1, combatUnit.hp);
+        comp.mp = combatUnit.mp;
+        if (combatUnit.hp <= 0) {
+          if (this.state.player.hardcore) {
+            comp.alive = false;
+            this.state.narrative.dialogueHistory.push(`${comp.name} 在战斗中牺牲了...`);
+          } else {
+            comp.hp = 1;
+            this.state.narrative.dialogueHistory.push(`${comp.name} 被救醒了。`);
+          }
+        }
+      }
+    }
+
+    this.combatInstance = null;
+    this.saveGame();
+    this.enterGame();
   },
 
   // ========== 菜单处理 ==========
@@ -304,6 +573,31 @@ const Game = {
         }
       });
     });
+  },
+
+  // ========== 碑文 ==========
+
+  showEpitaph() {
+    const p = this.state.player;
+    const html = `
+      <div class="epitaph-frame">
+        <h1>🪦 碑文</h1>
+        <div class="epitaph-content">
+          <p>这里长眠着</p>
+          <h2>${p.name}</h2>
+          <p>等级 ${p.level} · ${p.class}</p>
+          <p>存活时间: ${Utils.formatDuration(p.playTime)}</p>
+          <p>击败守门员: ${Object.entries(this.state.world.gatekeepers).filter(([_, v]) => v.defeated).length}/5</p>
+          <p>死亡次数: ${p.deaths}</p>
+          <p class="epitaph-quote">"${p.hardcore ? '硬核之路，无悔之选。' : '故事尚未结束。'}"</p>
+        </div>
+        <div class="epitaph-actions">
+          <button class="menu-btn" onclick="SaveManager.export(Game.state)">📤 导出角色卡</button>
+          <button class="menu-btn" onclick="location.reload()">🔄 重新开始</button>
+        </div>
+      </div>
+    `;
+    Renderer.container.innerHTML = html;
   },
 
   // ========== 存档管理 ==========
