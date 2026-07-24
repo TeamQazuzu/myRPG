@@ -39,6 +39,8 @@ const CombatEngine = {
       ...playerStats,
       hp: state.player.hp,
       mp: state.player.mp,
+      maxHp: state.player.maxHp,
+      maxMp: state.player.maxMp,
       skills: this.getAvailableSkills(state),
       ai: false,
     });
@@ -53,6 +55,8 @@ const CombatEngine = {
         ...stats,
         hp: comp.hp,
         mp: comp.mp,
+        maxHp: comp.maxHp,
+        maxMp: comp.maxMp,
         skills: this.getCompanionSkills(comp),
         ai: true,
         strategy: comp.aiStrategy,
@@ -191,8 +195,13 @@ const CombatEngine = {
     const results = [];
 
     if (action.type === "skill") {
-      const skill = actor.skills.find(s => s.name === action.skillName);
-      if (!skill) return null;
+      const skills = actor.skills || [];
+      const skill = skills.find(s => s.name === action.skillName);
+      if (!skill) {
+        // 自动降级为普通攻击
+        action.skillName = "普通攻击";
+        return this.executeAction(combat, actorId, action, targetId);
+      }
 
       // 检查MP
       if (actor.mp < skill.cost) {
