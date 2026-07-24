@@ -251,6 +251,20 @@ const Renderer = {
 
   renderCombatActions(state, combat, actor) {
     const skills = actor.skills || [];
+
+    // 如果正在选择目标，显示目标选择提示
+    if (combat.pendingAction) {
+      const actionName = combat.pendingAction.skillName || combat.pendingAction.type;
+      return `
+        <div class="combat-actions">
+          <div class="target-select-hint">🎯 选择目标发动「${actionName}」</div>
+          <div class="combat-controls">
+            <button class="combat-btn" data-action="cancel-target">❌ 取消</button>
+          </div>
+        </div>
+      `;
+    }
+
     const skillBtns = skills.map(s => {
       const canUse = actor.mp >= (s.cost || 0);
       return `<button class="skill-btn ${canUse ? '' : 'disabled'}" data-skill="${s.name}" ${!canUse ? 'disabled' : ''}>
@@ -287,15 +301,81 @@ const Renderer = {
         <div class="inv-header">
           <h3>🎒 背包 (${items.length}/${state.inventory.capacity})</h3>
         </div>
-        <div class="inv-grid">
+        <div class="inv-grid" id="inv-grid">
           ${items.map(item => this.renderItemCard(item)).join("")}
         </div>
+        <div id="item-detail-panel" class="item-detail-panel hidden"></div>
         <div class="inv-footer">
           <button class="menu-btn" data-action="back">↩️ 返回</button>
         </div>
       </div>
     `;
     this.container.innerHTML = html;
+
+    // 绑定点击事件
+    const grid = this.container.querySelector("#inv-grid");
+    if (grid) {
+      grid.querySelectorAll(".item-card").forEach(card => {
+        card.addEventListener("click", () => {
+          const itemId = card.dataset.item;
+          const item = items.find(i => i.id === itemId);
+          if (item) this.showItemDetail(item, state);
+        });
+      });
+    }
+  },
+
+  showItemDetail(item, state) {
+    const panel = this.container.querySelector("#item-detail-panel");
+    if (!panel) return;
+
+    const rarityData = DATA.rarity[item.rarity] || DATA.rarity.white;
+    let statsHtml = "";
+    if (item.baseStats) {
+      for (const [stat, val] of Object.entries(item.baseStats)) {
+        if (val) statsHtml += `<div>${stat}: +${val}</div>`;
+      }
+    }
+
+    let affixesHtml = "";
+    if (item.affixes && item.affixes.length > 0) {
+      affixesHtml = `<div class="item-affixes"><b>词条:</b> ${item.affixes.map(a => a.name).join(", ")}</div>`;
+    }
+
+    const isEquip = ["sword","axe","hammer","bow","staff","dagger","shield","armor","helmet","legs","boots","gloves","necklace","ring"].includes(item.type);
+    const equipBtn = isEquip ? `<button class="menu-btn" id="equip-btn">⚔️ 装备</button>` : "";
+
+    panel.innerHTML = `
+      <div class="detail-content">
+        <h4 style="color:${rarityData.color}">${item.name}</h4>
+        <div class="item-meta">${rarityData.name} · Lv.${item.level || 1}</div>
+        ${statsHtml ? `<div class="item-stats">${statsHtml}</div>` : ""}
+        ${affixesHtml}
+        <div class="detail-actions">
+          ${equipBtn}
+          <button class="menu-btn" id="close-detail">关闭</button>
+        </div>
+      </div>
+    `;
+    panel.classList.remove("hidden");
+
+    // 绑定装备按钮
+    if (isEquip) {
+      panel.querySelector("#equip-btn")?.addEventListener("click", () => {
+        const result = InventorySystem.equipFromInventory(state, item.id);
+        if (result.ok) {
+          this.showMessage(`装备了 ${item.name}`);
+          panel.classList.add("hidden");
+          this.renderInventory(state);
+        } else {
+          this.showMessage(result.reason || "装备失败", "error");
+        }
+      });
+    }
+
+    panel.querySelector("#close-detail")?.addEventListener("click", () => {
+      panel.classList.add("hidden");
+    });
   },
 
   renderItemCard(item) {
