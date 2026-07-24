@@ -1,5 +1,5 @@
 /* ============================================
-   《寻亲风云录》样式 — 新手村小地图版
+   《寻亲风云录》样式表 — 完整版
    ============================================ */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -160,10 +160,6 @@ html, body {
   color: var(--text-muted);
 }
 
-.legend-dot {
-  margin-right: 2px;
-}
-
 .legend-dot.current { color: var(--accent); }
 .legend-dot.exit { color: var(--accent); }
 .legend-dot.known { color: var(--text-muted); }
@@ -241,6 +237,42 @@ html, body {
 .action-exit:hover {
   background: var(--accent);
   color: var(--bg-primary);
+}
+
+/* ---- 荒地特殊按钮 ---- */
+.action-gather {
+  border-color: #8b7355;
+  color: #c9a96e;
+}
+
+.action-gather:hover {
+  background: #2a2520;
+  border-color: #c9a96e;
+}
+
+.action-idle {
+  border-color: #4a7a9e;
+  color: #6ab0e0;
+}
+
+.action-idle:hover {
+  background: #1a2530;
+  border-color: #6ab0e0;
+}
+
+.action-combat {
+  background: var(--error);
+  color: white;
+  border-color: var(--error);
+}
+
+.action-combat:hover {
+  background: #d04040;
+}
+
+.action-info {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ---- 底部菜单 ---- */
@@ -813,6 +845,55 @@ html, body {
 .save-actions .menu-btn {
   padding: 8px;
   font-size: 13px;
+}
+
+/* ---- 碑文 ---- */
+.epitaph-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.epitaph-frame h1 {
+  font-size: 32px;
+  margin-bottom: 30px;
+  color: var(--text-muted);
+}
+
+.epitaph-content {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 30px;
+  max-width: 400px;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.epitaph-content h2 {
+  font-size: 24px;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.epitaph-content p {
+  padding: 4px 0;
+  color: var(--text-secondary);
+}
+
+.epitaph-quote {
+  margin-top: 20px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.epitaph-actions {
+  display: flex;
+  gap: 12px;
 }
 
 /* ---- 弹窗 ---- */
