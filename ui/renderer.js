@@ -234,7 +234,7 @@ class UIRenderer {
         <div class="hp-bar">
           <div class="hp-fill" style="width:${hpPct}%;background:${hpColor}"></div>
         </div>
-        <div class="unit-stats">⚔${unit.attack || 0} 🛡${unit.defense || 0} 💨${unit.speed || 0}</div>
+        <div class="unit-stats">⚔${Math.round(unit.attack || 0)} 🛡${Math.round(unit.defense || 0)} 💨${(unit.speed || 0).toFixed(1)}</div>
       </div>
     `;
   }
