@@ -18,6 +18,8 @@ class CombatEngine {
     this.allUnits = [];       // 所有单位（用于排序）
     this.defenseBoosts = {};  // 本回合防御加成 { unitId: boost }
     this.selectedTarget = null; // 玩家选中的目标
+    this.cooldowns = {};      // 技能冷却 { skillId: remainingTurns }
+    this.selectedSkill = null; // 当前选中的技能ID
   }
 
   // ========== 启动战斗 ==========
@@ -38,6 +40,8 @@ class CombatEngine {
     this.currentTurnIndex = 0;
     this.defenseBoosts = {};
     this.selectedTarget = null;
+    this.cooldowns = {};
+    this.selectedSkill = null;
 
     this.calculateTurnOrder();
 
@@ -145,11 +149,56 @@ class CombatEngine {
         break;
 
       case 'skill':
-        if (!target || !target.alive) {
-          target = this.enemyUnits.find(e => e.alive && e.hp > 0);
+        // 如果还没有选择技能，不直接执行，由UI面板处理技能选择
+        // 如果已选择技能，则执行技能
+        if (this.selectedSkill) {
+          // 获取state引用
+          var state = window.gameApp && window.gameApp.state ? window.gameApp.state : null;
+          if (!target || !target.alive) {
+            target = this.enemyUnits.find(function(e) { return e.alive && e.hp > 0; });
+          }
+          if (!target) {
+            // 没有可用目标，取消技能选择
+            this.selectedSkill = null;
+            this.nextTurn();
+            break;
+          }
+          // 检查技能是否可用
+          var checkResult = SkillSystem && SkillSystem.canUseSkill ? SkillSystem.canUseSkill(state, this.selectedSkill, this) : { ok: false, reason: "技能系统未加载" };
+          if (!checkResult.ok) {
+            this.combatLog.push(checkResult.reason);
+            this.dispatchUpdate(checkResult.reason);
+            this.selectedSkill = null;
+            this.nextTurn();
+            break;
+          }
+          // 调用 SkillSystem.useSkill 执行技能
+          var skillResult = SkillSystem.useSkill(this.selectedSkill, unit, target, this.allUnits, this);
+          if (skillResult.log) {
+            this.combatLog.push(skillResult.log);
+            console.log('[战斗]', skillResult.log);
+            this.dispatchUpdate(skillResult.log);
+          }
+          // 处理AOE追加目标的日志
+          if (skillResult.aoeTargets && skillResult.aoeTargets.length > 0) {
+            for (var si = 0; si < skillResult.aoeTargets.length; si++) {
+              var aoeHit = skillResult.aoeTargets[si];
+              if (aoeHit.target && !aoeHit.target.alive && aoeHit.target.hp <= 0) {
+                var aoeKillMsg = "（" + aoeHit.target.name + " 倒下了）";
+                this.combatLog.push(aoeKillMsg);
+                this.dispatchUpdate(aoeKillMsg);
+              }
+            }
+          }
+          // 清除已选择的技能
+          this.selectedSkill = null;
+          if (this.checkBattleEnd()) return;
+          this.nextTurn();
+        } else {
+          // 未选择技能，通过事件通知UI显示技能选择面板
+          var evt = new CustomEvent('combat-select-skill', { detail: { combat: this } });
+          document.dispatchEvent(evt);
         }
-        if (target) this.executeAction(unit, 'skill', target);
-        else this.nextTurn();
         break;
 
       case 'defend':
@@ -161,13 +210,58 @@ class CombatEngine {
         break;
 
       case 'item':
-        const heal = 30;
-        const beforeHp = unit.hp;
-        unit.hp = Math.min(unit.maxHp, unit.hp + heal);
-        const actualHeal = unit.hp - beforeHp;
-        const itemMsg = `${unit.name} 使用药水，回复 ${actualHeal} HP`;
-        this.combatLog.push(itemMsg);
-        this.dispatchUpdate(itemMsg);
+        // 从背包中查找消耗品（type为consumable或名称包含'药水'）
+        var potion = null;
+        if (window.gameApp && window.gameApp.state && window.gameApp.state.inventory) {
+          var items = window.gameApp.state.inventory.items || [];
+          // 优先使用HP药水（type为consumable且含有healHp属性，或名称包含'药水'）
+          potion = items.find(function(it) {
+            return it.type === 'consumable' && it.healHp && it.healHp > 0;
+          });
+          // 如果没有找到HP药水，尝试找任何名称包含'药水'的消耗品
+          if (!potion) {
+            potion = items.find(function(it) {
+              return it.type === 'consumable' && it.name && it.name.indexOf('药水') !== -1;
+            });
+          }
+          // 最后尝试任何consumable类型的物品
+          if (!potion) {
+            potion = items.find(function(it) {
+              return it.type === 'consumable';
+            });
+          }
+        }
+        if (!potion) {
+          var noItemMsg = '没有可用的药水';
+          this.combatLog.push(noItemMsg);
+          this.dispatchUpdate(noItemMsg);
+          this.nextTurn();
+          break;
+        }
+        // 使用药水效果
+        var healHp = potion.healHp || 0;
+        var healMp = potion.healMp || 0;
+        var beforeHp2 = unit.hp;
+        var beforeMp = unit.mp;
+        if (healHp > 0) {
+          unit.hp = Math.min(unit.maxHp, unit.hp + healHp);
+        }
+        if (healMp > 0) {
+          unit.mp = Math.min(unit.maxMp, unit.mp + healMp);
+        }
+        var actualHealHp = unit.hp - beforeHp2;
+        var actualHealMp = unit.mp - beforeMp2;
+        var healMsg = unit.name + ' 使用了' + potion.name;
+        if (actualHealHp > 0) healMsg += '，回复 ' + actualHealHp + ' HP';
+        if (actualHealMp > 0) healMsg += '，回复 ' + actualHealMp + ' MP';
+        if (actualHealHp === 0 && actualHealMp === 0) healMsg += '，但没有效果';
+        // 从背包中移除使用的物品
+        var potionIdx = window.gameApp.state.inventory.items.indexOf(potion);
+        if (potionIdx !== -1) {
+          window.gameApp.state.inventory.items.splice(potionIdx, 1);
+        }
+        this.combatLog.push(healMsg);
+        this.dispatchUpdate(healMsg);
         this.nextTurn();
         break;
 
@@ -285,6 +379,15 @@ class CombatEngine {
       this.round++;
       // 清除防御加成
       this.defenseBoosts = {};
+      // 递减所有技能冷却
+      for (var cid in this.cooldowns) {
+        if (this.cooldowns.hasOwnProperty(cid) && this.cooldowns[cid] > 0) {
+          this.cooldowns[cid]--;
+          if (this.cooldowns[cid] <= 0) {
+            delete this.cooldowns[cid];
+          }
+        }
+      }
       // 重新计算行动顺序（活着的单位）
       this.calculateTurnOrder();
 
@@ -354,6 +457,37 @@ class CombatEngine {
 
     this.combatLog.push(message);
 
+    // 战斗结束后同步HP/MP回state
+    if (window.gameApp && window.gameApp.state) {
+      var state = window.gameApp.state;
+      // 同步主角HP/MP
+      if (this.playerUnit) {
+        state.player.hp = Math.max(1, this.playerUnit.hp);
+        state.player.mp = Math.max(0, this.playerUnit.mp);
+      }
+      // 同步随从HP/MP
+      if (this.allyUnits && this.allyUnits.length > 0 && state.companions) {
+        this.allyUnits.forEach(function(ally) {
+          var companion = state.companions.find(function(c) { return c.id === ally.id; });
+          if (companion) {
+            companion.hp = Math.max(0, ally.hp);
+            companion.mp = Math.max(0, ally.mp);
+            companion.alive = ally.hp > 0;
+          }
+        });
+      }
+    }
+
+    // 死亡流程处理
+    if (result === 'player_defeat' && window.gameApp && window.gameApp.state) {
+      var deathState = window.gameApp.state;
+      var currentZone = deathState.world && deathState.world.currentZone ? deathState.world.currentZone : 'greyVillage';
+      var deathResult = StateUtils.handleDeath(deathState, currentZone);
+      if (deathResult && deathResult.message) {
+        this.combatLog.push(deathResult.message);
+      }
+    }
+
     const event = new CustomEvent('combat-end', {
       detail: { combat: this, result: result, message: message, rewards: rewards }
     });
@@ -362,11 +496,12 @@ class CombatEngine {
 
   // ========== 计算奖励 ==========
   calculateRewards() {
-    let totalExp = 0;
-    let totalGold = 0;
-    const drops = [];
+    var totalExp = 0;
+    var totalGold = 0;
+    var drops = [];
+    var equipmentDrops = [];
 
-    this.enemyUnits.forEach(e => {
+    this.enemyUnits.forEach(function(e) {
       totalExp += e.exp || 0;
       totalGold += e.gold || 0;
       if (e.drop) drops.push(e.drop);
@@ -374,13 +509,13 @@ class CombatEngine {
 
     // 发放经验
     if (window.gameApp && window.gameApp.state) {
-      const state = window.gameApp.state;
-      const expResult = StateUtils.addExp(state, totalExp);
+      var state = window.gameApp.state;
+      var expResult = StateUtils.addExp(state, totalExp);
       StateUtils.addGold(state, totalGold);
 
       // 添加掉落物到背包
-      drops.forEach(drop => {
-        const item = {
+      drops.forEach(function(drop) {
+        var item = {
           id: Utils.uuid(),
           name: drop.name,
           type: drop.type || 'material',
@@ -391,9 +526,39 @@ class CombatEngine {
         StateUtils.addToInventory(state, item);
       });
 
-      return { exp: totalExp, gold: totalGold, drops: drops, expResult: expResult };
+      // 装备掉落逻辑
+      this.enemyUnits.forEach(function(enemy) {
+        // 根据敌人类型决定掉落概率
+        var dropChance = 0.15; // 普通怪15%
+        if (enemy.type === 'elite') {
+          dropChance = 0.50; // 精英怪50%
+        } else if (enemy.type === 'boss') {
+          dropChance = 1.0;  // Boss 100%
+        }
+        // 概率判定是否掉落
+        if (Math.random() < dropChance) {
+          var enemyLevel = enemy.level || 1;
+          // 使用 Utils.generateEquipment 生成装备
+          var equip = Utils.generateEquipment(enemyLevel);
+          // 添加到背包
+          StateUtils.addToInventory(state, equip);
+          equipmentDrops.push(equip);
+          // 记录掉落信息到战斗日志
+          var dropMsg = '获得装备：' + equip.name + '（' + Utils.getQualityName(equip.rarity) + '）';
+          console.log('[战斗]', dropMsg);
+        }
+      }.bind(this));
+
+      // 如果有装备掉落，汇总显示
+      if (equipmentDrops.length > 0) {
+        var equipDropNames = equipmentDrops.map(function(eq) { return eq.name; }).join('、');
+        var equipSummaryMsg = '装备掉落：' + equipDropNames;
+        this.combatLog.push(equipSummaryMsg);
+      }
+
+      return { exp: totalExp, gold: totalGold, drops: drops, equipmentDrops: equipmentDrops, expResult: expResult };
     }
-    return { exp: totalExp, gold: totalGold, drops: drops };
+    return { exp: totalExp, gold: totalGold, drops: drops, equipmentDrops: equipmentDrops };
   }
 
   // ========== 发送更新事件 ==========

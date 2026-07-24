@@ -19,7 +19,7 @@ class SceneManager {
         actions: [
           { label: '与艾琳对话', type: 'talk', target: 'ailin' },
         ],
-        exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_荒地', '灰烟村_矿脉'],
+        exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_荒地', '灰烟村_矿脉', '灰烟村_药草园', '灰烟村_村长家', '灰烟村_鱼塘', '灰烟村_杂货铺', '灰烟村_练功场', '灰烟村_后山小径'],
       },
       // ===== 灰烟村·酒馆 =====
       '灰烟村_酒馆': {
@@ -67,6 +67,86 @@ class SceneManager {
         ],
         exits: ['灰烟村'],
       },
+
+      // ===== 灰烟村·药草园（采集帧）=====
+      '灰烟村_药草园': {
+        id: 'greyVillage_herbGarden',
+        type: 'wild',
+        name: '药草园',
+        desc: '村西头一片用篱笆围起来的小园子，里面种着各种药草。空气中弥漫着苦涩的草药味，几株不知名的野花在角落里顽强地开着。偶尔能看到毒蛇在草丛中穿梭。',
+        actions: [
+          { label: '采集草药', type: 'gather', target: '草药', amount: 2 },
+          { label: '挂机采集', type: 'idle_gather', target: '草药' },
+          { label: '驱赶毒蛇', type: 'battle', enemies: ['毒蛇', '毒蛇'] },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·村长家（对话帧）=====
+      '灰烟村_村长家': {
+        id: 'greyVillage_chiefHouse',
+        type: 'safe',
+        name: '村长家',
+        desc: '村中心一栋比其他房屋都宽敞的砖房。门口挂着褪色的匾额，上面依稀写着"济世堂"三个字。村长老奎正坐在堂前的太师椅上，手里捻着一串旧念珠，眉头紧锁。',
+        actions: [
+          { label: '与村长老奎对话', type: 'talk', target: 'chief_kui' },
+          { label: '查看墙上的家谱', type: 'inspect', target: 'family_tree' },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·村东鱼塘（采集帧）=====
+      '灰烟村_鱼塘': {
+        id: 'greyVillage_fishPond',
+        type: 'wild',
+        name: '村东鱼塘',
+        desc: '村子东边的一口天然鱼塘，水面碧绿，倒映着远处灰蒙蒙的山脊。塘边水草丰茂，几只野鸭在水面悠闲地游荡。偶尔能看到螃蟹在浅滩处吐泡泡。',
+        actions: [
+          { label: '抓螃蟹', type: 'battle', enemies: ['螃蟹', '螃蟹', '螃蟹'] },
+          { label: '采集水草', type: 'gather', target: '水草', amount: 2 },
+          { label: '挂机采集', type: 'idle_gather', target: '水草' },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·杂货铺（对话帧·可触发商店）=====
+      '灰烟村_杂货铺': {
+        id: 'greyVillage_grocery',
+        type: 'safe',
+        name: '杂货铺',
+        desc: '一间拥挤但收拾得井井有条的小铺子。货架上摆满了日用品、干粮和一些廉价的药水。掌柜是个精明的中年女人，人称"三婶"，据说什么都有货。',
+        actions: [
+          { label: '与三婶攀谈', type: 'talk', target: 'grocery_sanshen' },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·练功场（战斗帧·切磋）=====
+      '灰烟村_练功场': {
+        id: 'greyVillage_trainingGround',
+        type: 'wild',
+        name: '练功场',
+        desc: '村子北面一块平整的沙地，几根木桩上插着磨损的草靶。几个村中练兵正在这里操练，旁边立着一块木牌，上面写着"擅入切磋，自负伤损"。',
+        actions: [
+          { label: '向练兵切磋', type: 'battle', enemies: ['练兵'] },
+          { label: '挑战全场练兵', type: 'battle', enemies: ['练兵', '练兵', '练兵'] },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·后山小径（战斗帧·山贼）=====
+      '灰烟村_后山小径': {
+        id: 'greyVillage_mountainTrail',
+        type: 'wild',
+        name: '后山小径',
+        desc: '一条通往后山的狭窄土路，两侧灌木丛生，视线受阻。地上散落着几个被丢弃的包袱和碎布条——看来山贼经常在此出没，劫路过往的行人。',
+        actions: [
+          { label: '清剿山贼', type: 'battle', enemies: ['山贼', '山贼'] },
+          { label: '查看丢弃的包袱', type: 'inspect', target: 'abandoned_bag' },
+          { label: '采集灌木果子', type: 'gather', target: '野果', amount: 1 },
+        ],
+        exits: ['灰烟村'],
+      },
     };
   }
 
@@ -77,6 +157,10 @@ class SceneManager {
       '野兔': { name: '野兔', level: 1, hp: 15, maxHp: 15, attack: 3, defense: 1, speed: 15, exp: 8, gold: 2 },
       '野鸭': { name: '野鸭', level: 1, hp: 20, maxHp: 20, attack: 5, defense: 1, speed: 12, exp: 10, gold: 3 },
       '螃蟹': { name: '螃蟹', level: 1, hp: 25, maxHp: 25, attack: 6, defense: 5, speed: 5, exp: 12, gold: 4 },
+      // ===== 灰烟村扩展敌人 =====
+      '毒蛇': { name: '毒蛇', level: 2, hp: 22, maxHp: 22, attack: 8, defense: 2, speed: 13, exp: 25, gold: 5, drop: { name: '蛇皮', type: 'material', rarity: 'white' } },
+      '练兵': { name: '村练兵', level: 3, hp: 50, maxHp: 50, attack: 9, defense: 6, speed: 8, exp: 40, gold: 12, drop: { name: '练功牌', type: 'material', rarity: 'green' } },
+      '山贼': { name: '山贼', level: 3, hp: 45, maxHp: 45, attack: 11, defense: 4, speed: 9, exp: 45, gold: 18, drop: { name: '山贼令牌', type: 'material', rarity: 'green' } },
     };
   }
 
@@ -207,6 +291,16 @@ class SceneManager {
       } else {
         this.showLog(result.reason || '背包已满');
       }
+    }
+  }
+
+  // ========== 与NPC对话（委托给DialogueSystem）==========
+  talkTo(npcId) {
+    if (DialogueSystem) {
+      DialogueSystem.startDialogue(npcId);
+    } else {
+      console.warn('[场景] DialogueSystem 未加载，无法与NPC对话:', npcId);
+      this.showLog('对话系统不可用。');
     }
   }
 
