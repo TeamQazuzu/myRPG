@@ -2,29 +2,32 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>寻亲风云录</title>
   <link rel="stylesheet" href="css/style.css">
-<base target="_blank">
 </head>
 <body>
-  <div id="game-container"></div>
-
-  <!-- 核心数据 -->
+  <div id="game-container">
+    <!-- 顶部：玩家信息栏 -->
+    <div id="player-info"></div>
+    <!-- 中间：场景/战斗（由 renderer 动态填充） -->
+    <div id="scene-container"></div>
+    <div id="combat-container" style="display:none"></div>
+    <div id="combat-log" style="display:none"></div>
+    <div id="action-buttons" style="display:none"></div>
+    <div id="combat-result" style="display:none"></div>
+    <!-- 底部：管理栏 -->
+    <div id="bottom-bar"></div>
+  </div>
+  <!-- 按顺序加载脚本 -->
   <script src="core/data.js"></script>
   <script src="core/utils.js"></script>
   <script src="core/state.js"></script>
-
-  <!-- 系统 -->
+  <script src="systems/combat.js"></script>
   <script src="systems/equipment.js"></script>
   <script src="systems/inventory.js"></script>
   <script src="systems/scene.js"></script>
-  <script src="systems/combat.js"></script>
-
-  <!-- UI -->
   <script src="ui/renderer.js"></script>
-
-  <!-- 主入口 -->
   <script src="app.js"></script>
 </body>
 </html>
