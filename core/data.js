@@ -74,8 +74,14 @@ const DATA = {
     purple: { name: "紫色", tier: 3, minAffixes: 3, maxAffixes: 4, color: "#9c27b0" },
     orange: { name: "橙色", tier: 4, minAffixes: 4, maxAffixes: 5, color: "#ff9800" },
     red:    { name: "红色", tier: 5, minAffixes: 6, maxAffixes: 6, color: "#f44336" },
-    gold:   { name: "金色", tier: 6, minAffixes: 3, maxAffixes: 3, color: "#ffd700" }, // 传家宝专用
+    gold:   { name: "金色", tier: 6, minAffixes: 3, maxAffixes: 3, color: "#ffd700" },
   },
+
+  // 品质顺序辅助（用于 equipment.js）
+  Q_ORDER: { white: 0, green: 1, blue: 2, purple: 3, orange: 4, red: 5, gold: 6 },
+
+  // 品质属性倍率（用于锻造升级时计算新属性）
+  Q_MULTI: { white: 1.0, green: 1.2, blue: 1.5, purple: 2.0, orange: 2.8, red: 4.0, gold: 3.0 },
 
   // ========== 装备承载上限 ==========
   equipLimits: [
@@ -86,11 +92,26 @@ const DATA = {
     { levelRange: [81, 99], maxRarity: "red",    sameColorMax: 99 },
   ],
 
+  // 按等级段限制的最高品质（equipment.js 辅助）
+  qualityLimits: {
+    bracket1: { maxQuality: "blue", sameLimit: 2 },
+    bracket2: { maxQuality: "purple", sameLimit: 2 },
+    bracket3: { maxQuality: "orange", sameLimit: 2 },
+    bracket4: { maxQuality: "red", sameLimit: 2 },
+    bracket5: { maxQuality: "red", sameLimit: 99 },
+  },
+
   // ========== 装备槽位 ==========
   equipSlots: [
     "weapon", "offhand", "helmet", "chest", "legs",
     "boots", "gloves", "necklace", "ring1", "ring2",
   ],
+
+  // 槽位中文名
+  slots: {
+    weapon: "武器", offhand: "副手", helmet: "头盔", chest: "胸甲", legs: "腿甲",
+    boots: "靴子", gloves: "手套", necklace: "项链", ring1: "戒指", ring2: "戒指"
+  },
 
   // ========== 装备词条池（80条·四系重构版）==========
   affixPool: {
@@ -119,7 +140,6 @@ const DATA = {
     critDmg:    { name: "暴伤",    effect: "critDmg",    value: 0.15,  minRarity: "purple", type: "attack" },
     pierce:     { name: "穿透",    effect: "pierce",     value: 0.10,  minRarity: "purple", type: "attack" },
     antiMagic:  { name: "破法",    effect: "antiMagic",  value: 0.20,  minRarity: "orange", type: "attack" },
-
     // 异常状态（18条）
     lacerate:   { name: "割裂",    effect: "bleedOnCrit",    value: 0.70,  minRarity: "blue",   type: "status" },
     bloodBlade: { name: "血刃",    effect: "bleedDmg",       value: 0.50,  minRarity: "purple", type: "status" },
@@ -139,7 +159,6 @@ const DATA = {
     thunderShock:{name: "雷震",    effect: "reduceHit",      value: 0.20,  minRarity: "blue",   type: "status" },
     scorchedSkin:{name: "灼肤",    effect: "burnReduceAtk",  value: 0.10,  minRarity: "purple", type: "status" },
     bleedOut:   { name: "流血不止",effect: "bleedNoHeal",    value: true,  minRarity: "orange", type: "status" },
-
     // 速度出手（8条）
     swift:      { name: "轻快",    effect: "speed",          value: 0.03,  minRarity: "green",  type: "speed" },
     gale:       { name: "疾风",    effect: "speed",          value: 0.06,  minRarity: "blue",   type: "speed" },
@@ -149,7 +168,6 @@ const DATA = {
     firstStrike:{ name: "先手",    effect: "firstTurnSpeed", value: 0.30,  minRarity: "purple", type: "speed" },
     nimble:     { name: "迅捷",    effect: "speedHpTrade",   value: {spd:0.08, hp:-0.05}, minRarity: "blue", type: "speed" },
     windSpirit: { name: "风灵",    effect: "dodgeSpeed",     value: 0.20,  minRarity: "orange", type: "speed" },
-
     // 防御类（12条）
     steelBody:  { name: "钢躯",    effect: "physDef",        value: 0.10,  minRarity: "green",  type: "defense" },
     ironWall:   { name: "铁壁",    effect: "physDef",        value: 0.20,  minRarity: "blue",   type: "defense" },
@@ -163,7 +181,6 @@ const DATA = {
     vitality:   { name: "生命",    effect: "maxHp",          value: 0.10,  minRarity: "green",  type: "defense" },
     vigor:      { name: "生机",    effect: "maxHp",          value: 0.20,  minRarity: "blue",   type: "defense" },
     regen:      { name: "再生",    effect: "hpRegen",        value: 5,     minRarity: "blue",   type: "defense" },
-
     // 功能类（10条）
     bloodthirst:{ name: "嗜血",    effect: "lifeSteal",      value: 0.08,  minRarity: "purple", type: "utility" },
     energyDrain:{ name: "吸能",    effect: "manaSteal",      value: 0.05,  minRarity: "purple", type: "utility" },
@@ -175,7 +192,6 @@ const DATA = {
     purify:     { name: "净化",    effect: "debuffCleanse",  value: 0.30,  minRarity: "orange", type: "utility" },
     guardian:   { name: "守护之约",effect: "protectChance",  value: 0.15,  minRarity: "purple", type: "utility" },
     comrade:    { name: "战友",    effect: "companionDmg",   value: 0.10,  minRarity: "blue",   type: "utility" },
-
     // 稀有类（8条）
     dragonRage: { name: "龙之怒",  effect: "dragonDmg",      value: {chance:0.05, mult:3.0}, minRarity: "orange", type: "rare" },
     dragonScale:{ name: "龙之鳞",  effect: "dragonImmune",    value: 0.05,  minRarity: "orange", type: "rare" },
@@ -252,162 +268,129 @@ const DATA = {
       combat: { hp: 5000, atk: 300, armor: 50, crit: 0.3, style: "glassCannon" },
       reward: "组织铭牌",
       onDefeat: "unlock_ashMines",
-      foreshadow: [37, 38], // 暗杀事件等级
+      foreshadow: [37, 38],
     },
     mechanicalGuard: {
-      name: "机械之守",
+      name: "机械守卫",
       level: 60,
-      knows: "什么都不知道。是组织设置的防御机制。",
-      stance: null,
-      combat: { hp: 8000, armor: 400, style: "tank" },
-      reward: "传送门激活",
+      knows: "组织的中坚力量，守护矿场。",
+      stance: "检测到入侵者。执行清除协议。",
+      combat: { hp: 8000, atk: 400, armor: 300, style: "tank" },
+      reward: "机械核心",
       onDefeat: "unlock_newWorld",
     },
     hermit: {
       name: "隐修者",
       level: 80,
-      knows: "组织全貌八成、父母离开的原因、12碎片存在。",
-      stance: "你爹打赢了我，然后走了，可他又改变了什么？你现在也打赢了我，你又能怎么样？",
-      combat: { hp: 10000, atk: 400, armor: 300, style: "balanced" },
-      reward: "12碎片线索+正邪转职",
-      onDefeat: "unlock_fragments",
+      knows: "组织的真相，碎片秘密。",
+      stance: "你终于来了。我等你很久了。",
+      combat: { hp: 12000, atk: 600, armor: 200, style: "mage" },
+      reward: "十二碎片之钥",
+      onDefeat: "unlock_skyTower",
     },
     finalBoss: {
-      name: "终局Boss",
+      name: "主人",
       level: 99,
-      variants: {
-        benevolent: { name: "白手套夫妻", desc: "组织秩序的执行者" },
-        ruthless:   { name: "绥靖派师徒", desc: "组织秩序的修补者" },
-      },
-      combat: { hp: 20000, atk: 600, armor: 500, style: "final" },
-      onDefeat: "ending",
+      knows: "一切。",
+      stance: "欢迎来到餐桌。",
+      combat: { hp: 50000, atk: 1000, armor: 500, style: "final" },
+      reward: "真相",
+      onDefeat: "game_complete",
     },
   },
 
-  // ========== 十二碎片 ==========
-  fragments: [
-    { id: 1,  zone: "newWorld", location: "资源平原·废弃哨塔",      type: "explore" },
-    { id: 2,  zone: "newWorld", location: "资源平原·地下暗河",      type: "puzzle" },
-    { id: 3,  zone: "newWorld", location: "资源平原·旧组织哨站",    type: "boss" },
-    { id: 4,  zone: "newWorld", location: "寂静城镇·镇长宅邸",    type: "explore" },
-    { id: 5,  zone: "newWorld", location: "寂静城镇·地下档案室",  type: "boss" },
-    { id: 6,  zone: "newWorld", location: "寂静城镇·旧教堂",      type: "puzzle" },
-    { id: 7,  zone: "newWorld", location: "空置殿堂·前厅",        type: "explore" },
-    { id: 8,  zone: "newWorld", location: "空置殿堂·试炼之间",    type: "boss" },
-    { id: 9,  zone: "newWorld", location: "空置殿堂·顶层观星台",  type: "puzzle" },
-    { id: 10, zone: "newWorld", location: "幽影裂隙·外围",        type: "explore" },
-    { id: 11, zone: "newWorld", location: "幽影裂隙·深处",        type: "boss" },
-    { id: 12, zone: "newWorld", location: "幽影裂隙·尽头裂缝",  type: "explore" },
-  ],
-
-  // ========== NPC（灰烟村）==========
+  // ========== NPC / 随从 ==========
   npcs: {
-    ailin:      { name: "艾琳",      role: "邻家少女",    desc: "父母双亡，背着父亲的旧弓，是你出发的理由", recruit: "auto", class: "ranger" },
-    chief:      { name: "村长",      role: "村长",        desc: "看着你长大，守着你父母托付的承诺" },
-    laokui:     { name: "老奎",      role: "退休矿工",    desc: "每天上山采矿石，认识你父亲", recruit: "好感度", class: "warrior" },
-    smith:      { name: "铁匠老哈",  role: "铁匠",        desc: "全村唯一会打铁的人" },
-    mira:       { name: "杂货店米拉",role: "杂货店老板娘",desc: "你爹以前赊过账" },
-    wood:       { name: "老农夫伍德",role: "种田人",      desc: "见过你父母最后一面" },
-    martha:     { name: "裁缝玛莎",  role: "裁缝",        desc: "做过你父母的御寒斗篷", recruit: "附魔斗篷", class: "mage_heal" },
-    xiaoke:     { name: "裁缝学徒小柯",role: "小裁缝",    desc: "从城里来的，知道外面的衣服", recruit: "找布匹", class: "ranger" },
-    laomu:      { name: "养羊人老穆",role: "猎人/养羊人", desc: "见过插着金属管的野猪" },
-    nuoen:      { name: "皮匠诺恩",  role: "皮匠",        desc: "能辨认非自然的皮", recruit: "带非自然的皮", class: "warrior" },
-    leina:      { name: "村医蕾娜",  role: "村医",        desc: "你父母走之前找她拿过止痛药", recruit: "珍稀药材", class: "mage_heal" },
-    blindHuo:   { name: "瞎眼老霍",  role: "卖炭人",      desc: "听脚步声认人" },
-    xiaonuo:    { name: "孤儿小诺",  role: "孤儿",        desc: "我长大了也要打怪物", recruit: "长大后支线", class: "ranger" },
-    zavier:     { name: "流浪商人泽维尔", role: "流浪商人", desc: "卖过红宝石给你父亲" },
-    bulong:     { name: "布隆",      role: "战士",        desc: "灰烬镇铁匠", recruit: "铁匠委托", class: "warrior" },
-    arthur:     { name: "阿瑟",      role: "法师·火焰",   desc: "灰烬山脉矿道救出", recruit: "矿道救出", class: "mage_fire" },
-    kate:       { name: "凯特",      role: "法师·雷电",   desc: "灰烬镇旅人对话", recruit: "旅人对话", class: "mage_lightning" },
-    luen:       { name: "鲁恩",      role: "战士",        desc: "灰烟矿场护送", recruit: "护送", class: "warrior" },
-  },
-
-  // ========== 生活技能 ==========
-  lifeSkills: {
-    mining:     { name: "采矿",     unlock: "初始",     idle: true,  source: null,         output: "矿石、宝石" },
-    smelting:   { name: "冶炼",     unlock: "初始",     idle: true,  source: "采矿产出",   output: "金属锭" },
-    weaving:    { name: "种植织布", unlock: "初始",     idle: true,  source: null,         output: "亚麻布、棉布" },
-    cooking:    { name: "种植烹饪", unlock: "初始",     idle: true,  source: null,         output: "基础食材" },
-    skinning:   { name: "剥皮",     unlock: "打野兽",   idle: true,  source: "野兽掉落",   output: "皮革、兽骨" },
-    tailoring:  { name: "裁缝",     unlock: "玛莎传授", idle: true,  source: "种植织布",   output: "布甲" },
-    leatherwork:{ name: "制皮",     unlock: "诺恩传授", idle: true,  source: "剥皮产出",   output: "皮甲" },
-    chef:       { name: "烹饪",     unlock: "米拉传授", idle: true,  source: "种植烹饪",   output: "食物增益" },
-    alchemy:    { name: "炼金",     unlock: "蕾娜传授", idle: true,  source: "采药",       output: "药水、药剂" },
-  },
-
-  // ========== 经验锁定提示 ==========
-  expLockMessages: {
-    20: "你感觉到一股无形的阻力。仿佛这片土地在告诉你：你已准备好了，但还差一个开始。",
-    40: "你已走遍了这里的每一条路。但有些门，需要有人打开。",
-    60: "你的技艺已经足够锋利。但黑暗中有什么东西在注视着你。",
-    80: "你已走到这个世界允许你走到的尽头。再往前，是另一段故事。",
-    99: "你已经站在了最高处。剩下的，只有那扇门。",
-  },
-
-  // ========== 死亡机制 ==========
-  death: {
-    normal: {
-      revives: 5,
-      greyVillage: "free",      // 不消耗复活
-      other: "consume",         // 消耗1次
-      zeroRevives: "epitaph",   // 碑文模式
+    ailin: {
+      id: "ailin",
+      name: "艾琳",
+      class: "ranger",
+      recruit: false,
+      desc: "你的青梅竹马，开局就在队伍里。",
     },
-    hardcore: {
-      revives: 0,
-      all: "retire",            // 角色退役，碑文模式
+    blacksmith: {
+      id: "blacksmith",
+      name: "老铁匠",
+      class: "warrior",
+      recruit: true,
+      desc: "灰烟村的铁匠，擅长锻造。",
+      reqLevel: 10,
+    },
+    hunter: {
+      id: "hunter",
+      name: "老猎人",
+      class: "ranger",
+      recruit: true,
+      desc: "经验丰富的猎人。",
+      reqLevel: 15,
+    },
+    mageApprentice: {
+      id: "mageApprentice",
+      name: "魔法学徒",
+      class: "mage",
+      branch: "fire",
+      recruit: true,
+      desc: "渴望冒险的魔法学徒。",
+      reqLevel: 20,
     },
   },
 
-  // ========== 传家宝 ==========
-  heirloom: {
-    slot1: { name: "父亲的旧短剑", holder: "player", rarity: "blue", level: 10, affixes: 3, desc: "开局自带" },
-    slot2: { name: "艾琳的旧弓",   holder: "ailin",  rarity: "blue", level: 10, affixes: 3, desc: "艾琳入队时自动装备" },
-    slot3: { name: null, holder: null, rarity: null, level: null, affixes: null, desc: "终局Boss内购解锁" },
-    rules: {
-      newGamePlus: true,
-      maxKeep: 3,               // 最多保留3条机制类词条
-      compressLevel: 10,        // 等级锁定为10级
-      color: "gold",            // 固定金色
-      prefix: "遗赠之",
-    },
-  },
-
-  // ========== 挂机系统 ==========
-  idle: {
-    maxDuration: 8,             // 小时
-    allowAutoTransition: false,   // 不允许自动转场
-    allowAutoSwitch: false,       // 不允许自动切换动作
-    actions: [
-      "mining", "woodcutting", "herbalism",
-      "hunting_beast", "hunting_humanoid", "hunting_mechanical",
-      "forging", "smelting", "tailoring", "leatherwork", "cooking", "alchemy",
-      "training",
-    ],
-  },
-
-  // ========== 战斗常量 ==========
-  combat: {
-    maxUnitsAlly: 3,
-    maxUnitsEnemy: 6,
-    maxTurns: 30,
-    multiWave: { min: 2, max: 4 },
-    drawPenalty: { hp: 1, mp: 0, goldLoss: 0.05, materialLoss: 0.10 },
-  },
-
-  // ========== 背包常量 ==========
-  inventory: {
-    baseCapacity: 20,
-    perGatekeeperBonus: 20,
-    stackLimits: { gold: 9999, basic: 99, rare: 50 },
-    storageBase: 50,
-    storageMax: 250,
-  },
-
-  // ========== 货币 ==========
+  // ========== 货币系统 ==========
   currency: {
-    copper: 1,
-    silver: 10,   // 10铜=1银
-    gold: 100,    // 100银=1金 (文档: 100银=1金)
-    maxCarry: 99999,
+    maxCarry: 999999,
+  },
+
+  // ========== 背包系统 ==========
+  inventory: {
+    perGatekeeperBonus: 20,
+    stackLimits: {
+      gold: 9999,
+      basic: 99,
+      rare: 20,
+    },
+  },
+
+  // ========== 经验锁提示 ==========
+  expLockMessages: {
+    20: "你感到身体达到了瓶颈，需要击败村长才能继续成长。",
+    40: "守夜人的阴影笼罩着你，必须战胜他才能突破。",
+    60: "机械守卫阻挡了你的去路，击败它才能继续前进。",
+    80: "隐修者的试炼 awaits，通过后才能触及巅峰。",
+    99: "你已达凡人极限。",
+  },
+
+  // ========== 符文之语（equipment.js 依赖）==========
+  runewords: {
+    fury: {
+      name: "愤怒",
+      c: ["ruby", "ruby", "diamond"],
+      effect: { physDmg: 0.25 },
+      desc: "三颗红宝石镶嵌触发：物理伤害+25%"
+    },
+    frostguard: {
+      name: "霜卫",
+      c: ["sapphire", "sapphire", "emerald"],
+      effect: { frostRes: 0.30 },
+      desc: "双蓝宝石+绿宝石：冰霜抗性+30%"
+    },
+    thunderlord: {
+      name: "雷霆领主",
+      c: ["topaz", "topaz", "topaz"],
+      effect: { lightDmg: 0.20 },
+      desc: "三颗黄宝石：雷电伤害+20%"
+    },
+  },
+
+  // ========== 装备类型到槽位映射（inventory.js / equipment.js 依赖）==========
+  typeToSlot: {
+    sword: "weapon", axe: "weapon", hammer: "weapon", bow: "weapon",
+    staff: "weapon", wand: "weapon", dagger: "weapon",
+    shield: "offhand",
+    helmet: "helmet", armor: "chest", chest: "chest",
+    legs: "legs", boots: "boots", gloves: "gloves",
+    necklace: "necklace", ring: "ring1",
   },
 };
+
+// 导出
+try { module.exports = DATA; } catch(e) {}

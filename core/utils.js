@@ -1,25 +1,21 @@
 // ============================================
 // 《寻亲风云录》通用工具函数
 // ============================================
-
 const Utils = {
   // ========== 随机数工具 ==========
-  
+
   // [0, 1) 随机浮点数
   random() {
     return Math.random();
   },
-
   // [min, max] 随机整数
   randInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   },
-
   // [min, max) 随机浮点数
   randFloat(min, max) {
     return min + Math.random() * (max - min);
   },
-
   // 按权重随机选择
   weightedRandom(items, weights) {
     const total = weights.reduce((a, b) => a + b, 0);
@@ -30,27 +26,27 @@ const Utils = {
     }
     return items[items.length - 1];
   },
-
   // 从数组中随机抽取n个不重复元素
   sample(array, n) {
     const shuffled = [...array].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, n);
   },
-
   // 概率判定
   chance(probability) {
     return Math.random() < probability;
   },
+  // 旧版兼容别名（equipment.js 可能用到 rand）
+  rand(min, max) {
+    return this.randInt(min, max);
+  },
 
   // ========== 数值计算 ==========
-
   // 伤害浮动（±10%）
   damageRoll(baseDamage) {
     const variance = 0.1;
     const roll = this.randFloat(1 - variance, 1 + variance);
     return Math.floor(baseDamage * roll);
   },
-
   // 暴击判定
   critRoll(critRate, critDmg) {
     if (this.chance(critRate)) {
@@ -58,27 +54,44 @@ const Utils = {
     }
     return { crit: false, multiplier: 1 };
   },
-
   // 闪避判定
   dodgeRoll(hit, dodge) {
-    // 基础命中率公式
     const baseHit = 0.9;
     const hitRate = baseHit + (hit - dodge) * 0.01;
     return this.chance(Math.max(0.05, Math.min(0.95, hitRate)));
   },
-
   // 等级缩放公式
   levelScale(baseValue, level, exponent = 1.1) {
     return Math.floor(baseValue * Math.pow(level, exponent) / Math.pow(10, exponent));
   },
-
   // 经验曲线
   expCurve(level) {
     return Math.floor(100 * Math.pow(1.15, level - 1));
   },
 
-  // ========== 装备生成 ==========
+  // ========== 装备系统辅助函数（equipment.js 依赖）==========
+  // 根据等级获取等级段
+  getLevelBracket(level) {
+    if (level <= 20) return "bracket1";
+    if (level <= 40) return "bracket2";
+    if (level <= 60) return "bracket3";
+    if (level <= 80) return "bracket4";
+    return "bracket5";
+  },
+  // 根据等级获取该等级段允许的最高品质
+  getMaxQuality(level) {
+    if (level <= 20) return "blue";
+    if (level <= 40) return "purple";
+    if (level <= 60) return "orange";
+    return "red";
+  },
+  // 获取品质中文名
+  getQualityName(quality) {
+    const r = DATA.rarity[quality];
+    return r ? r.name : quality;
+  },
 
+  // ========== 装备生成 ==========
   // 生成随机装备
   generateEquipment(level, rarityBias = null) {
     // 确定品质
@@ -94,14 +107,12 @@ const Utils = {
       else if (roll < 0.98) rarity = "orange";
       else rarity = "red";
     }
-
     const rarityData = DATA.rarity[rarity];
     const affixCount = this.randInt(rarityData.minAffixes, rarityData.maxAffixes);
-
     // 选择词条
     const availableAffixes = Object.entries(DATA.affixPool)
       .filter(([_, a]) => DATA.rarity[a.minRarity].tier <= rarityData.tier);
-    
+
     const selected = this.sample(availableAffixes, Math.min(affixCount, availableAffixes.length));
     const affixes = selected.map(([id, data]) => ({
       id,
@@ -109,14 +120,11 @@ const Utils = {
       effect: data.effect,
       value: data.value,
     }));
-
     // 确定装备类型
     const types = ["sword", "axe", "hammer", "bow", "staff", "dagger", "shield", "armor", "helmet", "boots", "gloves", "necklace", "ring"];
     const type = types[this.randInt(0, types.length - 1)];
-
     // 基础属性
     const baseStats = this.calcBaseStats(type, level);
-
     return {
       id: this.uuid(),
       name: this.generateItemName(type, rarity),
@@ -129,7 +137,6 @@ const Utils = {
       enchant: null,
     };
   },
-
   // 计算装备基础属性
   calcBaseStats(type, level) {
     const multipliers = {
@@ -155,7 +162,6 @@ const Utils = {
     }
     return stats;
   },
-
   // 生成装备名称
   generateItemName(type, rarity) {
     const prefixes = {
@@ -180,16 +186,16 @@ const Utils = {
       purple: ["稀有的", "卓越的", "闪耀的"],
       orange: ["传说的", "史诗的", "神圣的"],
       red: ["神话的", "至尊的", "毁灭的"],
+      gold: ["传家宝", "先祖的", "永恒的"],
     };
     const typeNames = prefixes[type] || ["物品"];
     const suffixList = suffixes[rarity] || [""];
     const suffix = suffixList[this.randInt(0, suffixList.length - 1)];
     const baseName = typeNames[this.randInt(0, typeNames.length - 1)];
-    return suffix + baseName;
+    return (suffix ? suffix + baseName : baseName);
   },
 
   // ========== 怪物生成 ==========
-
   generateMonster(level, type = "normal") {
     const multipliers = {
       normal: { hp: 1.0, atk: 1.0, exp: 1.0, gold: 1.0 },
@@ -197,14 +203,12 @@ const Utils = {
       boss: { hp: 5.0, atk: 2.0, exp: 10.0, gold: 5.0 },
     };
     const mult = multipliers[type] || multipliers.normal;
-
     const names = {
       normal: ["野狼", "山贼", "蝙蝠", "蜘蛛", "史莱姆", "骷髅兵"],
       elite: ["精英守卫", "强化兽", "暗影刺客", "火焰元素"],
       boss: ["区域首领", "守门员", "机械守卫"],
     };
     const nameList = names[type] || names.normal;
-
     return {
       id: this.uuid(),
       name: nameList[this.randInt(0, nameList.length - 1)],
@@ -225,12 +229,10 @@ const Utils = {
   },
 
   // ========== 字符串工具 ==========
-
   // 格式化数字（千分位）
   formatNumber(num) {
     return num.toLocaleString("zh-CN");
   },
-
   // 格式化金币显示
   formatGold(gold, silver, copper) {
     const parts = [];
@@ -239,7 +241,6 @@ const Utils = {
     if (copper > 0) parts.push(`${copper}铜`);
     return parts.join(" ") || "0铜";
   },
-
   // 生成UUID
   uuid() {
     return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
@@ -248,12 +249,10 @@ const Utils = {
       return v.toString(16);
     });
   },
-
   // 深拷贝
   deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
   },
-
   // 节流函数
   throttle(fn, delay) {
     let last = 0;
@@ -265,7 +264,6 @@ const Utils = {
       }
     };
   },
-
   // 防抖函数
   debounce(fn, delay) {
     let timer;
@@ -276,7 +274,6 @@ const Utils = {
   },
 
   // ========== 时间工具 ==========
-
   // 格式化时长
   formatDuration(seconds) {
     const h = Math.floor(seconds / 3600);
@@ -286,7 +283,6 @@ const Utils = {
     if (m > 0) return `${m}分${s}秒`;
     return `${s}秒`;
   },
-
   // 格式化日期
   formatDate(date) {
     const d = new Date(date);
@@ -294,7 +290,6 @@ const Utils = {
   },
 
   // ========== 战斗日志格式化 ==========
-
   formatCombatLog(entry) {
     const { actor, target, action, damage, crit, status, healed } = entry;
     let text = "";
@@ -311,7 +306,6 @@ const Utils = {
   },
 
   // ========== 存档大小估算 ==========
-
   estimateSaveSize(state) {
     const json = JSON.stringify(state);
     return json.length;

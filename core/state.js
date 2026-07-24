@@ -16,9 +16,9 @@ function createDefaultState() {
       silver: 0,
       copper: 0,
       class: "见习战士",
-      classPath: ["warrior"],       // ["warrior"] | ["ranger"] | ["mage", branch]
-      elementSpec: null,            // "fire" | "frost" | "lightning" | "heal" | null
-      awakened: false,              // 正邪转职标记
+      classPath: ["warrior"],
+      elementSpec: null,
+      awakened: false,
       attributes: {
         str: 8, agi: 8, int: 8,
         vit: 8, ten: 8, spi: 8,
@@ -30,20 +30,19 @@ function createDefaultState() {
       maxHp: 100,
       mp: 30,
       maxMp: 30,
-      combatMode: "manual",         // "manual" | "auto"
+      combatMode: "manual",
       location: "灰烟村·酒馆",
       zone: "greyVillage",
-      playTime: 0,                  // 秒
+      playTime: 0,
       deaths: 0,
       revivesLeft: 5,
       hardcore: false,
       dead: false,
       retired: false,
       canPlay: true,
-      blessingChoice: null,         // 内购奖励
+      blessingChoice: null,
     },
     companions: [
-      // 艾琳开局自动入队
       {
         id: "ailin",
         name: "艾琳",
@@ -57,14 +56,14 @@ function createDefaultState() {
         equipment: {
           weapon: { name: "父亲的旧弓", type: "bow", rarity: "blue", level: 10, affixes: [] },
         },
-        aiStrategy: "balanced",     // 预设战斗策略
+        aiStrategy: "balanced",
         alive: true,
       },
     ],
     inventory: {
       items: [],
       capacity: 20,
-      maxCapacity: 60,              // 20 + 20*4(击败4个守门员) = 100, 但文档说60
+      maxCapacity: 60,
     },
     storage: {
       items: [],
@@ -95,9 +94,9 @@ function createDefaultState() {
         finalBoss:        { defeated: false, attempts: 0 },
       },
       fragments: {
-        collected: [],                // [1, 3, 7, ...]
+        collected: [],
         total: 12,
-        unlocked: false,              // 击败隐修者后解锁
+        unlocked: false,
       },
       heirloom: {
         slot1: { equipped: true,  item: { name: "父亲的旧短剑", type: "sword", rarity: "gold", level: 10, affixes: [] } },
@@ -121,7 +120,6 @@ function createDefaultState() {
     quests: {
       active: [],
       completed: [],
-      // 支线事件追踪
       events: {
         mineWhispers: false,
         oldLedger: false,
@@ -136,15 +134,14 @@ function createDefaultState() {
       },
     },
     buffs: {
-      permanent: {},                  // 永久小Buff
-      temporary: [],                  // 临时Buff
+      permanent: {},
+      temporary: [],
     },
     crafting: {
-      recipes: [],                    // 已解锁配方
-      materials: {},                  // { "iron_ore": 50, ... }
+      recipes: [],
+      materials: {},
     },
     skills: {
-      // 生活技能等级
       mining:      { level: 1, exp: 0 },
       smelting:    { level: 1, exp: 0 },
       weaving:     { level: 1, exp: 0 },
@@ -156,23 +153,20 @@ function createDefaultState() {
       alchemy:     { level: 0, exp: 0 },
     },
     settings: {
-      textSpeed: "normal",            // "slow" | "normal" | "fast" | "instant"
+      textSpeed: "normal",
       combatAnim: true,
       sound: true,
       music: true,
       hardcoreMode: false,
       autoSave: true,
-      autoSaveInterval: 300,          // 秒
+      autoSaveInterval: 300,
     },
-    // 战斗状态（非存档，运行时）
     combat: null,
-    // 挂机状态
     idle: null,
-    // 叙事状态
     narrative: {
       currentScene: "opening",
       dialogueHistory: [],
-      flags: {},                      // 剧情标记
+      flags: {},
     },
   };
 }
@@ -181,23 +175,18 @@ function createDefaultState() {
 // 存档管理
 // ============================================
 const SAVE_KEY = "chronicle_keeper_save";
-
 const SaveManager = {
-  // 加载存档
   load() {
     try {
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return null;
       const data = JSON.parse(raw);
-      // 版本迁移可在此处理
       return this.migrate(data);
     } catch (e) {
       console.error("存档加载失败:", e);
       return null;
     }
   },
-
-  // 保存存档
   save(state) {
     try {
       state.world.lastSave = new Date().toISOString();
@@ -209,8 +198,6 @@ const SaveManager = {
       return false;
     }
   },
-
-  // 导出存档为JSON文件
   export(state) {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -220,8 +207,6 @@ const SaveManager = {
     a.click();
     URL.revokeObjectURL(url);
   },
-
-  // 导入存档
   import(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -236,20 +221,18 @@ const SaveManager = {
       reader.readAsText(file);
     });
   },
-
-  // 版本迁移
   migrate(data) {
     if (!data.version) data.version = "1.0.0";
-    // 未来版本迁移逻辑写在这里
+    if (!data.player) data.player = createDefaultState().player;
+    if (!data.world) data.world = createDefaultState().world;
+    if (!data.inventory) data.inventory = createDefaultState().inventory;
+    if (!data.equipment) data.equipment = createDefaultState().equipment;
+    if (!data.companions) data.companions = createDefaultState().companions;
     return data;
   },
-
-  // 删除存档
   delete() {
     localStorage.removeItem(SAVE_KEY);
   },
-
-  // 检查是否存在存档
   exists() {
     return localStorage.getItem(SAVE_KEY) !== null;
   },
@@ -259,7 +242,6 @@ const SaveManager = {
 // 状态操作工具
 // ============================================
 const StateUtils = {
-  // 计算等级上限（根据已击败守门员）
   getLevelCap(state) {
     const gk = state.world.gatekeepers;
     if (gk.finalBoss.defeated) return 99;
@@ -267,21 +249,15 @@ const StateUtils = {
     if (gk.mechanicalGuard.defeated) return 60;
     if (gk.nightWatcher.defeated) return 40;
     if (gk.villageChief.defeated) return 20;
-    return 20; // 灰烟村默认锁20
+    return 20;
   },
-
-  // 检查是否达到经验锁
   isExpLocked(state) {
     return state.player.level >= this.getLevelCap(state);
   },
-
-  // 获取当前区域等级范围
   getZoneLevelRange(state) {
     const zone = DATA.world.zones[state.world.currentZone];
     return zone ? zone.levelRange : [1, 99];
   },
-
-  // 增加经验（自动处理锁定）
   addExp(state, amount) {
     if (this.isExpLocked(state)) {
       return { gained: 0, locked: true, message: this.getLockMessage(state) };
@@ -291,38 +267,29 @@ const StateUtils = {
     while (state.player.exp >= state.player.expToNext && state.player.level < 99) {
       state.player.exp -= state.player.expToNext;
       state.player.level++;
-      state.player.attributePoints += 3; // 每级3点属性
+      state.player.attributePoints += 3;
       state.player.expToNext = Math.floor(100 * Math.pow(1.15, state.player.level - 1));
       leveled = true;
-      // 检查是否触发新等级锁
       if (this.isExpLocked(state)) break;
     }
     return { gained: amount, locked: false, leveled };
   },
-
-  // 获取经验锁提示文本
   getLockMessage(state) {
     const cap = this.getLevelCap(state);
     return DATA.expLockMessages[cap] || "你已至当前极限。";
   },
-
-  // 金币操作（自动处理溢出）
   addGold(state, amount) {
     const totalCopper = state.player.gold * 100 + state.player.silver * 10 + state.player.copper + Math.floor(amount * 100);
     state.player.gold = Math.floor(totalCopper / 100);
     state.player.silver = Math.floor((totalCopper % 100) / 10);
     state.player.copper = totalCopper % 10;
-    // 溢出处理
     if (state.player.gold > DATA.currency.maxCarry) {
       const overflow = state.player.gold - DATA.currency.maxCarry;
       state.player.gold = DATA.currency.maxCarry;
-      // 可在此生成"存款凭证"
       return { added: amount, overflow };
     }
     return { added: amount, overflow: 0 };
   },
-
-  // 扣除金币
   spendGold(state, amount) {
     const totalCopper = state.player.gold * 100 + state.player.silver * 10 + state.player.copper;
     const costCopper = Math.floor(amount * 100);
@@ -333,12 +300,9 @@ const StateUtils = {
     state.player.copper = remaining % 10;
     return true;
   },
-
-  // 计算玩家战斗属性（基础+装备+Buff）
   getCombatStats(state, unitId = "player") {
     const unit = unitId === "player" ? state.player : state.companions.find(c => c.id === unitId);
     if (!unit) return null;
-
     const base = { ...unit.attributes };
     const stats = {
       hp: unit.maxHp,
@@ -356,15 +320,11 @@ const StateUtils = {
       hpRegen: base.vit * 0.3,
       mpRegen: base.spi * 0.5,
     };
-
-    // 叠加装备属性
     const eq = unitId === "player" ? state.equipment : unit.equipment;
     if (eq) {
       for (const slot of Object.keys(eq)) {
         const item = eq[slot];
         if (!item) continue;
-        // 基础属性加成（根据装备类型和等级计算）
-        // 词条加成
         if (item.affixes) {
           for (const affix of item.affixes) {
             this.applyAffix(stats, affix);
@@ -372,18 +332,13 @@ const StateUtils = {
         }
       }
     }
-
-    // 叠加永久Buff
     for (const [key, buff] of Object.entries(state.buffs.permanent)) {
       if (buff.target === "all" || buff.target === unitId) {
         stats[buff.stat] = (stats[buff.stat] || 0) + buff.value;
       }
     }
-
     return stats;
   },
-
-  // 应用词条效果到战斗属性
   applyAffix(stats, affix) {
     const pool = DATA.affixPool[affix.id];
     if (!pool) return;
@@ -397,11 +352,8 @@ const StateUtils = {
       case "physDef": stats.physDef = (stats.physDef || 0) * (1 + pool.value); break;
       case "critRate": stats.critRate = (stats.critRate || 0) + pool.value; break;
       case "critDmg": stats.critDmg = (stats.critDmg || 0) + pool.value; break;
-      // ... 更多词条效果
     }
   },
-
-  // 装备承载检查
   checkEquipLimit(state, item) {
     const limits = DATA.equipLimits.find(l => state.player.level >= l.levelRange[0] && state.player.level <= l.levelRange[1]);
     if (!limits) return { ok: true };
@@ -410,15 +362,12 @@ const StateUtils = {
     if (rarityTier > maxTier) {
       return { ok: false, reason: `等级${state.player.level}无法穿戴${DATA.rarity[item.rarity].name}装备，最高${DATA.rarity[limits.maxRarity].name}` };
     }
-    // 同色数量检查
     const equipped = Object.values(state.equipment).filter(e => e && e.rarity === item.rarity);
     if (equipped.length >= limits.sameColorMax) {
       return { ok: false, reason: `${DATA.rarity[item.rarity].name}装备最多穿戴${limits.sameColorMax}件`, conflict: equipped };
     }
     return { ok: true };
   },
-
-  // 穿戴装备
   equipItem(state, item, slot) {
     const check = this.checkEquipLimit(state, item);
     if (!check.ok) return check;
@@ -426,8 +375,6 @@ const StateUtils = {
     state.equipment[slot] = item;
     return { ok: true, replaced: old };
   },
-
-  // 添加物品到背包
   addToInventory(state, item) {
     if (state.inventory.items.length >= state.inventory.capacity) {
       return { ok: false, reason: "背包已满" };
@@ -435,8 +382,6 @@ const StateUtils = {
     state.inventory.items.push(item);
     return { ok: true };
   },
-
-  // 随从招募
   recruitCompanion(state, npcId) {
     const npc = DATA.npcs[npcId];
     if (!npc || !npc.recruit) return { ok: false, reason: "不可招募" };
@@ -458,17 +403,13 @@ const StateUtils = {
     state.companions.push(companion);
     return { ok: true, companion };
   },
-
   generateCompanionAttributes(classKey) {
-    // 根据职业生成合理属性
     const base = { str: 8, agi: 8, int: 8, vit: 8, ten: 8, spi: 8 };
     if (classKey.includes("warrior")) { base.str = 12; base.vit = 10; base.ten = 10; }
     else if (classKey.includes("ranger")) { base.agi = 14; base.str = 10; }
     else if (classKey.includes("mage")) { base.int = 14; base.spi = 12; }
     return base;
   },
-
-  // 死亡处理
   handleDeath(state, zone) {
     if (state.player.hardcore) {
       state.player.retired = true;
@@ -492,25 +433,18 @@ const StateUtils = {
     state.player.location = "灰烟村·酒馆";
     return { mode: "revived", message: `消耗1次复活。剩余${state.player.revivesLeft}次。`, cost: 1 };
   },
-
-  // 击败守门员
   defeatGatekeeper(state, gkId) {
     const gk = state.world.gatekeepers[gkId];
     if (!gk) return;
     gk.defeated = true;
-    // 解锁新区域
     const zoneData = Object.values(DATA.world.zones).find(z => z.gatekeeper === gkId);
     if (zoneData) {
-      // 扩展背包
       state.inventory.capacity += DATA.inventory.perGatekeeperBonus;
     }
-    // 特殊处理
     if (gkId === "hermit") {
       state.world.fragments.unlocked = true;
     }
   },
-
-  // 获取当前可行动区域
   getAvailableZones(state) {
     const zones = [];
     const gk = state.world.gatekeepers;
@@ -521,21 +455,9 @@ const StateUtils = {
     if (gk.hermit.defeated) zones.push("skyTower");
     return zones;
   },
-
-  // 碎片收集
-  collectFragment(state, fragmentId) {
-    if (!state.world.fragments.unlocked) return { ok: false, reason: "碎片尚未解锁" };
-    if (state.world.fragments.collected.includes(fragmentId)) return { ok: false, reason: "已收集" };
-    state.world.fragments.collected.push(fragmentId);
-    // 检查是否集齐
-    if (state.world.fragments.collected.length >= 12) {
-      return { ok: true, complete: true, message: "12碎片集齐！传送门已激活。" };
-    }
-    return { ok: true, complete: false, progress: state.world.fragments.collected.length };
-  },
 };
 
 // 导出
 try {
   module.exports = { createDefaultState, SaveManager, StateUtils };
-} catch (e) {}
+} catch(e) {}
