@@ -330,57 +330,31 @@ const Game = {
   bindCombatEvents() {
     const container = Renderer.container;
     if (!container) return;
-    const combat = this.combatInstance;
-    if (!combat) return;
 
-    // 技能按钮 - 进入目标选择模式
     container.querySelectorAll(".skill-btn:not(.disabled)").forEach(btn => {
       btn.addEventListener("click", () => {
         const skillName = btn.dataset.skill;
-        combat.pendingAction = { type: "skill", skillName };
-        combat.targetSelection = true;
-        this.combatLoop();
+        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
+        const targetId = enemies[0]?.id;
+        this.executeCombatAction("player", { type: "skill", skillName }, targetId);
       });
     });
 
-    // 普攻/防御/物品按钮
     container.querySelectorAll(".combat-btn").forEach(btn => {
-      const action = btn.dataset.action;
-      if (action === "defend") {
-        btn.addEventListener("click", () => {
-          this.executeCombatAction("player", { type: "defend" }, "player");
-        });
-      } else if (action === "item") {
-        btn.addEventListener("click", () => {
-          Renderer.showMessage("物品功能待开发");
-        });
-      } else if (action === "cancel-target") {
-        btn.addEventListener("click", () => {
-          combat.pendingAction = null;
-          combat.targetSelection = false;
-          this.combatLoop();
-        });
-      }
-    });
-
-    // 目标选择 - 点击敌方单位
-    if (combat.targetSelection) {
-      container.querySelectorAll(".unit.enemy.selectable-target").forEach(unitEl => {
-        unitEl.addEventListener("click", () => {
-          const targetId = unitEl.dataset.unit;
-          if (!targetId) return;
-          const action = combat.pendingAction;
-          combat.pendingAction = null;
-          combat.targetSelection = false;
-          this.executeCombatAction("player", action, targetId);
-        });
+      btn.addEventListener("click", () => {
+        const action = btn.dataset.action;
+        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
+        const targetId = enemies[0]?.id;
+        this.executeCombatAction("player", { type: action }, targetId);
       });
-    }
+    });
 
     // 撤退
     container.querySelectorAll("[data-action='flee-combat']").forEach(btn => {
       btn.addEventListener("click", () => {
-        this.executeCombatAction("player", { type: "flee" }, "player");
+        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
+        const targetId = enemies[0]?.id;
+        this.executeCombatAction("player", { type: "flee" }, targetId);
       });
     });
   },
@@ -398,11 +372,11 @@ const Game = {
         }
         // 金币
         StateUtils.addGold(this.state, combat.rewards.gold);
-        // 物品（Boss/精英怪掉落装备，野兽只掉材料）
+        // 物品
         for (const item of combat.rewards.items) {
           InventorySystem.addToInventory(this.state, item);
         }
-        // 敌人专属掉落（材料 only）
+        // 野狗掉落
         for (const unit of combat.units) {
           if (unit.side === "enemy" && unit.hp <= 0 && unit.drops) {
             for (const drop of unit.drops) {
@@ -410,14 +384,14 @@ const Game = {
                 const dropItem = {
                   id: Utils.uuid(),
                   name: drop.name,
-                  type: "material",
+                  type: drop.type,
                   rarity: "white",
                   level: 1,
                   stackable: true,
                   stack: 1,
                 };
                 InventorySystem.addToInventory(this.state, dropItem);
-                this.state.narrative.dialogueHistory.push(`获得材料: ${drop.name}`);
+                this.state.narrative.dialogueHistory.push(`获得: ${drop.name}`);
               }
             }
           }
@@ -602,6 +576,29 @@ const Game = {
   },
 
   // ========== 碑文 ==========
+
+  equipItemById(itemId) {
+    if (!this.state) return;
+    const item = this.state.inventory.items.find(i => i.id === itemId);
+    if (!item) {
+      Renderer.showMessage("物品不存在", "error");
+      return;
+    }
+    const result = InventorySystem.equipFromInventory(this.state, itemId);
+    if (result.ok) {
+      Renderer.showMessage(`装备了 ${item.name}`);
+      this.closeItemDetail();
+      Renderer.renderInventory(this.state);
+      this.bindInventoryEvents();
+    } else {
+      Renderer.showMessage(result.reason || "装备失败", "error");
+    }
+  },
+
+  closeItemDetail() {
+    const panel = document.querySelector("#item-detail-panel");
+    if (panel) panel.classList.add("hidden");
+  },
 
   showEpitaph() {
     const p = this.state.player;
