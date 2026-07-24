@@ -2,7 +2,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>寻亲风云录</title>
+  <title>纪年·守望者</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -26,3 +26,24 @@
   <script src="app.js"></script>
 </body>
 </html>
+'''
+
+with open('/mnt/agents/output/index.html', 'w', encoding='utf-8') as f:
+    f.write(index_html)
+
+# 最终文件清单
+import os
+
+files = {
+    'index.html': '/mnt/agents/output/index.html',
+    'css/style.css': '/mnt/agents/output/style.css',
+    'core/data.js': '/mnt/agents/output/core_data.js',
+    'core/utils.js': '/mnt/agents/output/core_utils.js',
+    'core/state.js': '/mnt/agents/output/core_state.js',
+    'systems/equipment.js': '/mnt/agents/output/systems_equipment.js',
+    'systems/inventory.js': '/mnt/agents/output/systems_inventory.js',
+    'systems/scene.js': '/mnt/agents/output/systems_scene.js',
+    'systems/combat.js': '/mnt/agents/output/systems_combat.js',
+    'ui/renderer.js': '/mnt/agents/output/ui_renderer.js',
+    'app.js': '/mnt/agents/output/app.js',
+}
