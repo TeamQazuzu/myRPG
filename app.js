@@ -78,9 +78,25 @@ const Game = {
       this.state.player.attributes[attr] = Math.max(1, this.state.player.attributes[attr] + val);
     }
 
-    EquipmentSystem.recalcPlayerStats(this.state);
+    this.state.player.maxHp = this.state.player.attributes.vit * 10 + this.state.player.attributes.ten * 5; this.state.player.maxMp = this.state.player.attributes.spi * 5 + this.state.player.attributes.int * 2;
     this.state.player.hp = this.state.player.maxHp;
     this.state.player.mp = this.state.player.maxMp;
+
+    // 添加第三个随从（测试用：战士老奎）
+    this.state.companions.push({
+      id: "laokui",
+      name: "老奎",
+      class: "warrior",
+      level: 1,
+      hp: 120,
+      maxHp: 120,
+      mp: 20,
+      maxMp: 20,
+      attributes: { str: 12, agi: 6, int: 5, vit: 10, ten: 10, spi: 5 },
+      equipment: {},
+      aiStrategy: "balanced",
+      alive: true,
+    });
 
     this.state.narrative.dialogueHistory = [
       '"很美好的一天，朝阳升起，你徐徐醒来。"',
