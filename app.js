@@ -44,14 +44,30 @@ class GameApp {
     p.maxMp = 30 + attrs.spi * 5;
     if (p.mp > p.maxMp) p.mp = p.maxMp;
 
-    // 叠加装备基础属性
+    // 叠加装备基础属性和词条属性
     if (this.state.equipment) {
-      for (const slot of Object.keys(this.state.equipment)) {
-        const item = this.state.equipment[slot];
-        if (!item || !item.baseStats) continue;
-        if (item.baseStats.physAtk) p.attack += item.baseStats.physAtk;
-        if (item.baseStats.physDef) p.defense += item.baseStats.physDef;
-        if (item.baseStats.maxHp) p.maxHp += item.baseStats.maxHp;
+      for (var slotKey in this.state.equipment) {
+        var item = this.state.equipment[slotKey];
+        if (!item) continue;
+        // 叠加基础属性
+        if (item.baseStats) {
+          if (item.baseStats.physAtk) p.attack += item.baseStats.physAtk;
+          if (item.baseStats.physDef) p.defense += item.baseStats.physDef;
+          if (item.baseStats.maxHp) p.maxHp += item.baseStats.maxHp;
+        }
+        // 叠加词条属性
+        if (item.affixes && item.affixes.length > 0) {
+          // 初始化临时stats对象用于词条计算
+          var affixStats = { physAtk: 0, physDef: 0, maxHp: 0, speed: 0, critRate: 0, critDmg: 0 };
+          for (var ai = 0; ai < item.affixes.length; ai++) {
+            StateUtils.applyAffix(affixStats, item.affixes[ai]);
+          }
+          // 将词条计算结果叠加到主角属性上
+          if (affixStats.physAtk > 0) p.attack += Math.floor(affixStats.physAtk);
+          if (affixStats.physDef > 0) p.defense += Math.floor(affixStats.physDef);
+          if (affixStats.maxHp > 0) p.maxHp += Math.floor(affixStats.maxHp);
+          if (affixStats.speed > 0) p.speed += affixStats.speed;
+        }
       }
     }
 
