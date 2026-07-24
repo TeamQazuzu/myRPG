@@ -1,7 +1,11 @@
+// ============================================
+// 《寻亲风云录》场景系统 — 新手村+村边荒地测试版
+// ============================================
+
 const SceneSystem = {
 
-  // ========== 灰烟村场景定义 ==========
   scenes: {
+    // ===== 灰烟村安全区 =====
     "greyVillage_tavern": {
       id: "greyVillage_tavern",
       name: "酒馆",
@@ -10,7 +14,7 @@ const SceneSystem = {
       type: "safe",
       desc: "你长大的地方。炉火噼啪作响。艾琳坐在窗边，擦拭她的弓。外面天快黑了。",
       npcs: ["ailin"],
-      exits: ["greyVillage_smith", "greyVillage_tailor", "greyVillage_market", "greyVillage_graveyard"],
+      exits: ["greyVillage_smith", "greyVillage_tailor", "greyVillage_market", "greyVillage_graveyard", "greyVillage_wasteland"],
       objects: [
         { name: "炉火", desc: "温暖的火光", interact: "rest" },
       ],
@@ -46,7 +50,7 @@ const SceneSystem = {
       type: "safe",
       desc: "杂货店米拉在叫卖。老农夫伍德在卖菜。瞎眼老霍坐在角落里。",
       npcs: ["mira", "wood", "blindHuo"],
-      exits: ["greyVillage_smith", "greyVillage_tailor", "greyVillage_leather", "greyVillage_doctor", "greyVillage_gate"],
+      exits: ["greyVillage_smith", "greyVillage_tailor", "greyVillage_leather", "greyVillage_doctor", "greyVillage_gate", "greyVillage_wasteland"],
       mapPos: { x: 2, y: 1 },
     },
     "greyVillage_leather": {
@@ -97,22 +101,46 @@ const SceneSystem = {
       condition: { type: "gatekeeper", id: "villageChief", defeated: true, message: "村长拦住了你：\"你还不够强。\"" },
       mapPos: { x: 2, y: 0 },
     },
+
+    // ===== 村边荒地（测试帧）=====
+    "greyVillage_wasteland": {
+      id: "greyVillage_wasteland",
+      name: "村边荒地",
+      fullName: "灰烟村·村边荒地",
+      zone: "greyVillage",
+      type: "wild",
+      desc: "酒馆后面的荒地。杂草丛生，几块散落的石头露在地表。野狗在远处游荡。",
+      npcs: [],
+      exits: ["greyVillage_tavern", "greyVillage_market"],
+      objects: [
+        { name: "石头矿", desc: "裸露在地表的石头，可以敲打采集", interact: "mine_stone" },
+      ],
+      // 野狗刷新配置
+      respawn: {
+        enemies: [
+          { name: "野狗", type: "normal", level: 1, count: 2, hp: 30, atk: 5, def: 2, speed: 12, exp: 15, gold: 3 },
+        ],
+        cooldown: 120, // 2分钟（秒）
+        lastDefeated: null,
+      },
+      mapPos: { x: 4, y: 2 },
+    },
   },
 
-  // ========== 小地图网格配置 ==========
+  // ========== 小地图网格 ==========
   mapGrid: {
-    width: 5,
+    width: 6,
     height: 5,
     cells: [
-      [null, null, "greyVillage_gate", null, null],
-      ["greyVillage_leather", "greyVillage_smith", "greyVillage_market", "greyVillage_doctor", "greyVillage_tailor"],
-      [null, null, "greyVillage_tavern", null, null],
-      [null, null, "greyVillage_graveyard", null, null],
-      [null, null, null, null, null],
+      [null, null, "greyVillage_gate", null, null, null],
+      ["greyVillage_leather", "greyVillage_smith", "greyVillage_market", "greyVillage_doctor", "greyVillage_tailor", null],
+      [null, null, "greyVillage_tavern", null, "greyVillage_wasteland", null],
+      [null, null, "greyVillage_graveyard", null, null, null],
+      [null, null, null, null, null, null],
     ],
   },
 
-  // ========== 场景操作 ==========
+  // ========== 核心操作 ==========
 
   getCurrentScene(state) {
     return this.scenes[state.player.location] || this.scenes["greyVillage_tavern"];
@@ -164,9 +192,29 @@ const SceneSystem = {
       case "rest":
         state.player.hp = state.player.maxHp;
         state.player.mp = state.player.maxMp;
+        for (const comp of state.companions) {
+          if (comp.alive) { comp.hp = comp.maxHp; comp.mp = comp.maxMp; }
+        }
         return { ok: true, message: "你在炉火旁休息，恢复了全部生命和法力。" };
       case "mourn":
         return { ok: true, message: "你在墓碑前默哀。\"我会找到真相的。\"" };
+      case "mine_stone":
+        // 测试用石头采集
+        const stone = {
+          id: Utils.uuid(),
+          name: "石头",
+          type: "stone",
+          rarity: "white",
+          level: 1,
+          stackable: true,
+          stack: Utils.randInt(1, 3),
+        };
+        const addResult = InventorySystem.addToInventory(state, stone);
+        if (addResult.ok) {
+          return { ok: true, message: `你敲打石头，获得了 ${stone.stack} 块石头。（测试材料，暂无用途）` };
+        } else {
+          return { ok: false, reason: "背包已满" };
+        }
       default:
         return { ok: true, message: `你检查了${obj.name}。` };
     }
@@ -257,18 +305,77 @@ const SceneSystem = {
     return data;
   },
 
-  // ========== 野外战斗（灰烟村没有，预留接口）==========
+  // ========== 野狗生成与刷新 ==========
+
+  // 检查并生成荒地敌人
+  getWastelandEnemies(state) {
+    const scene = this.scenes["greyVillage_wasteland"];
+    const respawn = scene.respawn;
+    
+    // 检查是否在冷却中
+    if (respawn.lastDefeated) {
+      const elapsed = Math.floor((Date.now() - respawn.lastDefeated) / 1000);
+      if (elapsed < respawn.cooldown) {
+        const remaining = respawn.cooldown - elapsed;
+        return {
+          canSpawn: false,
+          remaining,
+          message: `野狗已被清理。约 ${Math.ceil(remaining / 60)} 分钟后刷新。`,
+        };
+      }
+    }
+
+    // 生成野狗
+    const enemies = [];
+    for (const template of respawn.enemies) {
+      for (let i = 0; i < template.count; i++) {
+        enemies.push({
+          id: Utils.uuid(),
+          name: template.name,
+          level: template.level,
+          type: template.type,
+          hp: template.hp,
+          maxHp: template.hp,
+          atk: template.atk,
+          def: template.def,
+          speed: template.speed,
+          critRate: 0.05,
+          critDmg: 1.5,
+          exp: template.exp,
+          gold: template.gold,
+          drops: [
+            { type: "dog_fang", name: "狗牙", chance: 0.5 },
+            { type: "dog_hide", name: "狗皮", chance: 0.3 },
+          ],
+          statusEffects: [],
+        });
+      }
+    }
+
+    return { canSpawn: true, enemies };
+  },
+
+  // 记录击败时间（用于刷新冷却）
+  recordDefeat(state) {
+    const scene = this.scenes["greyVillage_wasteland"];
+    if (scene && scene.respawn) {
+      scene.respawn.lastDefeated = Date.now();
+    }
+  },
+
+  // ========== 野外战斗入口 ==========
 
   spawnEnemies(scene, playerLevel) {
-    if (scene.zone !== "greyVillage") {
-      // 灰烟村没有野外敌人
-      const enemies = [];
-      for (let i = 0; i < Utils.randInt(1, 3); i++) {
-        enemies.push(Utils.generateMonster(playerLevel, "normal"));
-      }
-      return enemies.slice(0, DATA.combat.maxUnitsEnemy);
+    if (scene.id === "greyVillage_wasteland") {
+      // 荒地使用特殊刷新逻辑
+      return []; // 由 getWastelandEnemies 单独处理
     }
-    return [];
+    // 其他野外区域
+    const enemies = [];
+    for (let i = 0; i < Utils.randInt(1, 3); i++) {
+      enemies.push(Utils.generateMonster(playerLevel, "normal"));
+    }
+    return enemies.slice(0, DATA.combat.maxUnitsEnemy);
   },
 };
 
