@@ -39,8 +39,6 @@ const CombatEngine = {
       ...playerStats,
       hp: state.player.hp,
       mp: state.player.mp,
-      maxHp: state.player.maxHp,
-      maxMp: state.player.maxMp,
       skills: this.getAvailableSkills(state),
       ai: false,
     });
@@ -55,8 +53,6 @@ const CombatEngine = {
         ...stats,
         hp: comp.hp,
         mp: comp.mp,
-        maxHp: comp.maxHp,
-        maxMp: comp.maxMp,
         skills: this.getCompanionSkills(comp),
         ai: true,
         strategy: comp.aiStrategy,
@@ -195,13 +191,8 @@ const CombatEngine = {
     const results = [];
 
     if (action.type === "skill") {
-      const skills = actor.skills || [];
-      const skill = skills.find(s => s.name === action.skillName);
-      if (!skill) {
-        // 自动降级为普通攻击
-        action.skillName = "普通攻击";
-        return this.executeAction(combat, actorId, action, targetId);
-      }
+      const skill = actor.skills.find(s => s.name === action.skillName);
+      if (!skill) return null;
 
       // 检查MP
       if (actor.mp < skill.cost) {
@@ -457,9 +448,12 @@ const CombatEngine = {
     for (const unit of combat.units) {
       if (unit.side === "enemy" && unit.hp <= 0) {
         totalExp += unit.exp || 0;
-        totalGold += unit.gold || 0;
-        // 掉落
-        if (Utils.chance(0.3)) {
+        // 只有人形怪和Boss才掉金币，野兽不掉
+        if (unit.type !== "beast" && unit.type !== "normal") {
+          totalGold += unit.gold || 0;
+        }
+        // 只有精英/Boss才掉装备，野兽不掉
+        if ((unit.type === "elite" || unit.type === "boss") && Utils.chance(0.3)) {
           items.push(Utils.generateEquipment(unit.level));
         }
       }
