@@ -1,558 +1,702 @@
-// ui/renderer.js - UI渲染器
-// 两种视图：冒险视图（帧）和战斗视图，互斥切换
+// ui/renderer.js - UI渲染器（重写版）
+// 布局：顶部信息栏 → 中间场景/战斗 → 底部管理栏
 class UIRenderer {
-    constructor() {
-        this.container = null;
-        this.combatEngine = null;
+  constructor() {
+    this.container = null;
+    this.combatEngine = null;
+    this.isCombatActive = false;
+    this.gameLog = [];
+  }
+
+  // ========== 初始化 ==========
+  init(containerId) {
+    this.container = document.getElementById(containerId);
+    if (!this.container) {
+      console.error(`容器 #${containerId} 不存在`);
+      return false;
+    }
+    this.bindEvents();
+    this.renderBottomBar();
+    return true;
+  }
+
+  // ========== 事件绑定 ==========
+  bindEvents() {
+    // 场景切换
+    document.addEventListener('scene-change', (e) => {
+      if (!this.isCombatActive) this.renderScene(e.detail.scene);
+    });
+
+    // 战斗开始
+    document.addEventListener('combat-start', (e) => {
+      this.isCombatActive = true;
+      this.combatEngine = e.detail.combat;
+      this.showAdventureView(false);
+      this.renderCombat(this.combatEngine);
+    });
+
+    // 战斗更新
+    document.addEventListener('combat-update', (e) => {
+      this.updateCombat(e.detail.combat, e.detail.log);
+    });
+
+    // 战斗结束
+    document.addEventListener('combat-end', (e) => {
+      this.showCombatResult(e.detail);
+      setTimeout(() => {
+        this.showAdventureView(true);
         this.isCombatActive = false;
-    }
-
-    init(containerId) {
-        this.container = document.getElementById(containerId);
-        if (!this.container) {
-            console.error('[UI] 容器 #' + containerId + ' 不存在');
-            return false;
+        // 恢复场景显示
+        if (window.gameApp && window.gameApp.sceneManager) {
+          const scene = window.gameApp.sceneManager.getCurrentScene();
+          if (scene) this.renderScene(scene);
         }
-        this.bindEvents();
-        return true;
+        // 更新玩家信息
+        if (window.gameApp) window.gameApp.updatePlayerInfo();
+      }, 2500);
+    });
+
+    // 玩家回合
+    document.addEventListener('combat-player-turn', (e) => {
+      this.enableButtons(true);
+      this.updateTurnIndicator(e.detail.unit);
+    });
+
+    // 游戏日志
+    document.addEventListener('game-log', (e) => {
+      this.addGameLog(e.detail.message);
+    });
+  }
+
+  // ========== 冒险画面 ==========
+  renderScene(scene) {
+    const container = document.getElementById('scene-container');
+    if (!container) return;
+    container.style.display = 'flex';
+
+    const isSafe = scene.type === 'safe';
+    const typeLabel = isSafe ? '安全区' : '野外';
+    const typeClass = isSafe ? 'safe' : 'wild';
+
+    let html = `
+      <div class="scene-header">
+        <h2 class="scene-name">${scene.name}</h2>
+        <span class="scene-type ${typeClass}">${typeLabel}</span>
+      </div>
+      <div class="scene-desc">${scene.desc}</div>
+    `;
+
+    // 行动按钮
+    if (scene.actions && scene.actions.length > 0) {
+      html += '<div class="scene-actions">';
+      scene.actions.forEach((action, i) => {
+        html += `<button class="action-btn scene-action" data-action-idx="${i}">${action.label}</button>`;
+      });
+      html += '</div>';
     }
 
-    bindEvents() {
-     }   // 场景变化 → 渲染冒险视图
-        document.addEventListener('scene-change', (e) => {
-            if (!this.isCombatActive) {
-                this.renderAdventureView(e.detail.scene);
-            }
-        });
-
-        // 场景内消息（采集结果、对话等）
-        document.addEventListener('scene-message', (e) => {
-            this.showSceneMessage(e.detail.message);
-        });
-
-        // 战斗开始
-        document.addEventListener('combat-start', (e) => {
-            this.isCombatActive = true;
-            this.combatEngine = e.detail.combat;
-            this.hideAdventureView();
-            this.renderCombatView(this.combatEngine);
-        });
-
-        // 战斗更新
-        document.addEventListener('combat-update', (e) => {
-            this.updateCombatView(e.detail.combat, e.detail.log);
-        });
-
-        // 玩家回合
-        document.addEventListener('combat-player-turn', () => {
-            this.enableCombatButtons(true);
-        });
-
-        // 战斗结束
-        document.addEventListener('combat-end', (e) => {
-            this.showCombatResult(e.detail.result);
-        });
+    // 出口
+    if (scene.exits && scene.exits.length > 0) {
+      html += '<div class="scene-exits">';
+      html += '<span class="exits-label">前往：</span>';
+      scene.exits.forEach(exit => {
+        const exitScene = window.gameApp && window.gameApp.sceneManager && window.gameApp.sceneManager.scenes && window.gameApp.sceneManager.scenes[exit];
+        const exitName = exitScene ? exitScene.name : exit;
+        const exitType = exitScene ? exitScene.type : 'safe';
+        const icon = exitType === 'wild' ? '⚔' : '→';
+        html += `<button class="exit-btn" data-scene="${exit}">${icon} ${exitName}</button>`;
+      });
+      html += '</div>';
     }
 
-    // ================================================================
-    //  冒险视图
-    // ================================================================
+    container.innerHTML = html;
 
-    hideAdventureView() {
-        const el = document.getElementById('scene-container');
-        if (el) el.style.display = 'none';
-    }
+    // 绑定行动按钮
+    container.querySelectorAll('.scene-action').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.actionIdx);
+        this.handleSceneAction(scene.actions[idx]);
+      });
+    });
 
-    showAdventureView() {
-        const el = document.getElementById('scene-container');
-        if (el) el.style.display = 'flex';
-    }
-
-    renderAdventureView(scene) {
-        const el = document.getElementById('scene-container');
-        if (!el) return;
-
-        el.style.display = 'flex';
-        el.innerHTML = '';
-
-        // --- 1. 帧标题 ---
-        const header = document.createElement('div');
-        header.className = 'frame-header';
-        header.innerHTML = `<span class="frame-name">${scene.name}</span>`;
-        if (scene.type === 'safe') header.innerHTML += '<span class="frame-tag safe-tag">安全</span>';
-        else if (scene.type === 'battle') header.innerHTML += '<span class="frame-tag danger-tag">危险</span>';
-        else if (scene.type === 'gather') header.innerHTML += '<span class="frame-tag gather-tag">资源</span>';
-        el.appendChild(header);
-
-        // --- 2. 文字描述 ---
-        const desc = document.createElement('div');
-        desc.className = 'frame-desc';
-        desc.textContent = scene.desc;
-        el.appendChild(desc);
-
-        // --- 3. 帧内行动 ---
-        const actions = document.createElement('div');
-        actions.className = 'frame-actions';
-
-        // 战斗帧：显示"迎战"按钮
-        if (scene.type === 'battle' && scene.enemies && scene.enemies.length > 0) {
-            const cleared = scene.lastCleared &&
-                (Date.now() - scene.lastCleared < (scene.respawnTime || 120000));
-            if (cleared) {
-                const remaining = Math.ceil(((scene.respawnTime || 120000) - (Date.now() - scene.lastCleared)) / 1000);
-                actions.innerHTML = `<div class="action-hint">敌人已清空，${remaining}秒后刷新</div>`;
-            } else {
-                // 显示敌人概览
-                const enemyCounts = {};
-                scene.enemies.forEach(n => { enemyCounts[n] = (enemyCounts[n] || 0) + 1; });
-                const overview = Object.entries(enemyCounts).map(([name, count]) => `${name}×${count}`).join('、');
-                const btn = document.createElement('button');
-                btn.className = 'frame-action-btn fight-btn';
-                btn.textContent = `⚔️ 迎战（${overview}）`;
-                btn.addEventListener('click', () => {
-                    if (window.gameApp && window.gameApp.sceneManager) {
-                        window.gameApp.sceneManager.doAction('fight');
-                    }
-                });
-                actions.appendChild(btn);
-            }
+    // 绑定出口按钮
+    container.querySelectorAll('.exit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sceneName = btn.dataset.scene;
+        if (window.gameApp && window.gameApp.sceneManager) {
+          window.gameApp.sceneManager.enterScene(sceneName);
         }
+      });
+    });
+  }
 
-        // 采集帧：显示采集点
-        if (scene.type === 'gather' && scene.gatherSpots) {
-            scene.gatherSpots.forEach(spot => {
-                const btn = document.createElement('button');
-                btn.className = 'frame-action-btn gather-btn';
-                btn.textContent = `${spot.icon} ${spot.name}`;
-                btn.title = spot.desc;
-                btn.addEventListener('click', () => {
-                    if (window.gameApp && window.gameApp.sceneManager) {
-                        window.gameApp.sceneManager.doAction('gather', spot.id);
-                    }
-                });
-                actions.appendChild(btn);
-            });
+  // ========== 处理场景行动 ==========
+  handleSceneAction(action) {
+    console.log('[UI] 场景行动:', action.type, action.label);
+    const sm = window.gameApp && window.gameApp.sceneManager;
+    if (!sm) return;
+
+    switch (action.type) {
+      case 'battle':
+        sm.triggerBattle(action.enemies);
+        break;
+      case 'gather':
+        sm.gather(action.target, action.amount);
+        break;
+      case 'rest':
+        sm.rest();
+        break;
+      case 'talk':
+        this.addGameLog(`你与${action.target}交谈...（对话系统开发中）`);
+        break;
+      case 'inspect':
+        this.addGameLog('你仔细查看了一番...（inspect系统开发中）');
+        break;
+      case 'idle_gather':
+        this.addGameLog('挂机采集功能开发中...');
+        break;
+      default:
+        console.warn('[UI] 未知行动类型:', action.type);
+    }
+  }
+
+  // ========== 战斗画面 ==========
+  renderCombat(combat) {
+    const container = document.getElementById('combat-container');
+    if (!container) return;
+    container.style.display = 'flex';
+
+    let html = `
+      <div class="combat-header">
+        <span class="combat-title">⚔ 战斗</span>
+        <span class="combat-round">回合 ${combat.round}/${combat.maxRounds}</span>
+      </div>
+    `;
+
+    // 敌方区域
+    html += '<div class="combat-enemy-area">';
+    html += '<div class="combat-side-label">敌方</div>';
+    html += '<div class="combat-units" id="enemy-units">';
+    combat.getEnemyUnits().forEach((enemy, i) => {
+      html += this.renderUnitCard(enemy, 'enemy', i);
+    });
+    html += '</div></div>';
+
+    // 分隔
+    html += '<div class="combat-vs">VS</div>';
+
+    // 我方区域
+    html += '<div class="combat-ally-area">';
+    html += '<div class="combat-side-label">我方</div>';
+    html += '<div class="combat-units" id="ally-units">';
+    html += this.renderUnitCard(combat.getPlayerUnit(), 'player', 0);
+    combat.getAllyUnits().forEach((ally, i) => {
+      html += this.renderUnitCard(ally, 'ally', i + 1);
+    });
+    html += '</div></div>';
+
+    container.innerHTML = html;
+
+    // 渲染日志区
+    this.renderCombatLog();
+
+    // 渲染行动按钮
+    this.renderCombatButtons(combat);
+
+    // 绑定敌人选择
+    container.querySelectorAll('.unit-card.enemy').forEach(el => {
+      el.addEventListener('click', () => {
+        if (!combat.isPlayerTurn) return;
+        const idx = parseInt(el.dataset.idx);
+        const enemy = combat.getEnemyUnits()[idx];
+        if (enemy && enemy.alive && enemy.hp > 0) {
+          container.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
+          el.classList.add('selected');
+          combat.setSelectedTarget(enemy);
         }
+      });
+    });
+  }
 
-        // NPC对话
-        if (scene.npcs && scene.npcs.length > 0) {
-            scene.npcs.forEach(npcName => {
-                const btn = document.createElement('button');
-                btn.className = 'frame-action-btn talk-btn';
-                btn.textContent = `💬 ${npcName}`;
-                btn.addEventListener('click', () => {
-                    if (window.gameApp && window.gameApp.sceneManager) {
-                        window.gameApp.sceneManager.doAction('talk', npcName);
-                    }
-                });
-                actions.appendChild(btn);
-            });
-        }
+  // ========== 渲染单位卡片 ==========
+  renderUnitCard(unit, side, idx) {
+    const maxHp = unit.maxHp || 100;
+    const hp = Math.max(0, unit.hp || 0);
+    const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
+    const hpColor = hpPct > 50 ? '#5a9e5a' : hpPct > 25 ? '#d4a040' : '#c05050';
+    const dead = !unit.alive || hp <= 0;
+    const sideIcon = side === 'enemy' ? '🔴' : '🟢';
 
-        el.appendChild(actions);
+    return `
+      <div class="unit-card ${side} ${dead ? 'dead' : ''}" data-idx="${idx}" data-unit-id="${unit.id}">
+        <div class="unit-name">${sideIcon} ${unit.name} ${dead ? '💀' : ''}</div>
+        <div class="unit-hp-text">HP: ${hp}/${maxHp}</div>
+        <div class="hp-bar">
+          <div class="hp-fill" style="width:${hpPct}%;background:${hpColor}"></div>
+        </div>
+        <div class="unit-stats">⚔${unit.attack || 0} 🛡${unit.defense || 0} 💨${unit.speed || 0}</div>
+      </div>
+    `;
+  }
 
-        // --- 4. 场景内消息区（采集结果、对话等临时消息）---
-        const msgArea = document.createElement('div');
-        msgArea.className = 'frame-message';
-        msgArea.id = 'frame-message';
-        el.appendChild(msgArea);
+  // ========== 渲染战斗日志 ==========
+  renderCombatLog() {
+    const container = document.getElementById('combat-log');
+    if (!container) return;
+    container.style.display = 'block';
+    container.innerHTML = '<div class="log-title">战斗日志</div><div class="log-list" id="log-list"></div>';
 
-        // --- 5. 出口（方向移动）---
-        if (scene.exits && scene.exits.length > 0) {
-            const exits = document.createElement('div');
-            exits.className = 'frame-exits';
-            const label = document.createElement('span');
-            label.className = 'exits-label';
-            label.textContent = '前往';
-            exits.appendChild(label);
+    const logList = container.querySelector('#log-list');
+    const recent = this.combatEngine.combatLog.slice(-6);
+    recent.forEach(msg => {
+      const p = document.createElement('p');
+      p.textContent = msg;
+      logList.appendChild(p);
+    });
+    logList.scrollTop = logList.scrollHeight;
+  }
 
-            scene.exits.forEach(exitName => {
-                const btn = document.createElement('button');
-                btn.className = 'exit-btn';
-                btn.textContent = `→ ${exitName}`;
-                btn.addEventListener('click', () => {
-                    if (window.gameApp && window.gameApp.sceneManager) {
-                        window.gameApp.sceneManager.enterScene(exitName);
-                    }
-                });
-                exits.appendChild(btn);
-            });
-            el.appendChild(exits);
-        }
+  // ========== 渲染战斗按钮 ==========
+  renderCombatButtons(combat) {
+    const container = document.getElementById('action-buttons');
+    if (!container) return;
+    container.style.display = 'flex';
+    container.innerHTML = `
+      <button class="action-btn combat-btn" id="btn-attack">⚔ 攻击</button>
+      <button class="action-btn combat-btn" id="btn-skill">✨ 技能</button>
+      <button class="action-btn combat-btn" id="btn-defend">🛡 防御</button>
+      <button class="action-btn combat-btn" id="btn-item">🎒 道具</button>
+      <button class="action-btn combat-btn retreat-btn" id="btn-retreat">🏃 撤退</button>
+    `;
+
+    document.getElementById('btn-attack').addEventListener('click', () => {
+      if (!combat.isPlayerTurn) return;
+      const target = this.getSelectedTarget(combat);
+      if (target) {
+        this.disableButtons();
+        combat.playerAction('attack', target);
+      }
+    });
+
+    document.getElementById('btn-skill').addEventListener('click', () => {
+      if (!combat.isPlayerTurn) return;
+      const target = this.getSelectedTarget(combat);
+      if (target) {
+        this.disableButtons();
+        combat.playerAction('skill', target);
+      }
+    });
+
+    document.getElementById('btn-defend').addEventListener('click', () => {
+      if (!combat.isPlayerTurn) return;
+      this.disableButtons();
+      combat.playerAction('defend', null);
+    });
+
+    document.getElementById('btn-item').addEventListener('click', () => {
+      if (!combat.isPlayerTurn) return;
+      this.disableButtons();
+      combat.playerAction('item', null);
+    });
+
+    document.getElementById('btn-retreat').addEventListener('click', () => {
+      if (!combat.isPlayerTurn) return;
+      if (confirm('确定要撤退吗？')) {
+        combat.playerAction('retreat', null);
+      }
+    });
+
+    this.enableButtons(combat.isPlayerTurn);
+  }
+
+  // ========== 获取选中目标 ==========
+  getSelectedTarget(combat) {
+    if (combat.selectedTarget && combat.selectedTarget.alive && combat.selectedTarget.hp > 0) {
+      return combat.selectedTarget;
     }
-
-    /** 在帧内显示临时消息（采集结果、对话等） */
-    showSceneMessage(message) {
-        const msgArea = document.getElementById('frame-message');
-        if (!msgArea) return;
-        msgArea.textContent = message;
-        msgArea.style.opacity = '1';
-        // 3秒后淡出
-        setTimeout(() => { msgArea.style.opacity = '0'; }, 3000);
+    // 自动选第一个活着的敌人
+    const target = combat.getEnemyUnits().find(e => e.alive && e.hp > 0);
+    if (target) {
+      combat.setSelectedTarget(target);
     }
+    return target;
+  }
 
-    // ================================================================
-    //  战斗视图
-    // ================================================================
+  // ========== 更新战斗画面 ==========
+  updateCombat(combat, log) {
+    if (!combat) return;
 
-    renderCombatView(combat) {
-        // 隐藏冒险视图
-        this.hideAdventureView();
+    // 更新敌人卡片
+    combat.getEnemyUnits().forEach((enemy, i) => {
+      this.updateUnitCard(enemy, 'enemy', i);
+    });
 
-        const container = document.getElementById('combat-container');
-        if (!container) return;
-        container.style.display = 'flex';
-        container.innerHTML = '';
+    // 更新玩家卡片
+    this.updateUnitCard(combat.getPlayerUnit(), 'player', 0);
+    combat.getAllyUnits().forEach((ally, i) => {
+      this.updateUnitCard(ally, 'ally', i + 1);
+    });
 
-        // 回合标题
-        const header = document.createElement('div');
-        header.className = 'combat-header';
-        header.innerHTML = `
-            <span class="combat-title">⚔️ 战斗</span>
-            <span class="combat-turn" id="turn-display">第 ${combat.roundNumber} 轮 / ${combat.maxRounds}</span>
-        `;
-        container.appendChild(header);
+    // 更新回合数
+    const roundEl = document.querySelector('.combat-round');
+    if (roundEl) roundEl.textContent = `回合 ${combat.round}/${combat.maxRounds}`;
 
-        // 敌方
-        const enemySection = document.createElement('div');
-        enemySection.className = 'combat-section enemy-section';
-        enemySection.innerHTML = '<div class="section-label enemy-label">敌方</div>';
-        const enemyGrid = document.createElement('div');
-        enemyGrid.className = 'unit-grid enemy-grid';
-
-        combat.getEnemyUnits().forEach((enemy, i) => {
-            const card = this.createUnitCard(enemy, 'enemy', i);
-            enemyGrid.appendChild(card);
-        });
-        enemySection.appendChild(enemyGrid);
-        container.appendChild(enemySection);
-
-        // 分隔
-        const vs = document.createElement('div');
-        vs.className = 'vs-divider';
-        vs.textContent = 'VS';
-        container.appendChild(vs);
-
-        // 己方（主角+随从）
-        const allySection = document.createElement('div');
-        allySection.className = 'combat-section ally-section';
-        allySection.innerHTML = '<div class="section-label ally-label">我方</div>';
-        const allyGrid = document.createElement('div');
-        allyGrid.className = 'unit-grid ally-grid';
-
-        combat.getAllyUnits().forEach((ally, i) => {
-            const card = this.createUnitCard(ally, 'ally', i);
-            allyGrid.appendChild(card);
-        });
-        allySection.appendChild(allyGrid);
-        container.appendChild(allySection);
-
-        // 战斗日志
-        const logEl = document.getElementById('combat-log');
-        if (logEl) {
-            logEl.style.display = 'block';
-            logEl.innerHTML = '<div class="log-container" id="log-container"></div>';
-            this.renderCombatLog(combat.combatLog);
-        }
-
-        // 行动按钮
-        this.renderCombatButtons(combat);
-    }
-
-    createUnitCard(unit, side, index) {
-        const card = document.createElement('div');
-        const isAlly = side === 'ally';
-        card.className = `unit-card ${isAlly ? 'ally-card' : 'enemy-card'}`;
-        if (side === 'enemy') card.dataset.index = index;
-
-        const hp = Math.max(0, unit.hp || 0);
-        const maxHp = unit.maxHp || 100;
-        const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
-        const hpColor = hpPct > 60 ? '#4CAF50' : hpPct > 30 ? '#FF9800' : '#f44336';
-        const isDead = hp <= 0;
-
-        if (isDead) card.classList.add('dead');
-
-        card.innerHTML = `
-            <div class="unit-header">
-                <span class="unit-side-dot ${isAlly ? 'dot-ally' : 'dot-enemy'}"></span>
-                <span class="unit-name">${unit.name}</span>
-                ${isDead ? '<span class="unit-dead">💀</span>' : ''}
-            </div>
-            <div class="unit-hp-bar">
-                <div class="hp-fill" style="width:${hpPct}%;background:${hpColor}"></div>
-            </div>
-            <div class="unit-hp-text">${hp} / ${maxHp}</div>
-        `;
-
-        // 敌方卡片点击选中
-        if (side === 'enemy' && !isDead) {
-            card.addEventListener('click', () => {
-                document.querySelectorAll('.enemy-card').forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                if (this.combatEngine) {
-                    this.combatEngine.setSelectedEnemy(index);
-                }
-            });
-        }
-
-        return card;
-    }
-
-    renderCombatButtons(combat) {
-        const btnContainer = document.getElementById('action-buttons');
-        if (!btnContainer) return;
-        btnContainer.style.display = 'flex';
-        btnContainer.innerHTML = `
-            <button class="combat-btn" id="btn-attack">⚔️ 攻击</button>
-            <button class="combat-btn" id="btn-skill">✨ 技能</button>
-            <button class="combat-btn" id="btn-defend">🛡️ 防御</button>
-            <button class="combat-btn" id="btn-item">🎒 道具</button>
-            <button class="combat-btn" id="btn-flee">🏃 撤退</button>
-        `;
-
-        document.getElementById('btn-attack').addEventListener('click', () => {
-            if (!combat.isPlayerTurn) return;
-            this.enableCombatButtons(false);
-            combat.playerAction('attack', combat.getSelectedTarget());
-        });
-        document.getElementById('btn-skill').addEventListener('click', () => {
-            if (!combat.isPlayerTurn) return;
-            this.enableCombatButtons(false);
-            combat.playerAction('skill', combat.getSelectedTarget());
-        });
-        document.getElementById('btn-defend').addEventListener('click', () => {
-            if (!combat.isPlayerTurn) return;
-            this.enableCombatButtons(false);
-            combat.playerAction('defend', null);
-        });
-        document.getElementById('btn-item').addEventListener('click', () => {
-            if (!combat.isPlayerTurn) return;
-            this.enableCombatButtons(false);
-            // 简单版：回复20HP
-            const player = combat.getPlayerUnit();
-            if (player) {
-                player.hp = Math.min(player.maxHp, player.hp + 20);
-            }
-            combat.playerAction('item', null);
-        });
-        document.getElementById('btn-flee').addEventListener('click', () => {
-            if (!combat.isPlayerTurn) return;
-            this.enableCombatButtons(false);
-            combat.playerAction('flee', null);
-        });
-
-        this.enableCombatButtons(combat.isPlayerTurn);
-    }
-
-    enableCombatButtons(enabled) {
-        document.querySelectorAll('.combat-btn').forEach(btn => {
-            btn.disabled = !enabled;
-        });
-    }
-
-    updateCombatView(combat, newLog) {
-        if (!combat) return;
-
-        // 更新轮次显示
-        const turnEl = document.getElementById('turn-display');
-        if (turnEl) turnEl.textContent = `第 ${combat.roundNumber} 轮 / ${combat.maxRounds}`;
-
-        // 更新敌方单位卡
-        const enemyCards = document.querySelectorAll('.enemy-card');
-        combat.getEnemyUnits().forEach((enemy, i) => {
-            if (!enemyCards[i]) return;
-            const hp = Math.max(0, enemy.hp || 0);
-            const maxHp = enemy.maxHp || 100;
-            const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
-            const hpColor = hpPct > 60 ? '#4CAF50' : hpPct > 30 ? '#FF9800' : '#f44336';
-
-            const fill = enemyCards[i].querySelector('.hp-fill');
-            const text = enemyCards[i].querySelector('.unit-hp-text');
-            const dead = enemyCards[i].querySelector('.unit-dead');
-
-            if (fill) { fill.style.width = hpPct + '%'; fill.style.background = hpColor; }
-            if (text) text.textContent = `${hp} / ${maxHp}`;
-            if (hp <= 0) {
-                enemyCards[i].classList.add('dead');
-                if (!dead) {
-                    const nameEl = enemyCards[i].querySelector('.unit-header');
-                    if (nameEl) nameEl.innerHTML += '<span class="unit-dead">💀</span>';
-                }
-            }
-        });
-
-        // 更新己方单位卡
-        const allyCards = document.querySelectorAll('.ally-card');
-        combat.getAllyUnits().forEach((ally, i) => {
-            if (!allyCards[i]) return;
-            const hp = Math.max(0, ally.hp || 0);
-            const maxHp = ally.maxHp || 100;
-            const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
-            const hpColor = hpPct > 60 ? '#4CAF50' : hpPct > 30 ? '#FF9800' : '#f44336';
-
-            const fill = allyCards[i].querySelector('.hp-fill');
-            const text = allyCards[i].querySelector('.unit-hp-text');
-
-            if (fill) { fill.style.width = hpPct + '%'; fill.style.background = hpColor; }
-            if (text) text.textContent = `${hp} / ${maxHp}`;
-            if (hp <= 0) {
-                allyCards[i].classList.add('dead');
-            }
-        });
-
-        // 追加日志
-        if (newLog) {
-            this.appendLog(newLog);
-        }
-
-        this.enableCombatButtons(combat.isPlayerTurn);
-    }
-
-    renderCombatLog(logs) {
-        const container = document.getElementById('log-container');
-        if (!container) return;
-        container.innerHTML = '';
-        // 只显示最近6条
-        const recent = logs.slice(-6);
-        recent.forEach(msg => {
-            const p = document.createElement('p');
-            p.textContent = msg;
-            container.appendChild(p);
-        });
-        container.scrollTop = container.scrollHeight;
-    }
-
-    appendLog(msg) {
-        const container = document.getElementById('log-container');
-        if (!container) return;
+    // 更新日志
+    if (log) {
+      const logList = document.getElementById('log-list');
+      if (logList) {
         const p = document.createElement('p');
-        p.textContent = msg;
-        container.appendChild(p);
-        // 保持最多8条
-        while (container.children.length > 8) {
-            container.removeChild(container.firstChild);
+        p.textContent = log;
+        logList.appendChild(p);
+        // 只保留最后6条
+        while (logList.children.length > 6) {
+          logList.removeChild(logList.firstChild);
         }
-        container.scrollTop = container.scrollHeight;
+        logList.scrollTop = logList.scrollHeight;
+      }
     }
 
-    showCombatResult(result) {
-        const resultEl = document.getElementById('combat-result');
-        if (!resultEl) return;
+    this.enableButtons(combat.isPlayerTurn);
+  }
 
-        const config = {
-            player_victory: { text: '战斗胜利！', bg: '#1b5e20', color: '#a5d6a7' },
-            player_defeat:  { text: '战斗失败...', bg: '#b71c1c', color: '#ef9a9a' },
-            timeout:        { text: '回合耗尽，平局。', bg: '#e65100', color: '#ffcc80' },
-            flee:           { text: '成功撤退。', bg: '#1a237e', color: '#90caf9' },
-        };
-        const c = config[result] || { text: '战斗结束', bg: '#333', color: '#ccc' };
-        resultEl.textContent = c.text;
-        resultEl.style.display = 'block';
-        resultEl.style.background = c.bg;
-        resultEl.style.color = c.color;
+  // ========== 更新单个单位卡片 ==========
+  updateUnitCard(unit, side, idx) {
+    const container = document.getElementById('combat-container');
+    if (!container) return;
+    const card = container.querySelector(`.unit-card[data-idx="${idx}"][data-unit-id="${unit.id}"]`);
+    if (!card) return;
 
-        // 延迟后返回冒险视图
-        setTimeout(() => {
-            resultEl.style.display = 'none';
-            this.hideCombatView();
-            this.isCombatActive = false;
-            this.showAdventureView();
-            // 重新渲染当前场景（可能敌人已清空）
-            if (window.gameApp && window.gameApp.sceneManager) {
-                const scene = window.gameApp.sceneManager.getCurrentScene();
-                if (scene) this.renderAdventureView(scene);
-            }
-        }, result === 'player_victory' ? 2500 : 2000);
+    const maxHp = unit.maxHp || 100;
+    const hp = Math.max(0, unit.hp || 0);
+    const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
+    const hpColor = hpPct > 50 ? '#5a9e5a' : hpPct > 25 ? '#d4a040' : '#c05050';
+    const dead = !unit.alive || hp <= 0;
+
+    const nameEl = card.querySelector('.unit-name');
+    const hpTextEl = card.querySelector('.unit-hp-text');
+    const hpFillEl = card.querySelector('.hp-fill');
+
+    if (nameEl) nameEl.innerHTML = `${side === 'enemy' ? '🔴' : '🟢'} ${unit.name} ${dead ? '💀' : ''}`;
+    if (hpTextEl) hpTextEl.textContent = `HP: ${hp}/${maxHp}`;
+    if (hpFillEl) {
+      hpFillEl.style.width = hpPct + '%';
+      hpFillEl.style.background = hpColor;
     }
 
-    hideCombatView() {
-        const c = document.getElementById('combat-container');
-        const l = document.getElementById('combat-log');
-        const b = document.getElementById('action-buttons');
-        if (c) { c.style.display = 'none'; c.innerHTML = ''; }
-        if (l) { l.style.display = 'none'; l.innerHTML = ''; }
-        if (b) { b.style.display = 'none'; b.innerHTML = ''; }
+    if (dead) card.classList.add('dead');
+  }
+
+  // ========== 更新回合提示 ==========
+  updateTurnIndicator(unit) {
+    const logList = document.getElementById('log-list');
+    if (logList && unit) {
+      const p = document.createElement('p');
+      p.textContent = `— ${unit.name} 的回合 —`;
+      p.style.color = 'var(--accent)';
+      p.style.textAlign = 'center';
+      logList.appendChild(p);
+      while (logList.children.length > 6) {
+        logList.removeChild(logList.firstChild);
+      }
+      logList.scrollTop = logList.scrollHeight;
+    }
+  }
+
+  // ========== 按钮控制 ==========
+  enableButtons(enabled) {
+    document.querySelectorAll('.combat-btn').forEach(btn => {
+      btn.disabled = !enabled;
+    });
+  }
+
+  disableButtons() {
+    document.querySelectorAll('.combat-btn').forEach(btn => {
+      btn.disabled = true;
+    });
+  }
+
+  // ========== 显示战斗结果 ==========
+  showCombatResult(detail) {
+    const el = document.getElementById('combat-result');
+    if (!el) return;
+
+    const { result, message, rewards } = detail;
+    let html = `<div class="result-message">${message}</div>`;
+
+    if (rewards) {
+      html += '<div class="result-rewards">';
+      html += `<span>经验 +${rewards.exp}</span>`;
+      html += `<span>金币 +${rewards.gold}</span>`;
+      if (rewards.drops && rewards.drops.length > 0) {
+        html += `<span>掉落: ${rewards.drops.map(d => d.name).join(', ')}</span>`;
+      }
+      if (rewards.expResult && rewards.expResult.leveled) {
+        html += '<span class="level-up">升级了！</span>';
+      }
+      html += '</div>';
     }
 
-    // ================================================================
-    //  顶部玩家信息栏
-    // ================================================================
+    el.innerHTML = html;
+    el.className = 'combat-result ' + result;
+    el.style.display = 'block';
 
-    updatePlayerInfo(player) {
-        const el = document.getElementById('player-info');
-        if (!el || !player) return;
+    setTimeout(() => { el.style.display = 'none'; }, 2500);
+  }
 
-        const hpPct = player.maxHp > 0 ? Math.round((player.hp / player.maxHp) * 100) : 0;
-        const mpPct = player.maxMp > 0 ? Math.round((player.mp / player.maxMp) * 100) : 0;
-        const hpColor = hpPct > 60 ? '#4CAF50' : hpPct > 30 ? '#FF9800' : '#f44336';
+  // ========== 视图切换 ==========
+  showAdventureView(show) {
+    const scene = document.getElementById('scene-container');
+    const combat = document.getElementById('combat-container');
+    const log = document.getElementById('combat-log');
+    const buttons = document.getElementById('action-buttons');
 
-        el.innerHTML = `
-            <div class="info-bar">
-                <div class="info-left">
-                    <span class="info-name">${player.name}</span>
-                    <span class="info-level">Lv.${player.level}</span>
-                    <span class="info-class">${player.class || ''}</span>
-                </div>
-                <div class="info-right">
-                    <span class="info-gold">💰${player.gold}</span>
-                </div>
+    if (show) {
+      if (scene) scene.style.display = 'flex';
+      if (combat) { combat.style.display = 'none'; combat.innerHTML = ''; }
+      if (log) { log.style.display = 'none'; log.innerHTML = ''; }
+      if (buttons) { buttons.style.display = 'none'; buttons.innerHTML = ''; }
+    } else {
+      if (scene) scene.style.display = 'none';
+      if (combat) combat.style.display = 'flex';
+      if (log) log.style.display = 'block';
+      if (buttons) buttons.style.display = 'flex';
+    }
+  }
+
+  // ========== 玩家信息栏 ==========
+  updatePlayerInfo(player) {
+    const container = document.getElementById('player-info');
+    if (!container || !player) return;
+
+    const hpPct = player.maxHp > 0 ? (player.hp / player.maxHp) * 100 : 0;
+    const mpPct = player.maxMp > 0 ? (player.mp / player.maxMp) * 100 : 0;
+
+    container.innerHTML = `
+      <div class="player-bar">
+        <span class="player-name">${player.name}</span>
+        <span class="player-level">Lv.${player.level || 1}</span>
+        <div class="player-resource">
+          <span class="resource-label">HP</span>
+          <div class="resource-bar"><div class="resource-fill hp" style="width:${hpPct}%"></div></div>
+          <span class="resource-text">${player.hp}/${player.maxHp}</span>
+        </div>
+        <div class="player-resource">
+          <span class="resource-label">MP</span>
+          <div class="resource-bar"><div class="resource-fill mp" style="width:${mpPct}%"></div></div>
+          <span class="resource-text">${player.mp}/${player.maxMp}</span>
+        </div>
+        <span class="player-gold">💰${player.gold || 0}</span>
+      </div>
+    `;
+  }
+
+  // ========== 底部管理栏 ==========
+  renderBottomBar() {
+    const bar = document.getElementById('bottom-bar');
+    if (!bar) return;
+    bar.innerHTML = `
+      <button class="bottom-btn" id="btn-inventory">🎒 背包</button>
+      <button class="bottom-btn" id="btn-equipment">⚔ 装备</button>
+      <button class="bottom-btn" id="btn-team">👥 队伍</button>
+      <button class="bottom-btn" id="btn-save">💾 存档</button>
+      <button class="bottom-btn" id="btn-settings">⚙ 设置</button>
+    `;
+
+    document.getElementById('btn-inventory').addEventListener('click', () => this.showInventory());
+    document.getElementById('btn-equipment').addEventListener('click', () => this.showEquipment());
+    document.getElementById('btn-team').addEventListener('click', () => this.showTeam());
+    document.getElementById('btn-save').addEventListener('click', () => this.showSaveMenu());
+    document.getElementById('btn-settings').addEventListener('click', () => this.showSettings());
+  }
+
+  // ========== 背包面板 ==========
+  showInventory() {
+    if (!window.gameApp || !window.gameApp.state) return;
+    const state = window.gameApp.state;
+    this.showPanel('背包', `
+      <div class="panel-info">容量: ${state.inventory.items.length}/${state.inventory.capacity}</div>
+      <div class="inventory-grid">
+        ${state.inventory.items.length === 0 ? '<p class="empty-hint">背包空空如也</p>' :
+          state.inventory.items.map(item => `
+            <div class="inv-item">
+              <span class="item-name ${item.rarity || 'white'}">${item.name}</span>
+              ${item.stack > 1 ? `<span class="item-stack">x${item.stack}</span>` : ''}
             </div>
-            <div class="info-bars">
-                <div class="info-bar-row">
-                    <span class="bar-label">HP</span>
-                    <div class="info-hp-bar"><div class="hp-fill" style="width:${hpPct}%;background:${hpColor}"></div></div>
-                    <span class="bar-value">${player.hp}/${player.maxHp}</span>
-                </div>
-                <div class="info-bar-row">
-                    <span class="bar-label">MP</span>
-                    <div class="info-mp-bar"><div class="mp-fill" style="width:${mpPct}%"></div></div>
-                    <span class="bar-value">${player.mp}/${player.maxMp}</span>
-                </div>
+          `).join('')
+        }
+      </div>
+    `);
+  }
+
+  // ========== 装备面板 ==========
+  showEquipment() {
+    if (!window.gameApp || !window.gameApp.state) return;
+    const state = window.gameApp.state;
+    const slots = DATA.equipSlots;
+    const slotNames = DATA.slots;
+    this.showPanel('装备', `
+      <div class="equipment-grid">
+        ${slots.map(slot => {
+          const item = state.equipment[slot];
+          return `
+            <div class="eq-slot">
+              <span class="eq-slot-name">${slotNames[slot]}</span>
+              ${item ? `<span class="item-name ${item.rarity}">${item.name}</span>` : '<span class="eq-empty">空</span>'}
             </div>
-        `;
+          `;
+        }).join('')}
+      </div>
+    `);
+  }
+
+  // ========== 队伍面板 ==========
+  showTeam() {
+    if (!window.gameApp || !window.gameApp.state) return;
+    const state = window.gameApp.state;
+    const members = [state.player, ...state.companions];
+    this.showPanel('队伍', `
+      <div class="team-list">
+        ${members.map(m => `
+          <div class="team-member">
+            <span class="member-name">${m.name}</span>
+            <span class="member-class">${m.class || ''}</span>
+            <span class="member-level">Lv.${m.level}</span>
+            <span class="member-hp">HP ${m.hp}/${m.maxHp}</span>
+          </div>
+        `).join('')}
+      </div>
+    `);
+  }
+
+  // ========== 存档菜单 ==========
+  showSaveMenu() {
+    this.showPanel('存档', `
+      <div class="save-menu">
+        <button class="panel-btn" id="save-now">💾 立即保存</button>
+        <button class="panel-btn" id="save-export">📤 导出存档</button>
+        <button class="panel-btn danger" id="save-delete">🗑 删除存档</button>
+      </div>
+    `);
+
+    var btn;
+    btn = document.getElementById('save-now');
+    if (btn) btn.addEventListener('click', () => {
+      window.gameApp.saveGame();
+      this.addGameLog('存档成功');
+      this.closePanel();
+    });
+    btn = document.getElementById('save-export');
+    if (btn) btn.addEventListener('click', () => {
+      if (window.gameApp && window.gameApp.state) SaveManager.export(window.gameApp.state);
+    });
+    btn = document.getElementById('save-delete');
+    if (btn) btn.addEventListener('click', () => {
+      if (confirm('确定删除存档？此操作不可撤销！')) {
+        SaveManager.delete();
+        location.reload();
+      }
+    });
+  }
+
+  // ========== 设置面板 ==========
+  showSettings() {
+    if (!window.gameApp || !window.gameApp.state) return;
+    const s = window.gameApp.state.settings;
+    this.showPanel('设置', `
+      <div class="settings-list">
+        <label><input type="checkbox" id="set-autosave" ${s.autoSave ? 'checked' : ''}> 自动存档</label>
+        <label><input type="checkbox" id="set-sound" ${s.sound ? 'checked' : ''}> 音效</label>
+        <label><input type="checkbox" id="set-music" ${s.music ? 'checked' : ''}> 音乐</label>
+      </div>
+      <button class="panel-btn" id="settings-save">保存设置</button>
+    `);
+
+    var sBtn = document.getElementById('settings-save');
+    if (sBtn) sBtn.addEventListener('click', () => {
+      s.autoSave = document.getElementById('set-autosave').checked;
+      s.sound = document.getElementById('set-sound').checked;
+      s.music = document.getElementById('set-music').checked;
+      window.gameApp.saveGame();
+      this.closePanel();
+    });
+  }
+
+  // ========== 通用面板 ==========
+  showPanel(title, content) {
+    this.closePanel();
+    const overlay = document.createElement('div');
+    overlay.id = 'panel-overlay';
+    overlay.className = 'panel-overlay';
+    overlay.innerHTML = `
+      <div class="panel-box">
+        <div class="panel-header">
+          <span class="panel-title">${title}</span>
+          <button class="panel-close" id="panel-close">✕</button>
+        </div>
+        <div class="panel-content">${content}</div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.getElementById('panel-close').addEventListener('click', () => this.closePanel());
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) this.closePanel();
+    });
+  }
+
+  closePanel() {
+    const overlay = document.getElementById('panel-overlay');
+    if (overlay) overlay.remove();
+  }
+
+  // ========== 游戏日志 ==========
+  addGameLog(message) {
+    this.gameLog.push(message);
+    if (this.gameLog.length > 20) this.gameLog.shift();
+    // 在场景描述下方临时显示
+    const container = document.getElementById('scene-container');
+    if (container && !this.isCombatActive) {
+      let logEl = container.querySelector('.game-log-line');
+      if (!logEl) {
+        logEl = document.createElement('div');
+        logEl.className = 'game-log-line';
+        container.appendChild(logEl);
+      }
+      logEl.textContent = message;
+      logEl.style.display = 'block';
+      // 3秒后淡出
+      clearTimeout(this._logTimer);
+      this._logTimer = setTimeout(() => {
+        if (logEl) logEl.style.display = 'none';
+      }, 3000);
     }
+  }
 
-    // ================================================================
-    //  底部管理栏
-    // ================================================================
-
-    renderBottomBar() {
-        const el = document.getElementById('bottom-bar');
-        if (!el) return;
-        el.innerHTML = `
-            <button class="bottom-btn" id="btn-inventory">🎒 背包</button>
-            <button class="bottom-btn" id="btn-equipment">⚔️ 装备</button>
-            <button class="bottom-btn" id="btn-party">👥 队伍</button>
-            <button class="bottom-btn" id="btn-save">💾 存档</button>
-            <button class="bottom-btn" id="btn-settings">⚙️ 设置</button>
-        `;
-
-        document.getElementById('btn-save').addEventListener('click', () => {
-            if (window.gameApp) {
-                window.gameApp.saveGame();
-                this.showFrameMessage('💾 存档成功。');
-            }
-        });
-        document.getElementById('btn-inventory').addEventListener('click', () => {
-            this.showFrameMessage('🎒 背包系统开发中...');
-        });
-        document.getElementById('btn-equipment').addEventListener('click', () => {
-            this.showFrameMessage('⚔️ 装备系统开发中...');
-        });
-        document.getElementById('btn-party').addEventListener('click', () => {
-            this.showFrameMessage('👥 队伍管理开发中...');
-        });
-        document.getElementById('btn-settings').addEventListener('click', () => {
-            this.showFrameMessage('⚙️ 设置系统开发中...');
-        });
-    }
-
-    showFrameMessage(msg) {
-        const evt = new CustomEvent('scene-message', { detail: { message: msg } });
-        document.dispatchEvent(evt);
-    }
+  // ========== 角色创建 ==========
+  showCharacterCreation(onCreate) {
+    const container = document.getElementById('scene-container');
+    if (!container) return;
+    container.style.display = 'flex';
+    container.innerHTML = `
+      <div class="character-creation">
+        <h2>寻亲风云录</h2>
+        <p class="cc-intro">西元720年。你十八岁，是灰烟村酒馆的老板。<br>六岁那年，父母说"出一趟远门"，再也没有回来。</p>
+        <div class="cc-form">
+          <input type="text" id="player-name" placeholder="你的名字" value="" maxlength="8">
+          <select id="player-class">
+            <option value="warrior">战士 — 力量/体质，前排坦克</option>
+            <option value="ranger">游侠 — 敏捷，远程物理输出</option>
+            <option value="mage">法师 — 智力/精神，法术输出</option>
+          </select>
+          <label class="cc-hardcore"><input type="checkbox" id="hardcore-mode"> 硬核模式（死亡即删档）</label>
+          <button id="create-btn">开始冒险</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('create-btn').addEventListener('click', () => {
+      const name = document.getElementById('player-name').value.trim() || '勇者';
+      const classKey = document.getElementById('player-class').value;
+      const hardcore = document.getElementById('hardcore-mode').checked;
+      onCreate(name, classKey, hardcore);
+    });
+  }
 }
-
-// 导出
-try { module.exports = UIRenderer; } catch(e) {}
