@@ -1,475 +1,464 @@
-// ============================================
-// 《寻亲风云录》UI渲染 — 荒地测试帧版
-// ============================================
-
-const Renderer = {
-  container: null,
-
-  init(containerId) {
-    this.container = document.getElementById(containerId);
-    if (!this.container) {
-      console.error(`容器 #${containerId} 不存在`);
-      return false;
-    }
-    return true;
-  },
-
-  // ========== 主游戏画面 ==========
-
-  renderMain(state) {
-    if (!this.container) return;
-    const scene = SceneSystem.getCurrentScene(state);
-    const html = `
-      <div class="game-frame">
-        ${this.renderHeader(state)}
-        ${this.renderMiniMap(state)}
-        ${this.renderNarrative(state, scene)}
-        ${this.renderSceneActions(state, scene)}
-        ${this.renderMainMenu(state)}
-      </div>
-    `;
-    this.container.innerHTML = html;
-  },
-
-  // 顶部状态栏
-  renderHeader(state) {
-    const p = state.player;
-    const hpPct = Math.floor((p.hp / p.maxHp) * 100);
-    const mpPct = Math.floor((p.mp / p.maxMp) * 100);
-    return `
-      <div class="header-bar">
-        <div class="header-left">
-          <span class="location">🏠 ${p.location.split("·")[1] || p.location}</span>
-        </div>
-        <div class="header-right">
-          <span class="hp-bar" title="生命">❤️ ${p.hp}/${p.maxHp}</span>
-          <span class="mp-bar" title="法力">💙 ${p.mp}/${p.maxMp}</span>
-          <span class="level">Lv.${p.level}</span>
-          <span class="gold">${Utils.formatGold(p.gold, p.silver, p.copper)}</span>
-        </div>
-      </div>
-    `;
-  },
-
-  // 小地图
-  renderMiniMap(state) {
-    const mapData = SceneSystem.getMapData(state);
-    
-    let rows = "";
-    for (const row of mapData) {
-      let cells = "";
-      for (const cell of row) {
-        if (cell.type === "empty") {
-          cells += `<div class="map-cell map-empty"></div>`;
-        } else {
-          const cls = `map-${cell.type}`;
-          const label = cell.type === "current" ? "●" : (cell.type === "exit" ? "○" : "·");
-          cells += `<div class="map-cell ${cls}" title="${cell.fullName}" data-scene="${cell.sceneId}">${label}</div>`;
-        }
-      }
-      rows += `<div class="map-row">${cells}</div>`;
+// ui/renderer.js - UI渲染系统
+class UIRenderer {
+    constructor() {
+        this.combatEngine = null;
+        this.isRendering = false;
+        this.bindEvents();
     }
 
-    return `
-      <div class="mini-map">
-        <div class="map-title">🗺️ 灰烟村</div>
-        <div class="map-grid">${rows}</div>
-        <div class="map-legend">
-          <span><span class="legend-dot current">●</span> 当前</span>
-          <span><span class="legend-dot exit">○</span> 可前往</span>
-          <span><span class="legend-dot known">·</span> 已知</span>
-        </div>
-      </div>
-    `;
-  },
+    // 绑定全局事件
+    bindEvents() {
+        // 战斗开始
+        document.addEventListener('combat-start', (e) => {
+            console.log('[UI] 战斗开始事件触发');
+            this.combatEngine = e.detail.combat;
+            this.renderCombat(this.combatEngine);
+            this.showCombatUI(true);
+        });
 
-  // 叙事窗口
-  renderNarrative(state, scene) {
-    const narrative = state.narrative;
-    let historyHtml = "";
-    if (narrative.dialogueHistory && narrative.dialogueHistory.length > 0) {
-      const recent = narrative.dialogueHistory.slice(-8);
-      historyHtml = recent.map(h => `<p class="history-line">${this.escapeHtml(h)}</p>`).join("");
+        // 战斗更新
+        document.addEventListener('combat-update', (e) => {
+            console.log('[UI] 战斗更新事件触发');
+            this.updateCombat(e.detail.combat, e.detail.log);
+        });
+
+        // 战斗结束
+        document.addEventListener('combat-end', (e) => {
+            console.log('[UI] 战斗结束事件触发');
+            this.showCombatResult(e.detail.result);
+            setTimeout(() => {
+                this.showCombatUI(false);
+            }, 3000);
+        });
+
+        // 玩家回合
+        document.addEventListener('combat-player-turn', (e) => {
+            console.log('[UI] 玩家回合事件触发');
+            this.enableActionButtons(true);
+        });
+
+        // 场景变化
+        document.addEventListener('scene-change', (e) => {
+            console.log('[UI] 场景变化事件触发');
+            this.renderScene(e.detail.scene);
+        });
     }
 
-    return `
-      <div class="narrative-window">
-        <div class="narrative-history">${historyHtml}</div>
-        <div class="narrative-current">
-          <p class="scene-desc">${this.escapeHtml(scene.desc)}</p>
-        </div>
-      </div>
-    `;
-  },
-
-  // 场景交互按钮 — 根据场景类型动态生成
-  renderSceneActions(state, scene) {
-    let actions = [];
-
-    // ===== 荒地特殊处理 =====
-    if (scene.id === "greyVillage_wasteland") {
-      // 检查野狗状态
-      const enemyStatus = SceneSystem.getWastelandEnemies(state);
-      
-      if (enemyStatus.canSpawn) {
-        actions.push({ type: "combat", text: "⚔️ 迎战野狗", action: "wasteland_combat" });
-      } else {
-        actions.push({ type: "info", text: `⏳ 野狗刷新中 (${Math.ceil(enemyStatus.remaining / 60)}分)`, action: "none", disabled: true });
-      }
-
-      // 采集石头
-      actions.push({ type: "gather", text: "🔨 采集石头", action: "object:石头矿" });
-      
-      // 挂机按钮
-      actions.push({ type: "idle", text: "⏱️ 挂机采集", action: "idle_mine" });
-      
-      return `
-        <div class="scene-actions">
-          ${actions.map(a => `<button class="action-btn action-${a.type}" data-action="${a.action}" ${a.disabled ? 'disabled' : ''}>${a.text}</button>`).join("")}
-        </div>
-      `;
-    }
-
-    // ===== 普通场景 =====
-    // NPC对话
-    if (scene.npcs) {
-      for (const npcId of scene.npcs) {
-        const npc = DATA.npcs[npcId];
-        if (npc) {
-          actions.push({ type: "talk", text: `💬 ${npc.name}`, action: `talk:${npcId}` });
-        }
-      }
-    }
-
-    // 场景物品交互
-    if (scene.objects) {
-      for (const obj of scene.objects) {
-        actions.push({ type: "object", text: `👁️ ${obj.name}`, action: `object:${obj.name}` });
-      }
-    }
-
-    // 安全区域：休息
-    if (scene.type === "safe") {
-      actions.push({ type: "rest", text: "🛏️ 休息", action: "rest" });
-    }
-
-    return `
-      <div class="scene-actions">
-        ${actions.map(a => `<button class="action-btn action-${a.type}" data-action="${a.action}">${a.text}</button>`).join("")}
-      </div>
-    `;
-  },
-
-  // 底部主菜单
-  renderMainMenu(state) {
-    return `
-      <div class="main-menu">
-        <button class="menu-btn" data-menu="inventory">🎒背包</button>
-        <button class="menu-btn" data-menu="equipment">⚔️装备</button>
-        <button class="menu-btn" data-menu="companions">👥随从</button>
-        <button class="menu-btn" data-menu="save">💾存档</button>
-      </div>
-    `;
-  },
-
-  // ========== 战斗UI ==========
-
-  renderCombat(state, combat) {
-    if (!this.container) return;
-    const currentActor = CombatEngine.getCurrentActor(combat);
-    const isPlayerTurn = currentActor && currentActor.id === "player";
-
-    let html = `
-      <div class="combat-frame">
-        ${this.renderCombatHeader(combat)}
-        ${this.renderCombatField(combat)}
-        ${this.renderCombatLog(combat)}
-        ${isPlayerTurn ? this.renderCombatActions(state, combat, currentActor) : this.renderCombatWaiting(combat)}
-        <div class="combat-menu">
-          <button class="menu-btn" data-action="flee-combat">🏃撤退</button>
-        </div>
-      </div>
-    `;
-    this.container.innerHTML = html;
-  },
-
-  renderCombatHeader(combat) {
-    return `
-      <div class="combat-header">
-        <span class="combat-title">⚔️ 战斗</span>
-        <span class="combat-turn">回合 ${combat.turn}/${combat.maxTurns}</span>
-      </div>
-    `;
-  },
-
-  renderCombatField(combat) {
-    const enemies = combat.units.filter(u => u.side === "enemy" && u.hp > 0);
-    const allies = combat.units.filter(u => u.side === "ally" && u.hp > 0);
-
-    const renderUnit = (u, isEnemy) => {
-      const hpPct = Math.floor((u.hp / u.maxHp) * 100);
-      const statusIcons = (u.statusEffects || []).map(s => {
-        const icons = { bleed: "🩸", burn: "🔥", slow: "❄️", stun: "⚡", buff: "✨", shield: "🛡️" };
-        return icons[s.type] || "";
-      }).join("");
-      
-      return `
-        <div class="unit ${isEnemy ? 'enemy' : 'ally'}" data-unit="${u.id}">
-          <div class="unit-name">${isEnemy ? "🔴" : "🟢"} ${u.name}</div>
-          <div class="unit-hp-bar"><div class="hp-fill" style="width:${hpPct}%"></div></div>
-          <div class="unit-hp-text">${u.hp}/${u.maxHp} ${statusIcons}</div>
-        </div>
-      `;
-    };
-
-    return `
-      <div class="combat-field">
-        <div class="combat-side">
-          <div class="side-label">敌方</div>
-          <div class="unit-row enemy-row">
-            ${enemies.map(e => renderUnit(e, true)).join("")}
-          </div>
-        </div>
-        <div class="combat-divider">VS</div>
-        <div class="combat-side">
-          <div class="side-label">我方</div>
-          <div class="unit-row ally-row">
-            ${allies.map(a => renderUnit(a, false)).join("")}
-          </div>
-        </div>
-      </div>
-    `;
-  },
-
-  renderCombatLog(combat) {
-    return `
-      <div class="combat-log">
-        ${combat.log.slice(-4).map(line => `<p>${this.escapeHtml(line)}</p>`).join("")}
-      </div>
-    `;
-  },
-
-  renderCombatActions(state, combat, actor) {
-    const skills = actor.skills || [];
-    const skillBtns = skills.map(s => {
-      const canUse = actor.mp >= (s.cost || 0);
-      return `<button class="skill-btn ${canUse ? '' : 'disabled'}" data-skill="${s.name}" ${!canUse ? 'disabled' : ''}>
-        ${s.name}${s.cost ? ` ${s.cost}MP` : ''}
-      </button>`;
-    }).join("");
-
-    return `
-      <div class="combat-actions">
-        <div class="skill-list">${skillBtns}</div>
-        <div class="combat-controls">
-          <button class="combat-btn" data-action="defend">🛡️防御</button>
-          <button class="combat-btn" data-action="item">💊物品</button>
-        </div>
-      </div>
-    `;
-  },
-
-  renderCombatWaiting(combat) {
-    const actor = CombatEngine.getCurrentActor(combat);
-    return `
-      <div class="combat-waiting">
-        <p>${actor ? `${actor.name} 行动中...` : "..."}</p>
-      </div>
-    `;
-  },
-
-  // ========== 背包UI ==========
-
-  renderInventory(state) {
-    const items = state.inventory.items;
-    let html = `
-      <div class="inventory-frame">
-        <div class="inv-header">
-          <h3>🎒 背包 (${items.length}/${state.inventory.capacity})</h3>
-        </div>
-        <div class="inv-grid">
-          ${items.map(item => this.renderItemCard(item)).join("")}
-        </div>
-        <div class="inv-footer">
-          <button class="menu-btn" data-action="back">↩️ 返回</button>
-        </div>
-      </div>
-    `;
-    this.container.innerHTML = html;
-  },
-
-  renderItemCard(item) {
-    const rarityData = DATA.rarity[item.rarity] || DATA.rarity.white;
-    const stackText = item.stack > 1 ? ` x${item.stack}` : "";
-    return `
-      <div class="item-card" data-item="${item.id}" style="border-color:${rarityData.color}">
-        <div class="item-rarity" style="color:${rarityData.color}">${rarityData.name}</div>
-        <div class="item-name">${item.name}${stackText}</div>
-        <div class="item-level">Lv.${item.level || "?"}</div>
-      </div>
-    `;
-  },
-
-  // ========== 装备UI ==========
-
-  renderEquipment(state) {
-    const slots = DATA.equipSlots;
-    const slotNames = {
-      weapon: "主手", offhand: "副手", helmet: "头盔", chest: "胸甲",
-      legs: "护腿", boots: "靴子", gloves: "护手", necklace: "项链",
-      ring1: "戒指1", ring2: "戒指2",
-    };
-
-    let html = `
-      <div class="equipment-frame">
-        <h3>⚔️ 装备</h3>
-        <div class="equip-grid">
-    `;
-    
-    for (const slot of slots) {
-      const item = state.equipment[slot];
-      if (item) {
-        const rd = DATA.rarity[item.rarity];
-        html += `
-          <div class="equip-slot" data-slot="${slot}">
-            <div class="slot-name">${slotNames[slot]}</div>
-            <div class="slot-item" style="color:${rd.color}">${item.name}</div>
-            <div class="slot-level">Lv.${item.level}</div>
-          </div>
+    // 渲染场景
+    renderScene(scene) {
+        const container = document.getElementById('scene-container');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="scene-info">
+                <h2>${scene.name || '未知区域'}</h2>
+                <p>${scene.description || ''}</p>
+                <div class="scene-type">${scene.type === 'safe' ? '🛡️ 安全区' : '⚔️ 野外'}</div>
+            </div>
         `;
-      } else {
-        html += `
-          <div class="equip-slot empty" data-slot="${slot}">
-            <div class="slot-name">${slotNames[slot]}</div>
-            <div class="slot-empty">[ 空 ]</div>
-          </div>
+        
+        // 显示出口
+        if (scene.exits && scene.exits.length > 0) {
+            const exitsHtml = scene.exits.map(exit => 
+                `<button class="exit-btn" data-scene="${exit}">→ ${exit}</button>`
+            ).join('');
+            container.innerHTML += `
+                <div class="scene-exits">
+                    <h3>可前往:</h3>
+                    ${exitsHtml}
+                </div>
+            `;
+            
+            // 绑定出口事件
+            container.querySelectorAll('.exit-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const sceneName = btn.dataset.scene;
+                    if (window.gameApp && window.gameApp.sceneManager) {
+                        window.gameApp.sceneManager.enterScene(sceneName);
+                    }
+                });
+            });
+        }
+    }
+
+    // 显示/隐藏战斗UI
+    showCombatUI(show) {
+        const container = document.getElementById('combat-container');
+        const buttonContainer = document.getElementById('action-buttons');
+        
+        if (container) {
+            container.style.display = show ? 'block' : 'none';
+        }
+        if (buttonContainer) {
+            buttonContainer.style.display = show ? 'block' : 'none';
+        }
+    }
+
+    // 渲染战斗界面
+    renderCombat(combatEngine) {
+        console.log('[UI] 渲染战斗界面');
+        
+        if (!combatEngine) {
+            console.error('[UI] 战斗引擎为空');
+            return;
+        }
+
+        const container = document.getElementById('combat-container');
+        if (!container) {
+            console.error('[UI] 找不到战斗容器');
+            return;
+        }
+
+        // 清空容器
+        container.innerHTML = '';
+        
+        // 获取敌人
+        const enemies = combatEngine.getEnemyUnits() || [];
+        console.log('[UI] 渲染敌人数量:', enemies.length);
+        
+        // 渲染敌人
+        if (enemies.length > 0) {
+            const enemyContainer = document.createElement('div');
+            enemyContainer.className = 'enemy-container';
+            enemyContainer.innerHTML = '<h3>敌人</h3>';
+            
+            enemies.forEach((enemy, index) => {
+                const enemyEl = this.createEnemyElement(enemy, index);
+                enemyContainer.appendChild(enemyEl);
+            });
+            
+            container.appendChild(enemyContainer);
+        }
+
+        // 渲染玩家
+        const player = combatEngine.getPlayerUnit();
+        if (player) {
+            const playerContainer = document.createElement('div');
+            playerContainer.className = 'player-container';
+            playerContainer.innerHTML = '<h3>玩家</h3>';
+            const playerEl = this.createPlayerElement(player);
+            playerContainer.appendChild(playerEl);
+            container.appendChild(playerContainer);
+        }
+
+        // 渲染战斗日志
+        this.renderCombatLog(combatEngine.combatLog || []);
+        
+        // 渲染行动按钮
+        this.renderActionButtons(combatEngine);
+    }
+
+    // 创建敌人元素
+    createEnemyElement(enemy, index) {
+        const div = document.createElement('div');
+        div.className = 'enemy-unit';
+        div.dataset.index = index;
+        
+        const hpPercent = enemy.maxHp > 0 ? (enemy.hp / enemy.maxHp) * 100 : 0;
+        const hpColor = hpPercent > 50 ? '#4CAF50' : hpPercent > 25 ? '#FF9800' : '#f44336';
+        
+        div.innerHTML = `
+            <div class="enemy-name">🐺 ${enemy.name || '未知敌人'}</div>
+            <div class="enemy-hp">
+                <span class="hp-text">HP: ${Math.max(0, enemy.hp || 0)}/${enemy.maxHp || 0}</span>
+                <div class="hp-bar">
+                    <div class="hp-fill" style="width: ${Math.max(0, hpPercent)}%; background: ${hpColor};"></div>
+                </div>
+            </div>
+            <div class="enemy-status">状态: ${enemy.status || '正常'}</div>
         `;
-      }
+        
+        // 点击选中
+        div.addEventListener('click', () => {
+            document.querySelectorAll('.enemy-unit').forEach(el => {
+                el.classList.remove('selected');
+            });
+            div.classList.add('selected');
+            console.log('[UI] 选中敌人:', enemy.name);
+        });
+        
+        // 如果敌人已死亡，添加样式
+        if (enemy.hp <= 0) {
+            div.classList.add('dead');
+            div.innerHTML += '<div class="dead-label">💀 已死亡</div>';
+        }
+        
+        return div;
     }
 
-    html += `
-        </div>
-        <button class="menu-btn" data-action="back">↩️ 返回</button>
-      </div>
-    `;
-    this.container.innerHTML = html;
-  },
-
-  // ========== 随从UI ==========
-
-  renderCompanions(state) {
-    let html = `
-      <div class="companions-frame">
-        <h3>👥 随从</h3>
-        <div class="companion-list">
-    `;
-
-    for (const comp of state.companions) {
-      const status = comp.alive ? "🟢" : "💀";
-      html += `
-        <div class="companion-card ${comp.alive ? '' : 'dead'}">
-          <div class="companion-header">
-            <span>${status} ${comp.name}</span>
-            <span class="companion-class">${comp.class}</span>
-            <span>Lv.${comp.level}</span>
-          </div>
-          <div class="companion-hp">
-            ❤️ ${comp.hp}/${comp.maxHp}
-            <div class="hp-bar-small"><div class="hp-fill" style="width:${Math.floor((comp.hp/comp.maxHp)*100)}%"></div></div>
-          </div>
-        </div>
-      `;
+    // 创建玩家元素
+    createPlayerElement(player) {
+        const div = document.createElement('div');
+        div.className = 'player-unit';
+        
+        const hpPercent = player.maxHp > 0 ? (player.hp / player.maxHp) * 100 : 0;
+        
+        div.innerHTML = `
+            <div class="player-name">🧙 ${player.name || '勇者'}</div>
+            <div class="player-hp">
+                <span class="hp-text">HP: ${Math.max(0, player.hp || 0)}/${player.maxHp || 0}</span>
+                <div class="hp-bar">
+                    <div class="hp-fill" style="width: ${Math.max(0, hpPercent)}%; background: #2196F3;"></div>
+                </div>
+            </div>
+            <div class="player-stats">
+                <span>攻击: ${player.attack || 0}</span>
+                <span>防御: ${player.defense || 0}</span>
+                <span>速度: ${player.speed || 0}</span>
+            </div>
+        `;
+        
+        return div;
     }
 
-    html += `
-        </div>
-        <button class="menu-btn" data-action="back">↩️ 返回</button>
-      </div>
-    `;
-    this.container.innerHTML = html;
-  },
+    // 渲染战斗日志
+    renderCombatLog(logs) {
+        const container = document.getElementById('combat-log');
+        if (!container) return;
+        
+        container.innerHTML = '<h4>战斗日志</h4>';
+        const logContainer = document.createElement('div');
+        logContainer.className = 'log-container';
+        
+        // 显示最近10条日志
+        const recentLogs = logs.slice(-10);
+        recentLogs.forEach(log => {
+            const p = document.createElement('p');
+            p.textContent = log;
+            logContainer.appendChild(p);
+        });
+        
+        container.appendChild(logContainer);
+        
+        // 滚动到底部
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
 
-  // ========== 存档UI ==========
+    // 更新战斗
+    updateCombat(combatEngine, log) {
+        console.log('[UI] 更新战斗界面');
+        
+        if (!combatEngine) return;
+        
+        // 更新敌人
+        const enemies = combatEngine.getEnemyUnits() || [];
+        const enemyElements = document.querySelectorAll('.enemy-unit');
+        enemies.forEach((enemy, index) => {
+            if (enemyElements[index]) {
+                const hpPercent = enemy.maxHp > 0 ? (enemy.hp / enemy.maxHp) * 100 : 0;
+                const hpFill = enemyElements[index].querySelector('.hp-fill');
+                const hpText = enemyElements[index].querySelector('.hp-text');
+                
+                if (hpFill) {
+                    hpFill.style.width = Math.max(0, hpPercent) + '%';
+                    hpFill.style.background = hpPercent > 50 ? '#4CAF50' : hpPercent > 25 ? '#FF9800' : '#f44336';
+                }
+                if (hpText) {
+                    hpText.textContent = `HP: ${Math.max(0, enemy.hp)}/${enemy.maxHp}`;
+                }
+                
+                if (enemy.hp <= 0) {
+                    enemyElements[index].classList.add('dead');
+                }
+            }
+        });
+        
+        // 更新玩家
+        const player = combatEngine.getPlayerUnit();
+        if (player) {
+            const playerElement = document.querySelector('.player-unit');
+            if (playerElement) {
+                const hpFill = playerElement.querySelector('.hp-fill');
+                const hpText = playerElement.querySelector('.hp-text');
+                const hpPercent = player.maxHp > 0 ? (player.hp / player.maxHp) * 100 : 0;
+                
+                if (hpFill) {
+                    hpFill.style.width = Math.max(0, hpPercent) + '%';
+                }
+                if (hpText) {
+                    hpText.textContent = `HP: ${Math.max(0, player.hp)}/${player.maxHp}`;
+                }
+            }
+        }
+        
+        // 更新日志
+        if (log) {
+            const logContainer = document.querySelector('.log-container');
+            if (logContainer) {
+                const p = document.createElement('p');
+                p.textContent = log;
+                logContainer.appendChild(p);
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+        
+        // 更新按钮状态
+        this.enableActionButtons(combatEngine.isPlayerTurn);
+    }
 
-  renderSaveMenu(state) {
-    const lastSave = state.world.lastSave ? Utils.formatDate(state.world.lastSave) : "未保存";
-    let html = `
-      <div class="save-frame">
-        <h3>💾 存档</h3>
-        <div class="save-info">
-          <p>角色: ${state.player.name}</p>
-          <p>等级: ${state.player.level} · ${state.player.class}</p>
-          <p>最后保存: ${lastSave}</p>
-        </div>
-        <div class="save-actions">
-          <button class="menu-btn" data-action="save">💾 保存</button>
-          <button class="menu-btn" data-action="export">📤 导出</button>
-          <button class="menu-btn danger" data-action="delete">🗑️ 删除</button>
-        </div>
-        <button class="menu-btn" data-action="back">↩️ 返回</button>
-      </div>
-    `;
-    this.container.innerHTML = html;
-  },
+    // 渲染行动按钮
+    renderActionButtons(combatEngine) {
+        const container = document.getElementById('action-buttons');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <button id="attack-btn" class="action-btn" disabled>⚔️ 攻击</button>
+            <button id="skill-btn" class="action-btn" disabled>✨ 技能</button>
+            <button id="defend-btn" class="action-btn" disabled>🛡️ 防御</button>
+            <button id="item-btn" class="action-btn" disabled>🎒 道具</button>
+        `;
 
-  // ========== 角色创建UI ==========
+        // 攻击按钮
+        const attackBtn = document.getElementById('attack-btn');
+        if (attackBtn) {
+            attackBtn.addEventListener('click', () => {
+                if (!combatEngine.isPlayerTurn) {
+                    console.warn('[UI] 不是玩家回合');
+                    return;
+                }
+                
+                // 获取选中的敌人
+                const selected = document.querySelector('.enemy-unit.selected');
+                let target = null;
+                
+                if (selected) {
+                    const index = parseInt(selected.dataset.index);
+                    const enemies = combatEngine.getEnemyUnits();
+                    if (enemies[index] && enemies[index].hp > 0) {
+                        target = enemies[index];
+                    }
+                }
+                
+                // 如果没有选中，自动选择第一个存活的敌人
+                if (!target) {
+                    const enemies = combatEngine.getEnemyUnits();
+                    target = enemies.find(e => e.hp > 0);
+                    if (target) {
+                        // 高亮第一个敌人
+                        const firstEl = document.querySelector('.enemy-unit');
+                        if (firstEl) {
+                            document.querySelectorAll('.enemy-unit').forEach(el => el.classList.remove('selected'));
+                            firstEl.classList.add('selected');
+                        }
+                    }
+                }
+                
+                if (target) {
+                    attackBtn.disabled = true;
+                    combatEngine.playerAction('attack', target);
+                } else {
+                    console.warn('[UI] 没有可攻击的敌人');
+                }
+            });
+        }
 
-  renderCharacterCreation() {
-    let html = `
-      <div class="creation-frame">
-        <h1>🎭 创建角色</h1>
-        <div class="creation-narrative">
-          <p>"很美好的一天，朝阳升起，你徐徐醒来。"</p>
-          <p>"你叫什么名字来着？"</p>
-        </div>
-        <div class="creation-form">
-          <input type="text" id="char-name" placeholder="输入你的名字" maxlength="12" />
-          <div class="class-select">
-            <p>选择道路：</p>
-            <button class="class-btn" data-class="warrior">⚔️ 战士</button>
-            <button class="class-btn" data-class="ranger">🏹 游侠</button>
-            <button class="class-btn" data-class="mage">🔮 法师</button>
-          </div>
-          <div class="mode-select">
-            <label><input type="checkbox" id="hardcore-mode" /> 硬核模式</label>
-          </div>
-          <button class="start-btn" id="start-game">开始旅程</button>
-        </div>
-      </div>
-    `;
-    this.container.innerHTML = html;
-  },
+        // 技能按钮（简单实现）
+        const skillBtn = document.getElementById('skill-btn');
+        if (skillBtn) {
+            skillBtn.addEventListener('click', () => {
+                if (!combatEngine.isPlayerTurn) return;
+                
+                const target = this.getTargetEnemy(combatEngine);
+                if (target) {
+                    skillBtn.disabled = true;
+                    combatEngine.playerAction('skill', target);
+                }
+            });
+        }
 
-  // ========== 弹窗 ==========
+        // 防御按钮
+        const defendBtn = document.getElementById('defend-btn');
+        if (defendBtn) {
+            defendBtn.addEventListener('click', () => {
+                if (!combatEngine.isPlayerTurn) return;
+                defendBtn.disabled = true;
+                // 防御：增加防御力一回合
+                const player = combatEngine.getPlayerUnit();
+                if (player) {
+                    player.defense = (player.defense || 0) + 5;
+                    combatEngine.playerAction('defend', null);
+                    // 下回合恢复
+                    setTimeout(() => {
+                        if (player) {
+                            player.defense = (player.defense || 0) - 5;
+                        }
+                    }, 100);
+                }
+            });
+        }
 
-  showMessage(text, type = "info") {
-    const popup = document.createElement("div");
-    popup.className = `popup popup-${type}`;
-    popup.innerHTML = `<p>${this.escapeHtml(text)}</p><button onclick="this.parentElement.remove()">确定</button>`;
-    document.body.appendChild(popup);
-    setTimeout(() => popup.remove(), 4000);
-  },
+        // 道具按钮
+        const itemBtn = document.getElementById('item-btn');
+        if (itemBtn) {
+            itemBtn.addEventListener('click', () => {
+                if (!combatEngine.isPlayerTurn) return;
+                itemBtn.disabled = true;
+                // 简单回复
+                const player = combatEngine.getPlayerUnit();
+                if (player) {
+                    const heal = 20;
+                    player.hp = Math.min(player.maxHp, player.hp + heal);
+                    combatEngine.playerAction('item', null);
+                    combatEngine.combatLog.push(`${player.name} 使用道具，回复 ${heal} HP`);
+                }
+            });
+        }
+    }
 
-  showConfirm(text, onConfirm, onCancel) {
-    const popup = document.createElement("div");
-    popup.className = "popup popup-confirm";
-    popup.innerHTML = `
-      <p>${this.escapeHtml(text)}</p>
-      <div class="popup-buttons">
-        <button id="confirm-yes">确定</button>
-        <button id="confirm-no">取消</button>
-      </div>
-    `;
-    document.body.appendChild(popup);
-    popup.querySelector("#confirm-yes").onclick = () => { popup.remove(); if (onConfirm) onConfirm(); };
-    popup.querySelector("#confirm-no").onclick = () => { popup.remove(); if (onCancel) onCancel(); };
-  },
+    // 获取目标敌人
+    getTargetEnemy(combatEngine) {
+        const selected = document.querySelector('.enemy-unit.selected');
+        if (selected) {
+            const index = parseInt(selected.dataset.index);
+            const enemies = combatEngine.getEnemyUnits();
+            if (enemies[index] && enemies[index].hp > 0) {
+                return enemies[index];
+            }
+        }
+        const enemies = combatEngine.getEnemyUnits();
+        return enemies.find(e => e.hp > 0);
+    }
 
-  escapeHtml(text) {
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  },
-};
+    // 启用/禁用行动按钮
+    enableActionButtons(enabled) {
+        const buttons = document.querySelectorAll('.action-btn');
+        buttons.forEach(btn => {
+            btn.disabled = !enabled;
+        });
+    }
 
-try { module.exports = Renderer; } catch(e) {}
+    // 显示战斗结果
+    showCombatResult(result) {
+        const container = document.getElementById('combat-result');
+        if (!container) return;
+        
+        let message = '';
+        let className = '';
+        
+        switch(result) {
+            case 'player_victory':
+                message = '🎉 战斗胜利！';
+                className = 'victory';
+                break;
+            case 'player_defeat':
+                message = '💀 战斗失败...';
+                className = 'defeat';
+                break;
+            case 'timeout':
+                message = '⏰ 战斗超时，平局！';
+                className = 'timeout';
+                break;
+            default:
+                message = '战斗结束';
+                className = 'normal';
+        }
+        
+        container.textContent = message;
+        container.className = 'combat-result ' + className;
+        container.style.display = 'block';
+        
+        setTimeout(() => {
+            container.style.display = 'none';
+        }, 3000);
+    }
+}
