@@ -78,25 +78,9 @@ const Game = {
       this.state.player.attributes[attr] = Math.max(1, this.state.player.attributes[attr] + val);
     }
 
-    this.state.player.maxHp = this.state.player.attributes.vit * 10 + this.state.player.attributes.ten * 5; this.state.player.maxMp = this.state.player.attributes.spi * 5 + this.state.player.attributes.int * 2;
+    EquipmentSystem.recalcPlayerStats(this.state);
     this.state.player.hp = this.state.player.maxHp;
     this.state.player.mp = this.state.player.maxMp;
-
-    // 添加第三个随从（测试用：战士老奎）
-    this.state.companions.push({
-      id: "laokui",
-      name: "老奎",
-      class: "warrior",
-      level: 1,
-      hp: 120,
-      maxHp: 120,
-      mp: 20,
-      maxMp: 20,
-      attributes: { str: 12, agi: 6, int: 5, vit: 10, ten: 10, spi: 5 },
-      equipment: {},
-      aiStrategy: "balanced",
-      alive: true,
-    });
 
     this.state.narrative.dialogueHistory = [
       '"很美好的一天，朝阳升起，你徐徐醒来。"',
@@ -346,31 +330,57 @@ const Game = {
   bindCombatEvents() {
     const container = Renderer.container;
     if (!container) return;
+    const combat = this.combatInstance;
+    if (!combat) return;
 
+    // 技能按钮 - 进入目标选择模式
     container.querySelectorAll(".skill-btn:not(.disabled)").forEach(btn => {
       btn.addEventListener("click", () => {
         const skillName = btn.dataset.skill;
-        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
-        const targetId = enemies[0]?.id;
-        this.executeCombatAction("player", { type: "skill", skillName }, targetId);
+        combat.pendingAction = { type: "skill", skillName };
+        combat.targetSelection = true;
+        this.combatLoop();
       });
     });
 
+    // 普攻/防御/物品按钮
     container.querySelectorAll(".combat-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const action = btn.dataset.action;
-        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
-        const targetId = enemies[0]?.id;
-        this.executeCombatAction("player", { type: action }, targetId);
-      });
+      const action = btn.dataset.action;
+      if (action === "defend") {
+        btn.addEventListener("click", () => {
+          this.executeCombatAction("player", { type: "defend" }, "player");
+        });
+      } else if (action === "item") {
+        btn.addEventListener("click", () => {
+          Renderer.showMessage("物品功能待开发");
+        });
+      } else if (action === "cancel-target") {
+        btn.addEventListener("click", () => {
+          combat.pendingAction = null;
+          combat.targetSelection = false;
+          this.combatLoop();
+        });
+      }
     });
+
+    // 目标选择 - 点击敌方单位
+    if (combat.targetSelection) {
+      container.querySelectorAll(".unit.enemy.selectable-target").forEach(unitEl => {
+        unitEl.addEventListener("click", () => {
+          const targetId = unitEl.dataset.unit;
+          if (!targetId) return;
+          const action = combat.pendingAction;
+          combat.pendingAction = null;
+          combat.targetSelection = false;
+          this.executeCombatAction("player", action, targetId);
+        });
+      });
+    }
 
     // 撤退
     container.querySelectorAll("[data-action='flee-combat']").forEach(btn => {
       btn.addEventListener("click", () => {
-        const enemies = this.combatInstance.units.filter(u => u.side === "enemy" && u.hp > 0);
-        const targetId = enemies[0]?.id;
-        this.executeCombatAction("player", { type: "flee" }, targetId);
+        this.executeCombatAction("player", { type: "flee" }, "player");
       });
     });
   },
@@ -388,11 +398,11 @@ const Game = {
         }
         // 金币
         StateUtils.addGold(this.state, combat.rewards.gold);
-        // 物品
+        // 物品（Boss/精英怪掉落装备，野兽只掉材料）
         for (const item of combat.rewards.items) {
           InventorySystem.addToInventory(this.state, item);
         }
-        // 野狗掉落
+        // 敌人专属掉落（材料 only）
         for (const unit of combat.units) {
           if (unit.side === "enemy" && unit.hp <= 0 && unit.drops) {
             for (const drop of unit.drops) {
@@ -400,14 +410,14 @@ const Game = {
                 const dropItem = {
                   id: Utils.uuid(),
                   name: drop.name,
-                  type: drop.type,
+                  type: "material",
                   rarity: "white",
                   level: 1,
                   stackable: true,
                   stack: 1,
                 };
                 InventorySystem.addToInventory(this.state, dropItem);
-                this.state.narrative.dialogueHistory.push(`获得: ${drop.name}`);
+                this.state.narrative.dialogueHistory.push(`获得材料: ${drop.name}`);
               }
             }
           }
