@@ -1,5 +1,5 @@
 // ============================================
-// 《寻亲风云录》UI渲染 — 小地图+当前帧操作版
+// 《寻亲风云录》UI渲染 — 荒地测试帧版
 // ============================================
 
 const Renderer = {
@@ -88,7 +88,7 @@ const Renderer = {
     const narrative = state.narrative;
     let historyHtml = "";
     if (narrative.dialogueHistory && narrative.dialogueHistory.length > 0) {
-      const recent = narrative.dialogueHistory.slice(-6);
+      const recent = narrative.dialogueHistory.slice(-8);
       historyHtml = recent.map(h => `<p class="history-line">${this.escapeHtml(h)}</p>`).join("");
     }
 
@@ -102,10 +102,35 @@ const Renderer = {
     `;
   },
 
-  // 场景交互按钮 — 只保留当前帧可进行的操作（NPC对话+场景物品）
+  // 场景交互按钮 — 根据场景类型动态生成
   renderSceneActions(state, scene) {
     let actions = [];
 
+    // ===== 荒地特殊处理 =====
+    if (scene.id === "greyVillage_wasteland") {
+      // 检查野狗状态
+      const enemyStatus = SceneSystem.getWastelandEnemies(state);
+      
+      if (enemyStatus.canSpawn) {
+        actions.push({ type: "combat", text: "⚔️ 迎战野狗", action: "wasteland_combat" });
+      } else {
+        actions.push({ type: "info", text: `⏳ 野狗刷新中 (${Math.ceil(enemyStatus.remaining / 60)}分)`, action: "none", disabled: true });
+      }
+
+      // 采集石头
+      actions.push({ type: "gather", text: "🔨 采集石头", action: "object:石头矿" });
+      
+      // 挂机按钮
+      actions.push({ type: "idle", text: "⏱️ 挂机采集", action: "idle_mine" });
+      
+      return `
+        <div class="scene-actions">
+          ${actions.map(a => `<button class="action-btn action-${a.type}" data-action="${a.action}" ${a.disabled ? 'disabled' : ''}>${a.text}</button>`).join("")}
+        </div>
+      `;
+    }
+
+    // ===== 普通场景 =====
     // NPC对话
     if (scene.npcs) {
       for (const npcId of scene.npcs) {
