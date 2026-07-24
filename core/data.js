@@ -209,4 +209,188 @@ const DATA = {
       greyVillage: {
         name: "灰烟村",
         levelRange: [1, 20],
-        gatekeeper
+        gatekeeper: "villageChief",
+        locations: ["酒馆", "铁匠铺", "裁缝铺", "皮匠铺", "村医屋", "墓地"],
+        desc: "牧场起点，资源产出。你长大的地方。",
+      },
+      ashMountains: {
+        name: "灰烬山脉",
+        levelRange: [21, 40],
+        gatekeeper: "nightWatcher",
+        locations: ["山脚洞", "废弃仓库", "河岸洞穴", "路边坟", "旧矿道"],
+        desc: "资源初级加工。通往灰烬镇的路。",
+      },
+      ashMines: {
+        name: "灰烬矿场",
+        levelRange: [41, 60],
+        gatekeeper: "mechanicalGuard",
+        locations: ["无底洞矿场", "旧矿镇", "归童坊", "铁矿裂隙", "机械之守殿堂"],
+        desc: "资源精炼、中转。机械守卫的领地。",
+      },
+      newWorld: {
+        name: "新世界",
+        levelRange: [61, 80],
+        gatekeeper: "hermit",
+        locations: ["资源平原", "寂静城镇", "空置殿堂", "幽影裂隙"],
+        desc: "组织所在地。资源消耗终端。",
+      },
+      skyTower: {
+        name: "浮空塔",
+        levelRange: [81, 99],
+        gatekeeper: "finalBoss",
+        subZones: {
+          outerCourt:  { name: "外庭",   levelRange: [81, 85], locations: ["81-85级野外帧"] },
+          corridor:    { name: "回廊",   levelRange: [86, 90], locations: ["86-90级野外帧", "组织档案馆"] },
+          innerCourt:  { name: "内庭",   levelRange: [91, 95], locations: ["91-95级野外帧", "组织演武场"] },
+          throneHall:  { name: "至高殿", levelRange: [96, 99], locations: ["终局Boss房"] },
+        },
+        desc: "总部。主人的餐桌。",
+      },
+    },
+  },
+
+  // ========== 守门员 ==========
+  gatekeepers: {
+    villageChief: {
+      name: "村长",
+      level: 20,
+      knows: "父母的嘱托。不知道组织。",
+      stance: "我答应过你爹娘，要让你活着。",
+      combat: { hp: 3000, armor: 200, regen: 50, style: "tank" },
+      reward: "父亲的旧信",
+      onDefeat: "unlock_ashMountains",
+    },
+    nightWatcher: {
+      name: "守夜人",
+      level: 40,
+      knows: "组织存在，是中层的执行者。",
+      stance: "你普普通通过日子自然无恙，露点野心出来我就得做点什么。",
+      combat: { hp: 5000, atk: 300, armor: 50, crit: 0.3, style: "glassCannon" },
+      reward: "组织铭牌",
+      onDefeat: "unlock_ashMines",
+      foreshadow: [37, 38],
+    },
+    mechanicalGuard: {
+      name: "机械守卫",
+      level: 60,
+      knows: "组织的中坚力量，守护矿场。",
+      stance: "检测到入侵者。执行清除协议。",
+      combat: { hp: 8000, atk: 400, armor: 300, style: "tank" },
+      reward: "机械核心",
+      onDefeat: "unlock_newWorld",
+    },
+    hermit: {
+      name: "隐修者",
+      level: 80,
+      knows: "组织的真相，碎片秘密。",
+      stance: "你终于来了。我等你很久了。",
+      combat: { hp: 12000, atk: 600, armor: 200, style: "mage" },
+      reward: "十二碎片之钥",
+      onDefeat: "unlock_skyTower",
+    },
+    finalBoss: {
+      name: "主人",
+      level: 99,
+      knows: "一切。",
+      stance: "欢迎来到餐桌。",
+      combat: { hp: 50000, atk: 1000, armor: 500, style: "final" },
+      reward: "真相",
+      onDefeat: "game_complete",
+    },
+  },
+
+  // ========== NPC / 随从 ==========
+  npcs: {
+    ailin: {
+      id: "ailin",
+      name: "艾琳",
+      class: "ranger",
+      recruit: false,
+      desc: "你的青梅竹马，开局就在队伍里。",
+    },
+    blacksmith: {
+      id: "blacksmith",
+      name: "老铁匠",
+      class: "warrior",
+      recruit: true,
+      desc: "灰烟村的铁匠，擅长锻造。",
+      reqLevel: 10,
+    },
+    hunter: {
+      id: "hunter",
+      name: "老猎人",
+      class: "ranger",
+      recruit: true,
+      desc: "经验丰富的猎人。",
+      reqLevel: 15,
+    },
+    mageApprentice: {
+      id: "mageApprentice",
+      name: "魔法学徒",
+      class: "mage",
+      branch: "fire",
+      recruit: true,
+      desc: "渴望冒险的魔法学徒。",
+      reqLevel: 20,
+    },
+  },
+
+  // ========== 货币系统 ==========
+  currency: {
+    maxCarry: 999999,
+  },
+
+  // ========== 背包系统 ==========
+  inventory: {
+    perGatekeeperBonus: 20,
+    stackLimits: {
+      gold: 9999,
+      basic: 99,
+      rare: 20,
+    },
+  },
+
+  // ========== 经验锁提示 ==========
+  expLockMessages: {
+    20: "你感到身体达到了瓶颈，需要击败村长才能继续成长。",
+    40: "守夜人的阴影笼罩着你，必须战胜他才能突破。",
+    60: "机械守卫阻挡了你的去路，击败它才能继续前进。",
+    80: "隐修者的试炼 awaits，通过后才能触及巅峰。",
+    99: "你已达凡人极限。",
+  },
+
+  // ========== 符文之语（equipment.js 依赖）==========
+  runewords: {
+    fury: {
+      name: "愤怒",
+      c: ["ruby", "ruby", "diamond"],
+      effect: { physDmg: 0.25 },
+      desc: "三颗红宝石镶嵌触发：物理伤害+25%"
+    },
+    frostguard: {
+      name: "霜卫",
+      c: ["sapphire", "sapphire", "emerald"],
+      effect: { frostRes: 0.30 },
+      desc: "双蓝宝石+绿宝石：冰霜抗性+30%"
+    },
+    thunderlord: {
+      name: "雷霆领主",
+      c: ["topaz", "topaz", "topaz"],
+      effect: { lightDmg: 0.20 },
+      desc: "三颗黄宝石：雷电伤害+20%"
+    },
+  },
+
+  // ========== 装备类型到槽位映射（inventory.js / equipment.js 依赖）==========
+  typeToSlot: {
+    sword: "weapon", axe: "weapon", hammer: "weapon", bow: "weapon",
+    staff: "weapon", wand: "weapon", dagger: "weapon",
+    shield: "offhand",
+    helmet: "helmet", armor: "chest", chest: "chest",
+    legs: "legs", boots: "boots", gloves: "gloves",
+    necklace: "necklace", ring: "ring1",
+  },
+};
+
+// 导出
+try { module.exports = DATA; } catch(e) {}
