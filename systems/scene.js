@@ -1,12 +1,8 @@
-// systems/scene.js - 完全按你的设计
+// systems/scene.js - 场景管理
 class SceneManager {
     constructor() {
         this.currentScene = null;
         this.currentCombat = null;
-        
-        // ============================================
-        // 场景数据 - 完全按你的设计
-        // ============================================
         this.scenes = {
             // ----- 灰烟村（安全区）-----
             '灰烟村': {
@@ -51,7 +47,6 @@ class SceneManager {
                 description: '你的小窝，虽然简陋但很安心。墙上挂着旧地图。',
                 exits: ['灰烟村']
             },
-            
             // ----- 野外区域（战斗）-----
             '灰烟村_荒地': {
                 id: 'greyVillage_wasteland',
@@ -81,119 +76,66 @@ class SceneManager {
                 exits: ['灰烟村']
             }
         };
-
-        // ----- 敌人数据 -----
         this.enemyData = {
-            '野狗': {
-                name: '野狗',
-                hp: 30,
-                maxHp: 30,
-                attack: 8,
-                defense: 2,
-                speed: 10,
-                exp: 12,
-                gold: 5
-            },
-            '野兔': {
-                name: '野兔',
-                hp: 15,
-                maxHp: 15,
-                attack: 3,
-                defense: 1,
-                speed: 15,
-                exp: 8,
-                gold: 2
-            },
-            '野鸭': {
-                name: '野鸭',
-                hp: 20,
-                maxHp: 20,
-                attack: 5,
-                defense: 1,
-                speed: 12,
-                exp: 10,
-                gold: 3
-            },
-            '螃蟹': {
-                name: '螃蟹',
-                hp: 25,
-                maxHp: 25,
-                attack: 6,
-                defense: 5,
-                speed: 5,
-                exp: 12,
-                gold: 4
-            }
+            '野狗': { name: '野狗', hp: 30, maxHp: 30, attack: 8, defense: 2, speed: 10, exp: 12, gold: 5 },
+            '野兔': { name: '野兔', hp: 15, maxHp: 15, attack: 3, defense: 1, speed: 15, exp: 8, gold: 2 },
+            '野鸭': { name: '野鸭', hp: 20, maxHp: 20, attack: 5, defense: 1, speed: 12, exp: 10, gold: 3 },
+            '螃蟹': { name: '螃蟹', hp: 25, maxHp: 25, attack: 6, defense: 5, speed: 5, exp: 12, gold: 4 }
         };
     }
-
-    // ========== 核心方法 ==========
-
     enterScene(sceneName) {
         console.log('[场景] 进入:', sceneName);
-        
         const scene = this.scenes[sceneName];
         if (!scene) {
             console.error('[场景] 场景不存在:', sceneName);
             return;
         }
-        
         this.currentScene = scene;
-        
-        // 触发场景变化事件（通知UI）
-        const event = new CustomEvent('scene-change', {
-            detail: { scene: scene }
-        });
+        const event = new CustomEvent('scene-change', { detail: { scene: scene } });
         document.dispatchEvent(event);
-        
-        // 如果是野外场景且有敌人，触发战斗
         if (scene.type === 'wild' && scene.enemies && scene.enemies.length > 0) {
             console.log('[场景] 野外场景，触发战斗，敌人:', scene.enemies.join(', '));
             this.triggerBattle(scene.enemies);
         }
     }
-
     triggerBattle(enemyNames) {
         console.log('[战斗] 触发战斗，敌人:', enemyNames.join(', '));
-        
         const player = this.getPlayerData();
         if (!player) {
             console.error('[战斗] 没有玩家数据');
             return;
         }
-        
         const enemies = enemyNames.map(name => {
             const data = this.enemyData[name];
             if (!data) {
                 console.error('[战斗] 找不到敌人数据:', name);
                 return null;
             }
-            return {
-                ...data,
-                id: Date.now() + Math.random() * 1000,
-                status: 'normal',
-                hp: data.hp || 30,
-                maxHp: data.maxHp || 30,
-                speed: data.speed || 5
-            };
+            return { ...data, id: Date.now() + Math.random() * 1000, status: 'normal', hp: data.hp || 30, maxHp: data.maxHp || 30, speed: data.speed || 5 };
         }).filter(e => e !== null);
-        
         if (enemies.length === 0) {
             console.error('[战斗] 没有有效敌人');
             return;
         }
-        
         const combat = new CombatEngine();
         window.currentCombat = combat;
         this.currentCombat = combat;
         combat.startCombat(player, enemies);
     }
-
     getPlayerData() {
         try {
-            if (window.gameApp && window.gameApp.player) {
-                return window.gameApp.player;
+            // 优先从新的 GameApp 状态获取
+            if (window.gameApp && window.gameApp.state && window.gameApp.state.player) {
+                const p = window.gameApp.state.player;
+                // 确保有战斗所需属性
+                p.maxHp = p.maxHp || p.hp || 100;
+                p.hp = p.hp || p.maxHp;
+                p.speed = p.speed || 10;
+                p.attack = p.attack || 10;
+                p.defense = p.defense || 5;
+                return p;
             }
+            // 兼容旧存档（已废弃，保留以防万一）
             const saved = localStorage.getItem('myRPG_player');
             if (saved) {
                 const p = JSON.parse(saved);
@@ -210,16 +152,7 @@ class SceneManager {
             return null;
         }
     }
-
-    getCurrentScene() {
-        return this.currentScene;
-    }
-
-    getScenes() {
-        return this.scenes;
-    }
-
-    getExits() {
-        return this.currentScene ? this.currentScene.exits || [] : [];
-    }
+    getCurrentScene() { return this.currentScene; }
+    getScenes() { return this.scenes; }
+    getExits() { return this.currentScene ? this.currentScene.exits || [] : []; }
 }
