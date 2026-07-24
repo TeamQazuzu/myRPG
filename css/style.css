@@ -788,12 +788,498 @@ html, body {
 }
 
 /* ============================================
+   背包/装备面板增强样式
+   ============================================ */
+
+/* 物品详情容器 */
+.item-detail {
+  padding: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* 物品名称（大字） */
+.item-detail-name {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+/* 物品描述 */
+.item-detail-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 等级/类型元信息 */
+.item-detail-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* 基础属性列表 */
+.item-detail-stats {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-detail-stats .stats-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.item-detail-stats span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* 词条列表 */
+.item-detail-affixes {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-detail-affixes .affixes-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.affix-item {
+  font-size: 13px;
+  padding: 2px 0;
+}
+
+/* 词条颜色 */
+.affix-item.white { color: #cccccc; }
+.affix-item.green { color: #4caf50; }
+.affix-item.blue { color: #2196f3; }
+.affix-item.purple { color: #9c27b0; }
+.affix-item.orange { color: #ff9800; }
+.affix-item.red { color: #f44336; }
+
+/* 附魔信息 */
+.item-detail-enchant {
+  background: rgba(74, 138, 192, 0.15);
+  border: 1px solid rgba(74, 138, 192, 0.3);
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--info);
+}
+
+/* 操作按钮组 */
+.item-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+/* 操作按钮 */
+.item-action-btn {
+  flex: 1;
+  min-width: 70px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: center;
+  transition: all 0.15s;
+  min-height: 40px;
+}
+
+.item-action-btn:active {
+  transform: scale(0.97);
+}
+
+/* 穿戴按钮 */
+.btn-equip {
+  background: var(--bg-tertiary);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.btn-equip:hover {
+  background: var(--success);
+  color: #fff;
+}
+
+/* 使用按钮 */
+.btn-use {
+  background: var(--bg-tertiary);
+  color: var(--info);
+  border-color: var(--info);
+}
+
+.btn-use:hover {
+  background: var(--info);
+  color: #fff;
+}
+
+/* 丢弃按钮 */
+.btn-discard {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  border-color: var(--text-muted);
+}
+
+.btn-discard:hover {
+  background: var(--error);
+  color: #fff;
+  border-color: var(--error);
+}
+
+/* 卸下按钮 */
+.btn-unequip {
+  background: var(--bg-tertiary);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+.btn-unequip:hover {
+  background: var(--warning);
+  color: var(--bg-primary);
+}
+
+/* 锻造按钮 */
+.btn-forge {
+  background: var(--bg-tertiary);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-forge:hover {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+/* 附魔按钮 */
+.btn-enchant {
+  background: var(--bg-tertiary);
+  color: #b388ff;
+  border-color: #b388ff;
+}
+
+.btn-enchant:hover {
+  background: #b388ff;
+  color: var(--bg-primary);
+}
+
+/* 搜索框 */
+.search-bar {
+  margin-bottom: 10px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 筛选按钮组 */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+/* 筛选按钮 */
+.filter-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: all 0.15s;
+  min-height: 32px;
+}
+
+.filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 筛选按钮激活状态 */
+.filter-btn.active {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-color: var(--accent);
+  font-weight: bold;
+}
+
+/* 装备属性总和 */
+.eq-total-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  align-items: center;
+}
+
+.eq-total-stats > span:first-child {
+  color: var(--text-muted);
+  font-weight: bold;
+}
+
+.stat-atk { color: #e57373; }
+.stat-matk { color: #64b5f6; }
+.stat-def { color: #81c784; }
+.stat-mdef { color: #4db6ac; }
+
+/* 背包物品可点击 */
+.inv-item {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.inv-item:hover {
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.inv-item-level {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* 装备槽位可点击 */
+.eq-slot {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.eq-slot:hover {
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+/* 装备槽位内信息容器 */
+.eq-slot-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: right;
+}
+
+.eq-slot-level {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.eq-slot-stats {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* ============================================
    滚动条
    ============================================ */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg-primary); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ============================================
+   响应式（移动端优化）
+   ============================================ */
+/* ============================================
+   NPC对话框
+   ============================================ */
+.dialogue-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 20px;
+}
+
+.dialogue-box {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+
+.dialogue-speaker {
+  color: var(--accent);
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dialogue-text {
+  color: #ffffff;
+  font-size: 15px;
+  line-height: 1.8;
+  margin-bottom: 16px;
+  text-indent: 0;
+}
+
+.dialogue-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.dialogue-choice-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: left;
+  transition: all 0.15s;
+}
+
+.dialogue-choice-btn:hover {
+  border-left-color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.dialogue-choice-btn:active {
+  transform: scale(0.98);
+}
+
+.dialogue-continue {
+  justify-content: center;
+  border-left: 3px solid var(--accent);
+  color: var(--accent);
+}
+
+.dialogue-continue:hover {
+  border-left-color: var(--accent-hover);
+  color: var(--accent-hover);
+}
+
+.choice-number {
+  color: var(--text-muted);
+  font-size: 13px;
+  min-width: 20px;
+  flex-shrink: 0;
+}
+
+/* 对话商店面板中的商品样式 */
+.shop-owner {
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.shop-desc {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.shop-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.shop-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 10px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.shop-item-name {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.shop-item-desc {
+  color: var(--text-secondary);
+  font-size: 12px;
+  width: 100%;
+}
+
+.shop-item-price {
+  color: var(--warning);
+  font-size: 13px;
+}
+
+.shop-buy-btn {
+  margin-left: auto;
+  padding: 5px 14px;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.shop-buy-btn:hover {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
 
 /* ============================================
    响应式（移动端优化）
@@ -1058,5 +1544,70 @@ html, body {
 
   .panel-info {
     font-size: 13px;
+  }
+
+  /* —— 对话框 —— */
+  .dialogue-overlay {
+    padding: 12px;
+  }
+
+  .dialogue-box {
+    padding: 16px 18px;
+  }
+
+  .dialogue-speaker {
+    font-size: 17px;
+  }
+
+  .dialogue-text {
+    font-size: 15px;
+  }
+
+  .dialogue-choice-btn {
+    font-size: 14px;
+    padding: 12px 14px;
+    min-height: 44px;
+  }
+
+  .choice-number {
+    font-size: 14px;
+  }
+
+  .shop-buy-btn {
+    min-height: 36px;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  /* —— 背包/装备增强 —— */
+  .item-action-btn {
+    min-height: 44px;
+    font-size: 14px;
+    padding: 10px 14px;
+  }
+
+  .search-input {
+    font-size: 16px; /* iOS自动放大 prevention */
+    padding: 10px 12px;
+  }
+
+  .filter-btn {
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .item-detail-name {
+    font-size: 20px;
+  }
+
+  .item-detail-desc {
+    font-size: 14px;
+  }
+
+  .eq-total-stats {
+    font-size: 13px;
+    gap: 12px;
+    padding: 10px 14px;
   }
 }
