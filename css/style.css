@@ -964,34 +964,3 @@ html, body {
   .map-cell { width: 32px; height: 32px; font-size: 16px; }
   .equip-grid { grid-template-columns: 1fr; }
 }
-
-/* ---- 物品详情增强 ---- */
-.affix-line {
-  padding: 3px 0;
-  font-size: 12px;
-  color: var(--accent);
-}
-
-.affix-line b {
-  color: var(--text-primary);
-}
-
-.item-enchant {
-  padding: 6px;
-  background: rgba(156, 39, 176, 0.1);
-  border: 1px solid #9c27b0;
-  border-radius: 4px;
-  font-size: 12px;
-  color: #ce93d8;
-  margin: 8px 0;
-}
-
-.item-sockets {
-  margin: 8px 0;
-  font-size: 12px;
-}
-
-.socket-line {
-  padding: 2px 0;
-  color: var(--text-secondary);
-}
