@@ -62,6 +62,11 @@ class UIRenderer {
       this.updateTurnIndicator(e.detail.unit);
     });
 
+    // 技能选择面板请求（combat.js发出）
+    document.addEventListener('combat-select-skill', (e) => {
+      this.showSkillPanel(e.detail.combat);
+    });
+
     // 游戏日志
     document.addEventListener('game-log', (e) => {
       this.addGameLog(e.detail.message);
@@ -147,7 +152,11 @@ class UIRenderer {
         sm.rest();
         break;
       case 'talk':
-        this.addGameLog(`你与${action.target}交谈...（对话系统开发中）`);
+        if (DialogueSystem) {
+          DialogueSystem.startDialogue(action.target);
+        } else {
+          this.addGameLog('你与' + action.target + '交谈...（对话系统不可用）');
+        }
         break;
       case 'inspect':
         this.addGameLog('你仔细查看了一番...（inspect系统开发中）');
@@ -213,6 +222,11 @@ class UIRenderer {
           container.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
           el.classList.add('selected');
           combat.setSelectedTarget(enemy);
+          // 如果已选中技能，点击敌方目标直接释放技能
+          if (combat.selectedSkill) {
+            this.disableButtons();
+            combat.playerAction('skill', enemy);
+          }
         }
       });
     });
@@ -271,6 +285,9 @@ class UIRenderer {
 
     document.getElementById('btn-attack').addEventListener('click', () => {
       if (!combat.isPlayerTurn) return;
+      // 攻击时取消已选择的技能
+      combat.selectedSkill = null;
+      this.updateSkillButtonHint(combat);
       const target = this.getSelectedTarget(combat);
       if (target) {
         this.disableButtons();
@@ -280,11 +297,19 @@ class UIRenderer {
 
     document.getElementById('btn-skill').addEventListener('click', () => {
       if (!combat.isPlayerTurn) return;
-      const target = this.getSelectedTarget(combat);
-      if (target) {
-        this.disableButtons();
-        combat.playerAction('skill', target);
+      // 点击技能按钮，触发 combat-select-skill 事件让 combat.js 处理
+      // 如果已选中技能且有目标，直接执行
+      if (combat.selectedSkill) {
+        var target = this.getSelectedTarget(combat);
+        if (target) {
+          this.disableButtons();
+          combat.playerAction('skill', target);
+          return;
+        }
       }
+      // 否则通知combat显示技能选择面板
+      this.disableButtons();
+      combat.playerAction('skill', null);
     });
 
     document.getElementById('btn-defend').addEventListener('click', () => {
@@ -391,7 +416,13 @@ class UIRenderer {
     const logList = document.getElementById('log-list');
     if (logList && unit) {
       const p = document.createElement('p');
-      p.textContent = `— ${unit.name} 的回合 —`;
+      // 如果当前有选中的技能，在回合提示中显示
+      var hint = unit.name + ' 的回合';
+      if (this.combatEngine && this.combatEngine.selectedSkill && DATA && DATA.skills && DATA.skills[this.combatEngine.selectedSkill]) {
+        var selectedSkillName = DATA.skills[this.combatEngine.selectedSkill].name;
+        hint += '（已选技能：' + selectedSkillName + '，请点击敌方目标释放）';
+      }
+      p.textContent = '-- ' + hint + ' --';
       p.style.color = 'var(--accent)';
       p.style.textAlign = 'center';
       logList.appendChild(p);
@@ -399,6 +430,87 @@ class UIRenderer {
         logList.removeChild(logList.firstChild);
       }
       logList.scrollTop = logList.scrollHeight;
+    }
+  }
+
+  // ========== 技能选择面板 ==========
+  showSkillPanel(combat) {
+    if (!window.gameApp || !window.gameApp.state) {
+      this.enableButtons(true);
+      return;
+    }
+    var state = window.gameApp.state;
+    // 获取可用技能列表
+    var available = SkillSystem && SkillSystem.getAvailableSkills ? SkillSystem.getAvailableSkills(state) : [];
+    if (available.length === 0) {
+      this.addGameLog('当前没有可用的技能');
+      this.enableButtons(true);
+      return;
+    }
+
+    // 构建技能列表HTML
+    var skillListHtml = '<div class="skill-list">';
+    for (var i = 0; i < available.length; i++) {
+      var skill = available[i];
+      // 检查冷却状态
+      var cdRemaining = (combat.cooldowns && combat.cooldowns[skill.id]) || 0;
+      var canUse = state.player.mp >= skill.mpCost && cdRemaining <= 0;
+      var cdText = cdRemaining > 0 ? ' [冷却中 ' + cdRemaining + '回合]' : '';
+      var disabledClass = canUse ? '' : ' disabled';
+      var mpColor = state.player.mp >= skill.mpCost ? '#66bbff' : '#ff6666';
+      skillListHtml += '<button class="skill-item' + disabledClass + '" data-skill-id="' + skill.id + '"' + (canUse ? '' : ' disabled') + '>';
+      skillListHtml += '<div class="skill-item-name">' + skill.name + '</div>';
+      skillListHtml += '<div class="skill-item-info">';
+      skillListHtml += '<span class="skill-mp" style="color:' + mpColor + '">MP ' + skill.mpCost + '</span>';
+      skillListHtml += '<span class="skill-cd">' + cdText + '</span>';
+      skillListHtml += '</div>';
+      skillListHtml += '<div class="skill-item-desc">' + skill.desc + '</div>';
+      skillListHtml += '</button>';
+    }
+    skillListHtml += '</div>';
+
+    // 使用通用面板显示技能列表
+    this.showPanel('选择技能', skillListHtml);
+
+    // 绑定技能点击事件
+    var self = this;
+    var panelOverlay = document.getElementById('panel-overlay');
+    if (panelOverlay) {
+      var skillBtns = panelOverlay.querySelectorAll('.skill-item:not(.disabled)');
+      for (var j = 0; j < skillBtns.length; j++) {
+        (function(btn) {
+          btn.addEventListener('click', function() {
+            var skillId = btn.getAttribute('data-skill-id');
+            // 设置选中的技能
+            combat.selectedSkill = skillId;
+            // 关闭面板
+            self.closePanel();
+            // 更新按钮文字提示
+            self.updateSkillButtonHint(combat);
+            // 更新回合提示
+            self.updateTurnIndicator(combat.playerUnit);
+            // 重新启用按钮，让玩家选择目标
+            self.enableButtons(true);
+          });
+        })(skillBtns[j]);
+      }
+    }
+
+    // 面板关闭时重新启用按钮
+    this._skillPanelClosed = false;
+  }
+
+  // ========== 更新技能按钮提示文字 ==========
+  updateSkillButtonHint(combat) {
+    var skillBtn = document.getElementById('btn-skill');
+    if (!skillBtn) return;
+    if (combat.selectedSkill && DATA && DATA.skills && DATA.skills[combat.selectedSkill]) {
+      var skillName = DATA.skills[combat.selectedSkill].name;
+      skillBtn.textContent = '>> ' + skillName + ' <<';
+      skillBtn.classList.add('skill-selected');
+    } else {
+      skillBtn.textContent = '>> 技能 <<';
+      skillBtn.classList.remove('skill-selected');
     }
   }
 
@@ -509,44 +621,409 @@ class UIRenderer {
     document.getElementById('btn-settings').addEventListener('click', () => this.showSettings());
   }
 
-  // ========== 背包面板 ==========
+  // ========== 背包面板（增强版） ==========
   showInventory() {
     if (!window.gameApp || !window.gameApp.state) return;
-    const state = window.gameApp.state;
-    this.showPanel('背包', `
-      <div class="panel-info">容量: ${state.inventory.items.length}/${state.inventory.capacity}</div>
-      <div class="inventory-grid">
-        ${state.inventory.items.length === 0 ? '<p class="empty-hint">背包空空如也</p>' :
-          state.inventory.items.map(item => `
-            <div class="inv-item">
-              <span class="item-name ${item.rarity || 'white'}">${item.name}</span>
-              ${item.stack > 1 ? `<span class="item-stack">x${item.stack}</span>` : ''}
-            </div>
-          `).join('')
+    var state = window.gameApp.state;
+    var self = this;
+
+    // 记录当前筛选和搜索状态
+    this._invFilter = this._invFilter || 'all';
+    this._invSearch = this._invSearch || '';
+
+    // 获取显示的物品列表
+    var items = state.inventory.items;
+    if (this._invSearch && InventorySystem && InventorySystem.searchInventory) {
+      items = InventorySystem.searchInventory(state, this._invSearch);
+    }
+    if (this._invFilter !== 'all') {
+      items = items.filter(function(i) { return i.rarity === self._invFilter; });
+    }
+
+    // 构建品质筛选按钮
+    var rarityOptions = [
+      { key: 'all', label: '全部' },
+      { key: 'white', label: '白色' },
+      { key: 'green', label: '绿色' },
+      { key: 'blue', label: '蓝色' },
+      { key: 'purple', label: '紫色' },
+      { key: 'orange', label: '橙色' },
+      { key: 'red', label: '红色' }
+    ];
+    var filterHtml = '<div class="filter-bar">';
+    for (var f = 0; f < rarityOptions.length; f++) {
+      var opt = rarityOptions[f];
+      var activeClass = this._invFilter === opt.key ? ' active' : '';
+      filterHtml += '<button class="filter-btn' + activeClass + '" data-filter="' + opt.key + '">' + opt.label + '</button>';
+    }
+    filterHtml += '</div>';
+
+    // 构建物品列表HTML
+    var itemsHtml = '';
+    if (items.length === 0) {
+      itemsHtml = '<p class="empty-hint">背包空空如也</p>';
+    } else {
+      itemsHtml = '<div class="inventory-grid">';
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        itemsHtml += '<div class="inv-item" data-item-id="' + item.id + '">';
+        itemsHtml += '<span class="item-name ' + (item.rarity || 'white') + '">' + item.name + '</span>';
+        if (item.stack > 1) {
+          itemsHtml += '<span class="item-stack">x' + item.stack + '</span>';
         }
-      </div>
-    `);
+        if (item.level) {
+          itemsHtml += '<span class="inv-item-level">Lv.' + item.level + '</span>';
+        }
+        itemsHtml += '</div>';
+      }
+      itemsHtml += '</div>';
+    }
+
+    // 搜索框
+    var searchHtml = '<div class="search-bar"><input type="text" class="search-input" placeholder="搜索物品..." value="' + this._invSearch + '"></div>';
+
+    // 组合内容
+    var content = searchHtml + filterHtml + '<div class="panel-info">容量: ' + state.inventory.items.length + '/' + state.inventory.capacity + '</div>' + itemsHtml;
+
+    this.showPanel('背包', content);
+
+    // 绑定搜索事件
+    var searchInput = document.querySelector('.search-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', function() {
+        self._invSearch = searchInput.value;
+        self.showInventory();
+      });
+      // 自动聚焦搜索框
+      searchInput.focus();
+    }
+
+    // 绑定筛选按钮事件
+    var filterBtns = document.querySelectorAll('.filter-btn');
+    for (var b = 0; b < filterBtns.length; b++) {
+      filterBtns[b].addEventListener('click', function() {
+        self._invFilter = this.getAttribute('data-filter');
+        self.showInventory();
+      });
+    }
+
+    // 绑定物品点击事件 —— 显示详情子面板
+    var invItems = document.querySelectorAll('.inv-item[data-item-id]');
+    for (var j = 0; j < invItems.length; j++) {
+      invItems[j].addEventListener('click', function() {
+        var itemId = this.getAttribute('data-item-id');
+        var targetItem = null;
+        // 在完整物品列表中查找（不仅限于筛选后的）
+        for (var k = 0; k < state.inventory.items.length; k++) {
+          if (state.inventory.items[k].id === itemId) {
+            targetItem = state.inventory.items[k];
+            break;
+          }
+        }
+        if (targetItem) {
+          self.showItemDetail(targetItem, false, null);
+        }
+      });
+    }
   }
 
-  // ========== 装备面板 ==========
+  // ========== 装备面板（增强版） ==========
   showEquipment() {
     if (!window.gameApp || !window.gameApp.state) return;
-    const state = window.gameApp.state;
-    const slots = DATA.equipSlots;
-    const slotNames = DATA.slots;
-    this.showPanel('装备', `
-      <div class="equipment-grid">
-        ${slots.map(slot => {
-          const item = state.equipment[slot];
-          return `
-            <div class="eq-slot">
-              <span class="eq-slot-name">${slotNames[slot]}</span>
-              ${item ? `<span class="item-name ${item.rarity}">${item.name}</span>` : '<span class="eq-empty">空</span>'}
-            </div>
-          `;
-        }).join('')}
-      </div>
-    `);
+    var state = window.gameApp.state;
+    var self = this;
+    var slots = DATA.equipSlots;
+    var slotNames = DATA.slots;
+
+    // 装备属性总和
+    var totalStats = { physAtk: 0, magAtk: 0, physDef: 0, magDef: 0 };
+    if (EquipmentSystem && EquipmentSystem.getTotalStats) {
+      totalStats = EquipmentSystem.getTotalStats(state);
+    }
+    var totalHtml = '<div class="eq-total-stats">';
+    totalHtml += '<span>装备总属性：</span>';
+    if (totalStats.physAtk > 0) totalHtml += '<span class="stat-atk">物攻+' + totalStats.physAtk + '</span>';
+    if (totalStats.magAtk > 0) totalHtml += '<span class="stat-matk">法攻+' + totalStats.magAtk + '</span>';
+    if (totalStats.physDef > 0) totalHtml += '<span class="stat-def">物防+' + totalStats.physDef + '</span>';
+    if (totalStats.magDef > 0) totalHtml += '<span class="stat-mdef">法防+' + totalStats.magDef + '</span>';
+    if (totalStats.physAtk === 0 && totalStats.magAtk === 0 && totalStats.physDef === 0 && totalStats.magDef === 0) {
+      totalHtml += '<span>无装备</span>';
+    }
+    totalHtml += '</div>';
+
+    // 构建装备槽位HTML
+    var eqHtml = '<div class="equipment-grid">';
+    for (var s = 0; s < slots.length; s++) {
+      var slot = slots[s];
+      var item = state.equipment[slot];
+      eqHtml += '<div class="eq-slot" data-eq-slot="' + slot + '">';
+      eqHtml += '<span class="eq-slot-name">' + slotNames[slot] + '</span>';
+      if (item) {
+        // 显示装备名称和简要属性
+        eqHtml += '<div class="eq-slot-info">';
+        eqHtml += '<span class="item-name ' + (item.rarity || 'white') + '">' + item.name + '</span>';
+        eqHtml += '<span class="eq-slot-level">Lv.' + (item.level || 1) + '</span>';
+        // 基础属性摘要
+        if (item.baseStats) {
+          var statParts = [];
+          if (item.baseStats.physAtk) statParts.push('攻' + item.baseStats.physAtk);
+          if (item.baseStats.magAtk) statParts.push('法' + item.baseStats.magAtk);
+          if (item.baseStats.physDef) statParts.push('防' + item.baseStats.physDef);
+          if (item.baseStats.magDef) statParts.push('魔防' + item.baseStats.magDef);
+          if (statParts.length > 0) {
+            eqHtml += '<span class="eq-slot-stats">' + statParts.join(' ') + '</span>';
+          }
+        }
+        eqHtml += '</div>';
+      } else {
+        eqHtml += '<span class="eq-empty">空</span>';
+      }
+      eqHtml += '</div>';
+    }
+    eqHtml += '</div>';
+
+    var content = totalHtml + eqHtml;
+    this.showPanel('装备', content);
+
+    // 绑定已装备物品的点击事件
+    var eqSlots = document.querySelectorAll('.eq-slot[data-eq-slot]');
+    for (var j = 0; j < eqSlots.length; j++) {
+      eqSlots[j].addEventListener('click', function() {
+        var slotKey = this.getAttribute('data-eq-slot');
+        var eqItem = state.equipment[slotKey];
+        if (eqItem) {
+          self.showItemDetail(eqItem, true, slotKey);
+        }
+      });
+    }
+  }
+
+  // ========== 物品详情子面板 ==========
+  // isEquipped: 是否已装备的物品（true=装备面板点击，false=背包点击）
+  // slotKey: 如果已装备，传入槽位名称
+  showItemDetail(item, isEquipped, slotKey) {
+    var self = this;
+    var state = window.gameApp && window.gameApp.state;
+
+    // 物品名称（带品质颜色）
+    var detailHtml = '<div class="item-detail">';
+    detailHtml += '<div class="item-detail-name ' + (item.rarity || 'white') + '">' + item.name + '</div>';
+
+    // 物品描述
+    if (item.desc) {
+      detailHtml += '<div class="item-detail-desc">' + item.desc + '</div>';
+    }
+
+    // 等级和类型信息
+    detailHtml += '<div class="item-detail-meta">';
+    if (item.level) detailHtml += '<span>Lv.' + item.level + '</span>';
+    if (item.type) {
+      // 获取类型中文名
+      var typeName = item.type;
+      if (DATA && DATA.slots && DATA.slots[item.type]) {
+        typeName = DATA.slots[item.type];
+      }
+      detailHtml += '<span>类型：' + typeName + '</span>';
+    }
+    // 品质名称
+    if (item.rarity && DATA && DATA.rarity && DATA.rarity[item.rarity]) {
+      detailHtml += '<span>品质：' + DATA.rarity[item.rarity].name + '</span>';
+    }
+    detailHtml += '</div>';
+
+    // 基础属性
+    if (item.baseStats) {
+      detailHtml += '<div class="item-detail-stats">';
+      detailHtml += '<div class="stats-label">基础属性</div>';
+      if (item.baseStats.physAtk) detailHtml += '<span>物攻 +' + item.baseStats.physAtk + '</span>';
+      if (item.baseStats.magAtk) detailHtml += '<span>法攻 +' + item.baseStats.magAtk + '</span>';
+      if (item.baseStats.physDef) detailHtml += '<span>物防 +' + item.baseStats.physDef + '</span>';
+      if (item.baseStats.magDef) detailHtml += '<span>法防 +' + item.baseStats.magDef + '</span>';
+      detailHtml += '</div>';
+    }
+
+    // 词条列表
+    if (item.affixes && item.affixes.length > 0) {
+      detailHtml += '<div class="item-detail-affixes">';
+      detailHtml += '<div class="affixes-label">词条</div>';
+      for (var a = 0; a < item.affixes.length; a++) {
+        var affix = item.affixes[a];
+        var affixColor = '';
+        // 词条颜色根据品质
+        if (DATA && DATA.affixPool && DATA.affixPool[affix.id] && DATA.affixPool[affix.id].minRarity) {
+          affixColor = DATA.affixPool[affix.id].minRarity;
+        }
+        detailHtml += '<div class="affix-item ' + affixColor + '">' + affix.name + '</div>';
+      }
+      detailHtml += '</div>';
+    }
+
+    // 附魔信息
+    if (item.enchant) {
+      detailHtml += '<div class="item-detail-enchant">';
+      detailHtml += '<span>附魔：' + (item.enchant.desc || '未知') + '</span>';
+      detailHtml += '</div>';
+    }
+
+    // 操作按钮
+    detailHtml += '<div class="item-actions">';
+    if (isEquipped) {
+      // 已装备的物品 —— 卸下、锻造、附魔
+      detailHtml += '<button class="item-action-btn btn-unequip" data-action="unequip" data-slot="' + slotKey + '">卸下</button>';
+      detailHtml += '<button class="item-action-btn btn-forge" data-action="forge" data-slot="' + slotKey + '">锻造</button>';
+      detailHtml += '<button class="item-action-btn btn-enchant" data-action="enchant" data-slot="' + slotKey + '">附魔</button>';
+    } else {
+      // 背包中的物品 —— 判断类型
+      var equipTypes = ['sword','axe','hammer','bow','staff','wand','dagger','shield','armor','helmet','legs','boots','gloves','necklace','ring'];
+      var isEquip = equipTypes.indexOf(item.type) !== -1;
+      var isConsumable = item.type === 'consumable' || (item.healHp || item.healMp || (item.name && item.name.indexOf('药水') !== -1));
+
+      if (isEquip) {
+        detailHtml += '<button class="item-action-btn btn-equip" data-action="equip" data-item-id="' + item.id + '">穿戴</button>';
+      }
+      if (isConsumable) {
+        detailHtml += '<button class="item-action-btn btn-use" data-action="use" data-item-id="' + item.id + '">使用</button>';
+      }
+      // 所有物品都可以丢弃
+      detailHtml += '<button class="item-action-btn btn-discard" data-action="discard" data-item-id="' + item.id + '">丢弃</button>';
+    }
+    detailHtml += '</div>';
+    detailHtml += '</div>';
+
+    // 使用 showPanel 显示详情
+    this.showPanel('物品详情', detailHtml);
+
+    // 绑定操作按钮事件
+    var actionBtns = document.querySelectorAll('.item-action-btn');
+    for (var b = 0; b < actionBtns.length; b++) {
+      actionBtns[b].addEventListener('click', function(e) {
+        e.stopPropagation();
+        var action = this.getAttribute('data-action');
+
+        if (action === 'equip') {
+          // 穿戴装备
+          var itemId = this.getAttribute('data-item-id');
+          if (state && InventorySystem && InventorySystem.equipFromInventory) {
+            var result = InventorySystem.equipFromInventory(state, itemId);
+            if (result.ok) {
+              self.addGameLog(result.equipped ? '装备了 ' + result.equipped.name : '装备成功');
+              if (result.replaced) {
+                self.addGameLog('旧装备 ' + result.replaced.name + ' 已放入背包');
+              }
+            } else {
+              self.addGameLog(result.msg || result.reason || '装备失败');
+              return;
+            }
+          }
+          self.closePanel();
+          self.showInventory();
+          self.refreshPlayerInfo();
+        }
+
+        else if (action === 'use') {
+          // 使用消耗品
+          var useItemId = this.getAttribute('data-item-id');
+          var useItem = null;
+          for (var ui = 0; ui < state.inventory.items.length; ui++) {
+            if (state.inventory.items[ui].id === useItemId) {
+              useItem = state.inventory.items[ui];
+              break;
+            }
+          }
+          if (!useItem) return;
+
+          // 恢复HP逻辑
+          if (useItem.healHp || (useItem.name && useItem.name.indexOf('药水') !== -1)) {
+            var healHp = useItem.healHp || 20;
+            state.player.hp = Math.min(state.player.maxHp, state.player.hp + healHp);
+            self.addGameLog('恢复了 ' + healHp + ' 点生命');
+          }
+          // 恢复MP逻辑
+          if (useItem.healMp) {
+            state.player.mp = Math.min(state.player.maxMp, state.player.mp + useItem.healMp);
+            self.addGameLog('恢复了 ' + useItem.healMp + ' 点法力');
+          }
+
+          // 从背包移除
+          if (InventorySystem && InventorySystem.removeFromInventory) {
+            InventorySystem.removeFromInventory(state, useItemId, 1);
+          }
+
+          self.closePanel();
+          self.showInventory();
+          self.refreshPlayerInfo();
+        }
+
+        else if (action === 'discard') {
+          // 丢弃物品
+          var discardItemId = this.getAttribute('data-item-id');
+          if (confirm('确定要丢弃该物品吗？')) {
+            if (state && InventorySystem && InventorySystem.discard) {
+              var discardResult = InventorySystem.discard(state, discardItemId);
+              if (discardResult.ok) {
+                self.addGameLog('物品已丢弃');
+              } else {
+                self.addGameLog(discardResult.reason || '丢弃失败');
+                return;
+              }
+            }
+            self.closePanel();
+            self.showInventory();
+            self.refreshPlayerInfo();
+          }
+        }
+
+        else if (action === 'unequip') {
+          // 卸下装备
+          var unequipSlot = this.getAttribute('data-slot');
+          if (state && InventorySystem && InventorySystem.unequipToInventory) {
+            var unequipResult = InventorySystem.unequipToInventory(state, unequipSlot);
+            if (unequipResult.ok) {
+              self.addGameLog('卸下了 ' + unequipResult.item.name);
+            } else {
+              self.addGameLog(unequipResult.msg || unequipResult.reason || '卸下失败');
+              return;
+            }
+          }
+          self.closePanel();
+          self.showEquipment();
+          self.refreshPlayerInfo();
+        }
+
+        else if (action === 'forge') {
+          // 锻造装备
+          var forgeSlot = this.getAttribute('data-slot');
+          var forgeItem = state && state.equipment[forgeSlot];
+          if (forgeItem && EquipmentSystem && EquipmentSystem.forge) {
+            var forgeResult = EquipmentSystem.forge(forgeItem);
+            self.addGameLog(forgeResult.msg || (forgeResult.ok ? '锻造成功' : '锻造失败'));
+          }
+          self.closePanel();
+          self.showEquipment();
+          self.refreshPlayerInfo();
+        }
+
+        else if (action === 'enchant') {
+          // 附魔装备
+          var enchantSlot = this.getAttribute('data-slot');
+          var enchantItem = state && state.equipment[enchantSlot];
+          if (enchantItem && EquipmentSystem && EquipmentSystem.enchant) {
+            var enchantResult = EquipmentSystem.enchant(enchantItem);
+            self.addGameLog(enchantResult.msg || (enchantResult.ok ? '附魔成功' : '附魔失败'));
+          }
+          self.closePanel();
+          self.showEquipment();
+          self.refreshPlayerInfo();
+        }
+      });
+    }
+  }
+
+  // ========== 刷新玩家信息栏 ==========
+  refreshPlayerInfo() {
+    if (window.gameApp && window.gameApp.state && window.gameApp.state.player) {
+      this.updatePlayerInfo(window.gameApp.state.player);
+    }
   }
 
   // ========== 队伍面板 ==========
