@@ -1,239 +1,276 @@
+// ============================================
+// 《寻亲风云录》背包与仓库系统
+// ============================================
 
 const InventorySystem = {
-  selectedItem: null,
-  selectedContext: null,
 
-  // ---------- 获取背包物品 ----------
-  getItems: function() {
-    return GameState.data.inventory.items;
-  },
+  // ========== 背包操作 ==========
 
-  getCapacity: function() {
-    return GameState.data.inventory.capacity;
-  },
-
-  getCount: function() {
-    return this.getItems().length;
-  },
-
-  // ---------- 添加物品 ----------
-  addItem: function(item) {
-    const items = this.getItems();
-    if (items.length >= this.getCapacity()) {
-      log('背包已满！', 'system');
-      return false;
+  addToInventory(state, item) {
+    // 检查容量
+    if (state.inventory.items.length >= state.inventory.capacity) {
+      return { ok: false, reason: "背包已满", overflow: item };
     }
 
-    // 尝试堆叠
+    // 堆叠检查（金币/材料）
     if (item.stackable) {
-      const existing = items.find(function(i) {
-        return i.name === item.name && i.quality === item.quality && i.type === item.type;
-      });
-      if (existing && existing.stackCount < existing.stackMax) {
-        existing.stackCount = Math.min(existing.stackCount + item.stackCount, existing.stackMax);
-        return true;
+      const existing = state.inventory.items.find(i => 
+        i.type === item.type && i.name === item.name && i.stack < this.getStackLimit(item)
+      );
+      if (existing) {
+        const space = this.getStackLimit(existing) - existing.stack;
+        const add = Math.min(space, item.stack || 1);
+        existing.stack += add;
+        if ((item.stack || 1) > add) {
+          // 还有剩余，继续添加
+          item.stack -= add;
+          return this.addToInventory(state, item);
+        }
+        return { ok: true, stacked: true };
       }
     }
 
-    items.push(item);
-    return true;
+    state.inventory.items.push({ ...item, stack: item.stack || 1 });
+    return { ok: true, stacked: false };
   },
 
-  // ---------- 移除物品 ----------
-  removeItem: function(itemId) {
-    const items = this.getItems();
-    const idx = items.findIndex(function(i) { return i.id === itemId; });
-    if (idx >= 0) {
-      items.splice(idx, 1);
-      return true;
+  removeFromInventory(state, itemId, count = 1) {
+    const idx = state.inventory.items.findIndex(i => i.id === itemId);
+    if (idx === -1) return { ok: false, reason: "物品不存在" };
+    
+    const item = state.inventory.items[idx];
+    if (item.stack > count) {
+      item.stack -= count;
+      return { ok: true, removed: count, remaining: item.stack };
     }
-    return false;
+    
+    state.inventory.items.splice(idx, 1);
+    return { ok: true, removed: item.stack, item };
   },
 
-  // ---------- 查找物品 ----------
-  findItem: function(itemId) {
-    return this.getItems().find(function(i) { return i.id === itemId; });
+  getStackLimit(item) {
+    if (item.type === "gold") return DATA.inventory.stackLimits.gold;
+    if (item.rarity === "white" || item.rarity === "green") {
+      return DATA.inventory.stackLimits.basic;
+    }
+    return DATA.inventory.stackLimits.rare;
   },
 
-  // ---------- 拆分堆叠 ----------
-  splitStack: function(itemId) {
-    const item = this.findItem(itemId);
-    if (!item || !item.stackable || item.stackCount <= 1) return false;
+  // ========== 仓库操作 ==========
 
-    const count = Math.floor(item.stackCount / 2);
-    if (count < 1) return false;
-    if (this.getItems().length >= this.getCapacity()) {
-      log('背包已满，无法拆分！', 'system');
-      return false;
+  moveToStorage(state, itemId, count = 1) {
+    const invIdx = state.inventory.items.findIndex(i => i.id === itemId);
+    if (invIdx === -1) return { ok: false, reason: "背包中没有该物品" };
+    
+    const item = state.inventory.items[invIdx];
+    
+    // 检查仓库容量
+    if (state.storage.items.length >= state.storage.capacity) {
+      return { ok: false, reason: "仓库已满" };
     }
 
-    item.stackCount -= count;
-    const newItem = Utils.deepCopy(item);
-    newItem.id = Utils.genId();
-    newItem.stackCount = count;
-    this.getItems().push(newItem);
-    return true;
+    if (item.stack > count) {
+      item.stack -= count;
+      state.storage.items.push({ ...item, stack: count, id: Utils.uuid() });
+    } else {
+      state.inventory.items.splice(invIdx, 1);
+      state.storage.items.push(item);
+    }
+
+    return { ok: true };
   },
 
-  // ---------- 丢弃物品 ----------
-  discardItem: function(itemId) {
-    const item = this.findItem(itemId);
-    if (!item) return false;
-    if (!confirm('确定要丢弃 ' + item.name + ' 吗？')) return false;
-    this.removeItem(itemId);
-    this.selectedItem = null;
-    return true;
+  moveToInventory(state, itemId, count = 1) {
+    const stgIdx = state.storage.items.findIndex(i => i.id === itemId);
+    if (stgIdx === -1) return { ok: false, reason: "仓库中没有该物品" };
+    
+    const item = state.storage.items[stgIdx];
+
+    // 检查背包容量
+    if (state.inventory.items.length >= state.inventory.capacity) {
+      return { ok: false, reason: "背包已满" };
+    }
+
+    if (item.stack > count) {
+      item.stack -= count;
+      state.inventory.items.push({ ...item, stack: count, id: Utils.uuid() });
+    } else {
+      state.storage.items.splice(stgIdx, 1);
+      state.inventory.items.push(item);
+    }
+
+    return { ok: true };
   },
 
-  // ---------- 移动到仓库 ----------
-  moveToStorage: function(itemId) {
-    const item = this.findItem(itemId);
-    if (!item) return false;
-    const storage = GameState.data.storage;
-    if (storage.items.length >= storage.capacity) {
-      log('仓库已满！', 'system');
-      return false;
+  // 升级仓库
+  upgradeStorage(state) {
+    const costs = [100, 300, 600, 1000, 1500]; // 5次升级
+    if (state.storage.upgradeLevel >= costs.length) {
+      return { ok: false, reason: "仓库已达最大容量" };
     }
-    storage.items.push(item);
-    this.removeItem(itemId);
-    log(item.name + ' 已存入仓库', 'info');
-    this.selectedItem = null;
-    return true;
+    
+    const cost = costs[state.storage.upgradeLevel];
+    if (!StateUtils.spendGold(state, cost)) {
+      return { ok: false, reason: `需要${cost}金币` };
+    }
+
+    state.storage.upgradeLevel++;
+    state.storage.capacity += 40; // 每次+40格
+    return { ok: true, newCapacity: state.storage.capacity };
   },
 
-  // ---------- 使用消耗品 ----------
-  useConsumable: function(itemId) {
-    const item = this.findItem(itemId);
-    if (!item || item.type !== 'consumable') return false;
+  // ========== 装备快捷操作 ==========
 
-    const p = GameState.data.player;
-    if (item.effect.healHp) {
-      p.hp = Math.min(p.hp + item.effect.healHp, p.maxHp);
-      log('使用了 ' + item.name + '，恢复 ' + item.effect.healHp + ' 点生命！', 'heal');
-    }
-    if (item.effect.healMp) {
-      p.mp = Math.min(p.mp + item.effect.healMp, p.maxMp);
-      log('使用了 ' + item.name + '，恢复 ' + item.effect.healMp + ' 点法力！', 'heal');
-    }
-    if (item.effect.buff) {
-      p.buffs.push({
-        stat: item.effect.buff.s,
-        value: item.effect.buff.v,
-        appliedAt: Date.now()
-      });
-      log('获得增益: ' + item.effect.buff.s + ' +' + (item.effect.buff.v * 100).toFixed(0) + '%', 'info');
+  equipFromInventory(state, itemId) {
+    const idx = state.inventory.items.findIndex(i => i.id === itemId);
+    if (idx === -1) return { ok: false, reason: "背包中没有该物品" };
+    
+    const item = state.inventory.items[idx];
+    const slot = EquipmentSystem.typeToSlot(item.type);
+    if (!slot) return { ok: false, reason: "该物品不可装备" };
+
+    const result = EquipmentSystem.equip(state, item, slot);
+    if (!result.ok) return result;
+
+    // 从背包移除
+    state.inventory.items.splice(idx, 1);
+    
+    // 旧装备放入背包
+    if (result.replaced) {
+      const addResult = this.addToInventory(state, result.replaced);
+      if (!addResult.ok) {
+        // 背包满了，掉地上（简化处理：直接丢弃或提示）
+        return { ok: true, equipped: item, dropped: result.replaced, warning: "旧装备因背包已满被丢弃" };
+      }
     }
 
-    // 减少数量
-    const idx = this.getItems().findIndex(function(i) { return i.id === itemId; });
-    if (idx >= 0) {
-      if (this.getItems()[idx].stackCount > 1) {
-        this.getItems()[idx].stackCount--;
+    return { ok: true, equipped: item, replaced: result.replaced };
+  },
+
+  unequipToInventory(state, slot) {
+    const result = EquipmentSystem.unequip(state, slot);
+    if (!result.ok) return result;
+
+    const addResult = this.addToInventory(state, result.item);
+    if (!addResult.ok) {
+      // 重新装备回去
+      EquipmentSystem.equip(state, result.item, slot);
+      return { ok: false, reason: "背包已满，无法卸下" };
+    }
+
+    return { ok: true, item: result.item };
+  },
+
+  // ========== 材料管理 ==========
+
+  addMaterial(state, materialId, count) {
+    const existing = state.crafting.materials[materialId];
+    if (existing) {
+      state.crafting.materials[materialId] += count;
+    } else {
+      state.crafting.materials[materialId] = count;
+    }
+    return { ok: true, total: state.crafting.materials[materialId] };
+  },
+
+  spendMaterial(state, materialId, count) {
+    const existing = state.crafting.materials[materialId] || 0;
+    if (existing < count) {
+      return { ok: false, reason: `材料不足，需要${count}，仅有${existing}` };
+    }
+    state.crafting.materials[materialId] -= count;
+    if (state.crafting.materials[materialId] <= 0) {
+      delete state.crafting.materials[materialId];
+    }
+    return { ok: true };
+  },
+
+  // ========== 金币操作 ==========
+
+  addGold(state, amount) {
+    return StateUtils.addGold(state, amount);
+  },
+
+  spendGold(state, amount) {
+    return StateUtils.spendGold(state, amount);
+  },
+
+  // ========== 物品分类统计 ==========
+
+  getInventorySummary(state) {
+    const summary = {
+      total: state.inventory.items.length,
+      capacity: state.inventory.capacity,
+      byRarity: {},
+      byType: {},
+      equipment: [],
+      materials: [],
+      consumables: [],
+    };
+
+    for (const item of state.inventory.items) {
+      // 按品质统计
+      summary.byRarity[item.rarity] = (summary.byRarity[item.rarity] || 0) + (item.stack || 1);
+      // 按类型统计
+      summary.byType[item.type] = (summary.byType[item.type] || 0) + (item.stack || 1);
+      
+      // 分类
+      if (["sword","axe","hammer","bow","staff","dagger","shield","armor","helmet","legs","boots","gloves","necklace","ring"].includes(item.type)) {
+        summary.equipment.push(item);
+      } else if (["ore","gem","leather","cloth","herb","meat"].includes(item.type)) {
+        summary.materials.push(item);
       } else {
-        this.getItems().splice(idx, 1);
+        summary.consumables.push(item);
       }
     }
 
-    GameState.recalcStats();
-    this.selectedItem = null;
-    return true;
+    return summary;
   },
 
-  // ---------- 装备物品 ----------
-  equipItem: function(itemId) {
-    const item = this.findItem(itemId);
-    if (!item || !item.slot) return false;
+  // ========== 搜索/筛选 ==========
 
-    let slot = item.slot;
-    if (slot === 'ring') {
-      slot = GameState.data.equipment.ring1 ? 'ring2' : 'ring1';
-    }
-
-    // 卸下当前装备
-    if (GameState.data.equipment[slot]) {
-      this.getItems().push(GameState.data.equipment[slot]);
-    }
-
-    // 装备新物品
-    GameState.data.equipment[slot] = item;
-    this.removeItem(itemId);
-
-    log('装备了 ' + item.name, 'info');
-    GameState.recalcStats();
-    this.selectedItem = null;
-    return true;
+  searchInventory(state, keyword) {
+    return state.inventory.items.filter(i => 
+      i.name.includes(keyword) || 
+      (i.affixes && i.affixes.some(a => a.name.includes(keyword)))
+    );
   },
 
-  // ---------- 从装备栏卸下 ----------
-  unequipItem: function(slot) {
-    const item = GameState.data.equipment[slot];
-    if (!item) return false;
-    if (this.getItems().length >= this.getCapacity()) {
-      log('背包已满，无法卸下装备！', 'system');
-      return false;
-    }
-
-    this.getItems().push(item);
-    GameState.data.equipment[slot] = null;
-
-    log('卸下了 ' + item.name, 'info');
-    GameState.recalcStats();
-    return true;
+  filterByRarity(state, rarity) {
+    return state.inventory.items.filter(i => i.rarity === rarity);
   },
 
-  // ---------- 检查装备是否已装备 ----------
-  isEquipped: function(itemId) {
-    const eq = GameState.data.equipment;
-    for (let slot in eq) {
-      if (eq[slot] && eq[slot].id === itemId) return true;
-    }
-    return false;
+  filterByType(state, type) {
+    return state.inventory.items.filter(i => i.type === type);
   },
 
-  // ---------- 获取装备所在槽位 ----------
-  getEquippedSlot: function(itemId) {
-    const eq = GameState.data.equipment;
-    for (let slot in eq) {
-      if (eq[slot] && eq[slot].id === itemId) return slot;
-    }
-    return null;
-  }
+  // ========== 丢弃 ==========
+
+  discard(state, itemId, count = 1) {
+    return this.removeFromInventory(state, itemId, count);
+  },
+
+  // ========== 排序 ==========
+
+  sortInventory(state, sortBy = "rarity") {
+    const rarityOrder = { red: 6, orange: 5, purple: 4, blue: 3, green: 2, white: 1, gold: 7 };
+    
+    state.inventory.items.sort((a, b) => {
+      switch (sortBy) {
+        case "rarity":
+          return (rarityOrder[b.rarity] || 0) - (rarityOrder[a.rarity] || 0);
+        case "level":
+          return (b.level || 0) - (a.level || 0);
+        case "name":
+          return a.name.localeCompare(b.name, "zh-CN");
+        case "type":
+          return a.type.localeCompare(b.type);
+        default:
+          return 0;
+      }
+    });
+  },
 };
 
-// ---------- 仓库系统 ----------
-const StorageSystem = {
-  selectedItem: null,
-
-  getItems: function() {
-    return GameState.data.storage.items;
-  },
-
-  getCapacity: function() {
-    return GameState.data.storage.capacity;
-  },
-
-  getCount: function() {
-    return this.getItems().length;
-  },
-
-  findItem: function(itemId) {
-    return this.getItems().find(function(i) { return i.id === itemId; });
-  },
-
-  moveToInventory: function(itemId) {
-    const item = this.findItem(itemId);
-    if (!item) return false;
-    if (InventorySystem.getItems().length >= InventorySystem.getCapacity()) {
-      log('背包已满！', 'system');
-      return false;
-    }
-
-    InventorySystem.getItems().push(item);
-    const idx = this.getItems().findIndex(function(i) { return i.id === itemId; });
-    if (idx >= 0) this.getItems().splice(idx, 1);
-
-    log(item.name + ' 已取回背包', 'info');
-    this.selectedItem = null;
-    return true;
-  }
-};
+// 导出
+try { module.exports = InventorySystem; } catch(e) {}
