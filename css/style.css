@@ -796,56 +796,267 @@ html, body {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ============================================
-   响应式
+   响应式（移动端优化）
    ============================================ */
 @media (max-width: 480px) {
+  html, body {
+    font-size: 16px; /* 手机基准字号提到16px */
+  }
+
   #game-container {
     border-left: none;
     border-right: none;
   }
 
+  /* —— 顶部信息栏 —— */
   .player-bar {
+    font-size: 14px;
+    gap: 8px;
+  }
+
+  .player-name {
+    font-size: 15px;
+  }
+
+  .player-level {
     font-size: 12px;
-    gap: 6px;
+    padding: 2px 7px;
+  }
+
+  .resource-label {
+    font-size: 12px;
+    width: 20px;
   }
 
   .resource-bar {
-    width: 55px;
+    width: 60px;
+    height: 10px; /* 加粗血条 */
   }
 
   .resource-text {
-    font-size: 10px;
-    min-width: 40px;
+    font-size: 12px;
+    min-width: 55px;
   }
 
+  .player-gold {
+    font-size: 14px;
+  }
+
+  /* —— 场景 —— */
   .scene-name {
-    font-size: 18px;
+    font-size: 20px;
   }
 
   .scene-desc {
+    font-size: 15px;
+    line-height: 2;
+  }
+
+  .scene-type {
+    font-size: 12px;
+    padding: 3px 10px;
+  }
+
+  .exits-label {
     font-size: 13px;
   }
 
-  .action-btn {
-    padding: 7px 12px;
-    font-size: 12px;
-    min-width: 60px;
+  .exit-btn {
+    font-size: 14px;
+    padding: 10px 16px; /* 触摸区域 ≥44px */
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
 
-  .bottom-btn {
-    font-size: 11px;
-    padding: 6px 2px;
+  .game-log-line {
+    font-size: 13px;
+  }
+
+  /* —— 战斗卡片 —— */
+  .combat-title {
+    font-size: 17px;
+  }
+
+  .combat-round {
+    font-size: 13px;
+  }
+
+  .combat-side-label {
+    font-size: 13px;
+  }
+
+  .combat-vs {
+    font-size: 14px;
+    padding: 4px 0;
   }
 
   .combat-units {
-    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
   }
 
   .unit-card {
-    padding: 6px 8px;
+    padding: 10px 12px; /* 触摸区域更舒适 */
+    min-height: 72px; /* 确保点击目标够大 */
   }
 
   .unit-name {
+    font-size: 14px;
+  }
+
+  .unit-hp-text {
     font-size: 12px;
+  }
+
+  .hp-bar {
+    height: 8px;
+    margin: 4px 0;
+  }
+
+  .unit-stats {
+    font-size: 12px; /* 从10提到12，手机上能看清 */
+  }
+
+  /* —— 战斗日志 —— */
+  #combat-log {
+    font-size: 13px;
+    max-height: 110px;
+    padding: 10px 14px;
+  }
+
+  .log-title {
+    font-size: 12px;
+  }
+
+  /* —— 行动按钮 —— */
+  .action-btn {
+    padding: 10px 14px;
+    font-size: 14px;
+    min-width: 64px;
+    min-height: 44px; /* Apple/Google触摸标准 */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #action-buttons {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  /* —— 底部管理栏 —— */
+  .bottom-btn {
+    font-size: 13px;
+    padding: 10px 4px; /* 触摸区域 ≥44px */
+    min-height: 44px;
+  }
+
+  /* —— 战斗结果 —— */
+  #combat-result {
+    font-size: 16px;
+    padding: 16px;
+  }
+
+  .result-rewards {
+    font-size: 13px;
+  }
+
+  /* —— 弹出面板 —— */
+  .panel-overlay {
+    padding: 12px;
+  }
+
+  .panel-title {
+    font-size: 17px;
+  }
+
+  .panel-close {
+    font-size: 20px;
+    padding: 4px 8px; /* 关闭按钮触摸区域 */
+  }
+
+  .panel-content {
+    padding: 14px;
+  }
+
+  .panel-btn {
+    font-size: 15px;
+    padding: 12px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* —— 角色创建 —— */
+  .cc-intro {
+    font-size: 15px;
+  }
+
+  .cc-form input[type="text"] {
+    font-size: 16px; /* iOS自动放大 prevention */
+    padding: 12px 16px;
+  }
+
+  .cc-form select {
+    font-size: 16px; /* 同上 */
+    padding: 12px 16px;
+  }
+
+  .cc-hardcore {
+    font-size: 13px;
+  }
+
+  #create-btn {
+    font-size: 17px;
+    padding: 14px;
+    min-height: 48px;
+  }
+
+  /* —— 队伍面板 —— */
+  .member-name {
+    font-size: 15px;
+  }
+
+  .member-class {
+    font-size: 13px;
+  }
+
+  .member-level {
+    font-size: 12px;
+    padding: 2px 7px;
+  }
+
+  .member-hp {
+    font-size: 13px;
+  }
+
+  /* —— 杂项 —— */
+  .item-stack {
+    font-size: 12px;
+  }
+
+  .eq-slot-name,
+  .eq-empty {
+    font-size: 13px;
+  }
+
+  .eq-slot {
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+
+  .inv-item {
+    padding: 10px;
+    min-height: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .panel-info {
+    font-size: 13px;
   }
 }
