@@ -1,126 +1,315 @@
-
 const Utils = {
-  // ---------- 随机数 ----------
-  rand: function(min, max) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-  },
-
-  randFloat: function() {
+  // ========== 随机数工具 ==========
+  
+  // [0, 1) 随机浮点数
+  random() {
     return Math.random();
   },
 
-  clamp: function(v, min, max) {
-    return Math.max(min, Math.min(max, v));
+  // [min, max] 随机整数
+  randInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
   },
 
-  // ---------- 加权随机选择 ----------
-  weightedRandom: function(items, weights) {
-    const total = weights.reduce(function(a, b) { return a + b; }, 0);
-    let r = Math.random() * total;
+  // [min, max) 随机浮点数
+  randFloat(min, max) {
+    return min + Math.random() * (max - min);
+  },
+
+  // 按权重随机选择
+  weightedRandom(items, weights) {
+    const total = weights.reduce((a, b) => a + b, 0);
+    let roll = Math.random() * total;
     for (let i = 0; i < items.length; i++) {
-      r -= weights[i];
-      if (r <= 0) return items[i];
+      roll -= weights[i];
+      if (roll <= 0) return items[i];
     }
     return items[items.length - 1];
   },
 
-  // ---------- 日志系统 ----------
-  log: function(msg, type) {
-    const entry = document.createElement('div');
-    entry.className = 'log-entry log-' + (type || 'info') + ' fade-in';
-    entry.innerHTML = msg;
-    const logEl = document.getElementById('game-log');
-    if (logEl) {
-      logEl.appendChild(entry);
-      logEl.scrollTop = logEl.scrollHeight;
+  // 从数组中随机抽取n个不重复元素
+  sample(array, n) {
+    const shuffled = [...array].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, n);
+  },
+
+  // 概率判定
+  chance(probability) {
+    return Math.random() < probability;
+  },
+
+  // ========== 数值计算 ==========
+
+  // 伤害浮动（±10%）
+  damageRoll(baseDamage) {
+    const variance = 0.1;
+    const roll = this.randFloat(1 - variance, 1 + variance);
+    return Math.floor(baseDamage * roll);
+  },
+
+  // 暴击判定
+  critRoll(critRate, critDmg) {
+    if (this.chance(critRate)) {
+      return { crit: true, multiplier: critDmg };
     }
+    return { crit: false, multiplier: 1 };
   },
 
-  // ---------- 品质相关工具 ----------
-  getQualityColor: function(q) {
-    return GAME_DATA.Q_COLOR[q] || '#ccc';
+  // 闪避判定
+  dodgeRoll(hit, dodge) {
+    // 基础命中率公式
+    const baseHit = 0.9;
+    const hitRate = baseHit + (hit - dodge) * 0.01;
+    return this.chance(Math.max(0.05, Math.min(0.95, hitRate)));
   },
 
-  getQualityName: function(q) {
-    return GAME_DATA.Q_NAME[q] || '';
+  // 等级缩放公式
+  levelScale(baseValue, level, exponent = 1.1) {
+    return Math.floor(baseValue * Math.pow(level, exponent) / Math.pow(10, exponent));
   },
 
-  getQualityClass: function(q) {
-    return 'item-' + q;
+  // 经验曲线
+  expCurve(level) {
+    return Math.floor(100 * Math.pow(1.15, level - 1));
   },
 
-  getMaxQuality: function(level) {
-    if (level <= 20) return 'blue';
-    if (level <= 40) return 'purple';
-    if (level <= 60) return 'orange';
-    return 'red';
+  // ========== 装备生成 ==========
+
+  // 生成随机装备
+  generateEquipment(level, rarityBias = null) {
+    // 确定品质
+    let rarity;
+    if (rarityBias) {
+      rarity = rarityBias;
+    } else {
+      const roll = this.random();
+      if (roll < 0.40) rarity = "white";
+      else if (roll < 0.65) rarity = "green";
+      else if (roll < 0.82) rarity = "blue";
+      else if (roll < 0.93) rarity = "purple";
+      else if (roll < 0.98) rarity = "orange";
+      else rarity = "red";
+    }
+
+    const rarityData = DATA.rarity[rarity];
+    const affixCount = this.randInt(rarityData.minAffixes, rarityData.maxAffixes);
+
+    // 选择词条
+    const availableAffixes = Object.entries(DATA.affixPool)
+      .filter(([_, a]) => DATA.rarity[a.minRarity].tier <= rarityData.tier);
+    
+    const selected = this.sample(availableAffixes, Math.min(affixCount, availableAffixes.length));
+    const affixes = selected.map(([id, data]) => ({
+      id,
+      name: data.name,
+      effect: data.effect,
+      value: data.value,
+    }));
+
+    // 确定装备类型
+    const types = ["sword", "axe", "hammer", "bow", "staff", "dagger", "shield", "armor", "helmet", "boots", "gloves", "necklace", "ring"];
+    const type = types[this.randInt(0, types.length - 1)];
+
+    // 基础属性
+    const baseStats = this.calcBaseStats(type, level);
+
+    return {
+      id: this.uuid(),
+      name: this.generateItemName(type, rarity),
+      type,
+      rarity,
+      level,
+      baseStats,
+      affixes,
+      sockets: this.randInt(0, 3), // 0-3孔
+      enchant: null,
+    };
   },
 
-  // ---------- 经验计算 ----------
-  expForLevel: function(level) {
-    return Math.floor(GAME_DATA.expCurve.base * Math.pow(GAME_DATA.expCurve.multiplier, level - 1));
+  // 计算装备基础属性
+  calcBaseStats(type, level) {
+    const multipliers = {
+      sword: { physAtk: 1.0 },
+      axe: { physAtk: 1.2, speed: -0.1 },
+      hammer: { physAtk: 1.5, speed: -0.2 },
+      bow: { physAtk: 0.9, speed: 0.1 },
+      staff: { magAtk: 1.0 },
+      dagger: { physAtk: 0.6, speed: 0.2, critRate: 0.05 },
+      shield: { physDef: 1.0, block: 0.1 },
+      armor: { physDef: 0.8, magDef: 0.4, maxHp: 0.5 },
+      helmet: { physDef: 0.4, magDef: 0.3, maxHp: 0.2 },
+      boots: { speed: 0.1, dodge: 0.05 },
+      gloves: { physAtk: 0.2, hit: 0.05 },
+      necklace: { magDef: 0.3, maxHp: 0.1 },
+      ring: { critRate: 0.02, speed: 0.05 },
+    };
+    const mult = multipliers[type] || {};
+    const base = level * 5;
+    const stats = {};
+    for (const [stat, m] of Object.entries(mult)) {
+      stats[stat] = Math.floor(base * m);
+    }
+    return stats;
   },
 
-  // ---------- 等级段判断 ----------
-  getLevelBracket: function(level) {
-    if (level <= 20) return '1-20';
-    if (level <= 40) return '21-40';
-    if (level <= 60) return '41-60';
-    if (level <= 80) return '61-80';
-    return '81-99';
+  // 生成装备名称
+  generateItemName(type, rarity) {
+    const prefixes = {
+      sword: ["短剑", "长剑", "阔剑", "细剑"],
+      axe: ["手斧", "战斧", "巨斧"],
+      hammer: ["钉锤", "战锤", "巨锤"],
+      bow: ["短弓", "长弓", "复合弓"],
+      staff: ["法杖", "魔杖", "权杖"],
+      dagger: ["匕首", "短刀", "刺刀"],
+      shield: ["圆盾", "塔盾", "鸢盾"],
+      armor: ["皮甲", "链甲", "板甲"],
+      helmet: ["皮帽", "铁盔", "战盔"],
+      boots: ["皮靴", "战靴", "铁靴"],
+      gloves: ["手套", "护手", "铁手套"],
+      necklace: ["项链", "护符", "吊坠"],
+      ring: ["铜戒", "银戒", "金戒"],
+    };
+    const suffixes = {
+      white: ["", "", ""],
+      green: ["学徒的", "粗糙的", "破旧的"],
+      blue: ["精制的", "坚固的", "锐利的"],
+      purple: ["稀有的", "卓越的", "闪耀的"],
+      orange: ["传说的", "史诗的", "神圣的"],
+      red: ["神话的", "至尊的", "毁灭的"],
+    };
+    const typeNames = prefixes[type] || ["物品"];
+    const suffixList = suffixes[rarity] || [""];
+    const suffix = suffixList[this.randInt(0, suffixList.length - 1)];
+    const baseName = typeNames[this.randInt(0, typeNames.length - 1)];
+    return suffix + baseName;
   },
 
-  // ---------- 品质上限检查 ----------
-  canHoldQuality: function(level, quality) {
-    const bracket = this.getLevelBracket(level);
-    const limit = GAME_DATA.qualityLimits[bracket];
-    if (!limit) return false;
-    return GAME_DATA.Q_ORDER[quality] <= GAME_DATA.Q_ORDER[limit.maxQuality];
+  // ========== 怪物生成 ==========
+
+  generateMonster(level, type = "normal") {
+    const multipliers = {
+      normal: { hp: 1.0, atk: 1.0, exp: 1.0, gold: 1.0 },
+      elite: { hp: 2.5, atk: 1.5, exp: 3.0, gold: 2.0 },
+      boss: { hp: 5.0, atk: 2.0, exp: 10.0, gold: 5.0 },
+    };
+    const mult = multipliers[type] || multipliers.normal;
+
+    const names = {
+      normal: ["野狼", "山贼", "蝙蝠", "蜘蛛", "史莱姆", "骷髅兵"],
+      elite: ["精英守卫", "强化兽", "暗影刺客", "火焰元素"],
+      boss: ["区域首领", "守门员", "机械守卫"],
+    };
+    const nameList = names[type] || names.normal;
+
+    return {
+      id: this.uuid(),
+      name: nameList[this.randInt(0, nameList.length - 1)],
+      level,
+      type,
+      hp: Math.floor(level * 50 * mult.hp),
+      maxHp: Math.floor(level * 50 * mult.hp),
+      atk: Math.floor(level * 8 * mult.atk),
+      def: Math.floor(level * 4),
+      speed: Math.floor(level * 2 + this.randInt(-5, 5)),
+      critRate: 0.05,
+      critDmg: 1.5,
+      exp: Math.floor(level * 20 * mult.exp),
+      gold: Math.floor(level * 5 * mult.gold),
+      drops: [],
+      statusEffects: [],
+    };
   },
 
-  // ---------- 唯一ID生成 ----------
-  genId: function() {
-    return Date.now() + this.rand(0, 99999);
+  // ========== 字符串工具 ==========
+
+  // 格式化数字（千分位）
+  formatNumber(num) {
+    return num.toLocaleString("zh-CN");
   },
 
-  // ---------- 深拷贝 ----------
-  deepCopy: function(obj) {
+  // 格式化金币显示
+  formatGold(gold, silver, copper) {
+    const parts = [];
+    if (gold > 0) parts.push(`${gold}金`);
+    if (silver > 0) parts.push(`${silver}银`);
+    if (copper > 0) parts.push(`${copper}铜`);
+    return parts.join(" ") || "0铜";
+  },
+
+  // 生成UUID
+  uuid() {
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      const v = c === "x" ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  },
+
+  // 深拷贝
+  deepClone(obj) {
     return JSON.parse(JSON.stringify(obj));
   },
 
-  // ---------- 格式化数字 ----------
-  fmtNum: function(n) {
-    return Math.floor(n).toLocaleString('zh-CN');
+  // 节流函数
+  throttle(fn, delay) {
+    let last = 0;
+    return function(...args) {
+      const now = Date.now();
+      if (now - last >= delay) {
+        last = now;
+        fn.apply(this, args);
+      }
+    };
   },
 
-  // ---------- 时间格式化 ----------
-  fmtTime: function(seconds) {
+  // 防抖函数
+  debounce(fn, delay) {
+    let timer;
+    return function(...args) {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn.apply(this, args), delay);
+    };
+  },
+
+  // ========== 时间工具 ==========
+
+  // 格式化时长
+  formatDuration(seconds) {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    if (h > 0) return h + '小时' + m + '分';
-    if (m > 0) return m + '分' + s + '秒';
-    return s + '秒';
+    if (h > 0) return `${h}时${m}分`;
+    if (m > 0) return `${m}分${s}秒`;
+    return `${s}秒`;
   },
 
-  // ---------- 防抖 ----------
-  debounce: function(fn, delay) {
-    let timer = null;
-    return function() {
-      const context = this, args = arguments;
-      clearTimeout(timer);
-      timer = setTimeout(function() { fn.apply(context, args); }, delay);
-    };
-  }
-};
+  // 格式化日期
+  formatDate(date) {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  },
 
-// 兼容旧代码的独立函数
-function rand(min, max) { return Utils.rand(min, max); }
-function randFloat() { return Utils.randFloat(); }
-function clamp(v, min, max) { return Utils.clamp(v, min, max); }
-function log(msg, type) { Utils.log(msg, type); }
-function getQC(q) { return Utils.getQualityColor(q); }
-function getQN(q) { return Utils.getQualityName(q); }
-function getQualityClass(q) { return Utils.getQualityClass(q); }
-function getMaxQ(lv) { return Utils.getMaxQuality(lv); }
-function genId() { return Utils.genId(); }
+  // ========== 战斗日志格式化 ==========
+
+  formatCombatLog(entry) {
+    const { actor, target, action, damage, crit, status, healed } = entry;
+    let text = "";
+    if (healed) {
+      text = `${actor} → ${target} ${action} 恢复${healed}生命`;
+    } else if (damage !== undefined) {
+      const critText = crit ? " 暴击！" : "";
+      const statusText = status ? ` [${status}]` : "";
+      text = `${actor} → ${target} ${action} ${damage}伤害${critText}${statusText}`;
+    } else {
+      text = `${actor} ${action}`;
+    }
+    return text;
+  },
+
+  // ========== 存档大小估算 ==========
+
+  estimateSaveSize(state) {
+    const json = JSON.stringify(state);
+    return json.length;
+  },
+};
