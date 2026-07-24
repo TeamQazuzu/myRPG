@@ -1,5 +1,5 @@
 // ============================================
-// 《寻亲风云录》主入口 — 新手村测试版
+// 《寻亲风云录》主入口 — 小地图移动+当前帧操作版
 // ============================================
 
 const Game = {
@@ -67,7 +67,6 @@ const Game = {
     this.state.player.revivesLeft = hardcore ? 0 : 5;
     this.state.settings.hardcoreMode = hardcore;
 
-    // 职业属性调整
     const attrMods = {
       warrior: { str: 4, vit: 2, agi: -1, int: -2, spi: -1 },
       ranger:  { agi: 4, str: 1, int: -1, vit: -1, spi: -1 },
@@ -82,7 +81,6 @@ const Game = {
     this.state.player.hp = this.state.player.maxHp;
     this.state.player.mp = this.state.player.maxMp;
 
-    // 开场叙事
     this.state.narrative.dialogueHistory = [
       '"很美好的一天，朝阳升起，你徐徐醒来。"',
       '"你父亲叫埃德蒙，母亲叫莉娜。你六岁那年他们说"出一趟远门"，再也没有回来。"',
@@ -111,7 +109,7 @@ const Game = {
     const container = Renderer.container;
     if (!container) return;
 
-    // 小地图点击
+    // 小地图点击移动
     container.querySelectorAll(".map-cell[data-scene]").forEach(cell => {
       cell.addEventListener("click", () => {
         const sceneId = cell.dataset.scene;
@@ -119,7 +117,7 @@ const Game = {
       });
     });
 
-    // 场景交互按钮
+    // 场景交互按钮（NPC对话/物品交互/休息）
     container.querySelectorAll(".action-btn[data-action]").forEach(btn => {
       btn.addEventListener("click", () => {
         const action = btn.dataset.action;
@@ -138,7 +136,7 @@ const Game = {
 
   handleMove(sceneId) {
     const current = SceneSystem.getCurrentScene(this.state);
-    if (current.id === sceneId) return; // 已经在该位置
+    if (current.id === sceneId) return;
 
     const result = SceneSystem.moveTo(this.state, sceneId);
     if (result.ok) {
@@ -172,8 +170,15 @@ const Game = {
         this.bindMainEvents();
         break;
 
-      case "move":
-        this.handleMove(target);
+      case "rest":
+        this.state.player.hp = this.state.player.maxHp;
+        this.state.player.mp = this.state.player.maxMp;
+        for (const comp of this.state.companions) {
+          if (comp.alive) { comp.hp = comp.maxHp; comp.mp = comp.maxMp; }
+        }
+        this.state.narrative.dialogueHistory.push("你在安全的地方休息了一会儿，恢复了全部生命和法力。");
+        Renderer.renderMain(this.state);
+        this.bindMainEvents();
         break;
     }
   },
