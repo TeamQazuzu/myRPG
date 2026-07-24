@@ -1,117 +1,212 @@
 /* ============================================
-   《寻亲风云录》样式表 — 适配重写版核心
+   《寻亲风}云录》样式表 v2
+   布局：顶部信息栏 → 中间帧/战斗 → 底部管理栏
    ============================================ */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
-  --text-primary: #e8e8e8;
-  --text-secondary: #a0a0b0;
-  --text-muted: #666680;
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #21262d;
+  --bg-card: #1c2128;
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #484f58;
   --accent: #c9a96e;
   --accent-hover: #e0c080;
-  --border: #2a2a4a;
-  --success: #5a9e5a;
-  --warning: #d4a040;
-  --error: #c05050;
-  --info: #4a8ac0;
+  --border: #30363d;
+  --success: #3fb950;
+  --danger: #f85149;
+  --warning: #d29922;
+  --info: #58a6ff;
+  --enemy-color: #f85149;
+  --ally-color: #3fb950;
 }
 html, body {
   height: 100%;
-  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+  font-family: "Noto Sans CJK SC", "WenQuanYi Micro Hei", "PingFang SC", "Microsoft YaHei", sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
   font-size: 15px;
-  line-height: 1.8;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
 }
 #game-container {
-  max-width: 640px;
-  min-height: 100vh;
+  max-width: 480px;
+  height: 100vh;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
   background: var(--bg-secondary);
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
 }
 
-/* ---- 玩家信息栏 ---- */
+/* ================================================================
+   顶部玩家信息栏
+   ================================================================ */
 #player-info {
-  padding: 8px 14px;
+  flex-shrink: 0;
+  padding: 6px 12px;
   background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border);
-  font-size: 13px;
-  flex-shrink: 0;
 }
-.player-info-bar {
+.info-bar {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  margin-bottom: 4px;
 }
-.player-info-bar strong {
-  color: var(--accent);
-  font-size: 14px;
-}
-.player-info-placeholder {
-  color: var(--text-muted);
-  text-align: center;
-}
-
-/* ---- 场景容器 ---- */
-#scene-container {
-  flex: 1;
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.scene-placeholder {
-  color: var(--text-muted);
-  text-align: center;
-  margin-top: 40px;
-}
-.scene-info h2 {
-  color: var(--accent);
-  font-size: 18px;
-  margin-bottom: 8px;
-}
-.scene-info p {
-  color: var(--text-secondary);
-  line-height: 1.8;
-  text-indent: 2em;
-  margin-bottom: 8px;
-}
-.scene-type {
-  display: inline-block;
-  padding: 2px 8px;
+.info-left { display: flex; align-items: center; gap: 8px; }
+.info-name { color: var(--accent); font-weight: bold; font-size: 14px; }
+.info-level {
+  background: var(--accent);
+  color: var(--bg-primary);
+  padding: 1px 6px;
   border-radius: 3px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: bold;
 }
-.scene-type.safe {
-  background: var(--success);
-  color: #fff;
+.info-class { color: var(--text-secondary); font-size: 12px; }
+.info-right { display: flex; align-items: center; gap: 6px; }
+.info-gold { color: var(--accent); font-size: 13px; }
+.info-bars { display: flex; flex-direction: column; gap: 3px; }
+.info-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
 }
-.scene-type.wild {
-  background: var(--error);
-  color: #fff;
+.bar-label { width: 22px; color: var(--text-muted); font-size: 10px; }
+.bar-value { width: 80px; text-align: right; color: var(--text-secondary); font-size: 10px; }
+.info-hp-bar, .info-mp-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--bg-primary);
+  border-radius: 4px;
+  overflow: hidden;
 }
-.scene-exits {
+.info-hp-bar .hp-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.info-mp-bar .mp-fill { height: 100%; background: #58a6ff; border-radius: 4px; transition: width 0.3s; }
+
+/* ================================================================
+   冒险视图（帧）
+   ================================================================ */
+#scene-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 帧标题 */
+.frame-header {
+  padding: 10px 14px 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.frame-name {
+  font-size: 17px;
+  font-weight: bold;
+  color: var(--text-primary);
+}
+.frame-tag {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: bold;
+}
+.safe-tag { background: var(--success); color: #fff; }
+.danger-tag { background: var(--danger); color: #fff; }
+.gather-tag { background: var(--warning); color: var(--bg-primary); }
+
+/* 帧描述 */
+.frame-desc {
+  padding: 6px 16px 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.9;
+  text-indent: 2em;
+  flex-shrink: 0;
+}
+
+/* 帧内行动按钮 */
+.frame-actions {
+  padding: 6px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.frame-action-btn {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+}
+.fight-btn {
+  background: linear-gradient(135deg, #2d1a1a, #1a1a2e);
+  color: var(--danger);
+  border-color: rgba(248, 81, 73, 0.3);
+  font-weight: bold;
+}
+.fight-btn:hover { background: rgba(248, 81, 73, 0.15); border-color: var(--danger); }
+.gather-btn {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.gather-btn:hover { border-color: var(--warning); color: var(--warning); }
+.talk-btn {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+.talk-btn:hover { border-color: var(--info); color: var(--info); }
+.action-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 8px;
+}
+
+/* 帧内临时消息 */
+.frame-message {
+  padding: 8px 16px;
+  color: var(--accent);
+  font-size: 13px;
+  text-indent: 2em;
+  min-height: 20px;
+  transition: opacity 0.5s;
+  flex-shrink: 0;
+}
+
+/* 出口按钮 */
+.frame-exits {
+  padding: 10px 14px 8px;
+  border-top: 1px solid var(--border);
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  flex-shrink: 0;
+  margin-top: auto;
 }
-.scene-exits strong {
+.exits-label {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 .exit-btn {
-  padding: 6px 12px;
+  padding: 7px 14px;
   border: 1px solid var(--accent);
-  background: var(--bg-tertiary);
+  background: transparent;
   color: var(--accent);
   border-radius: 4px;
   cursor: pointer;
@@ -119,12 +214,181 @@ html, body {
   font-family: inherit;
   transition: all 0.15s;
 }
-.exit-btn:hover {
-  background: var(--accent);
-  color: var(--bg-primary);
+.exit-btn:hover { background: var(--accent); color: var(--bg-primary); }
+.exit-btn:active { transform: scale(0.97); }
+
+/* ================================================================
+   战斗视图
+   ================================================================ */
+#combat-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 10px 12px;
+  gap: 8px;
+}
+.combat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.combat-title { font-weight: bold; color: var(--accent); font-size: 15px; }
+.combat-turn { font-size: 12px; color: var(--text-muted); }
+
+/* 战斗分区 */
+.combat-section { flex-shrink: 0; }
+.section-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  font-weight: bold;
+}
+.enemy-label { color: var(--danger); }
+.ally-label { color: var(--ally-color); }
+
+/* 单位网格 */
+.unit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.unit-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  transition: all 0.15s;
+}
+.unit-card.enemy-card { cursor: pointer; }
+.unit-card.enemy-card:hover { border-color: var(--enemy-color); }
+.unit-card.selected { border-color: var(--accent); box-shadow: 0 0 6px rgba(201, 169, 110, 0.3); }
+.unit-card.dead { opacity: 0.35; cursor: default; }
+.unit-card.dead:hover { border-color: var(--border); }
+
+.unit-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+}
+.unit-side-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-ally { background: var(--ally-color); }
+.dot-enemy { background: var(--enemy-color); }
+.unit-name { font-size: 12px; font-weight: bold; color: var(--text-primary); }
+.unit-dead { font-size: 12px; }
+
+.unit-hp-bar {
+  width: 100%;
+  height: 5px;
+  background: var(--bg-primary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.unit-hp-bar .hp-fill { height: 100%; border-radius: 3px; transition: width 0.3s, background 0.3s; }
+.unit-hp-text { font-size: 10px; color: var(--text-muted); margin-top: 2px; text-align: right; }
+
+/* VS分隔 */
+.vs-divider {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 4px 0;
+  flex-shrink: 0;
 }
 
-/* ---- 角色创建 ---- */
+/* 战斗日志 */
+#combat-log {
+  flex-shrink: 0;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border);
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 6px 12px;
+}
+#combat-log .log-container p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  line-height: 1.5;
+}
+#combat-log .log-container p:last-child {
+  color: var(--text-primary);
+}
+
+/* 战斗行动按钮 */
+#action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  justify-content: center;
+  flex-shrink: 0;
+}
+.combat-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.15s;
+  min-width: 60px;
+}
+.combat-btn:hover { border-color: var(--accent); background: var(--bg-primary); }
+.combat-btn:active { transform: scale(0.97); }
+.combat-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* 战斗结果 */
+#combat-result {
+  padding: 14px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 6px;
+  margin: 8px 12px;
+  flex-shrink: 0;
+}
+
+/* ================================================================
+   底部管理栏
+   ================================================================ */
+#bottom-bar {
+  flex-shrink: 0;
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  padding: 0;
+}
+.bottom-btn {
+  flex: 1;
+  padding: 10px 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-right: 1px solid var(--border);
+  font-family: inherit;
+}
+.bottom-btn:last-child { border-right: none; }
+.bottom-btn:hover { background: var(--bg-primary); color: var(--text-primary); }
+
+/* ================================================================
+   角色创建
+   ================================================================ */
 .character-creation {
   display: flex;
   flex-direction: column;
@@ -136,7 +400,7 @@ html, body {
 .character-creation h2 {
   color: var(--accent);
   font-size: 22px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 .character-creation input[type="text"] {
   width: 100%;
@@ -150,10 +414,7 @@ html, body {
   font-family: inherit;
   text-align: center;
 }
-.character-creation input[type="text"]:focus {
-  outline: none;
-  border-color: var(--accent);
-}
+.character-creation input[type="text"]:focus { outline: none; border-color: var(--accent); }
 .character-creation select {
   width: 100%;
   max-width: 280px;
@@ -184,266 +445,25 @@ html, body {
   font-weight: bold;
   transition: all 0.15s;
 }
-.character-creation button:hover {
-  background: var(--accent-hover);
-}
+.character-creation button:hover { background: var(--accent-hover); }
 
-/* ---- 战斗画面 ---- */
-#combat-container {
-  flex: 1;
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.combat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-.combat-title {
-  font-weight: bold;
-  color: var(--accent);
-  font-size: 16px;
-}
-.combat-turn {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* 敌人 */
-.enemy-container h4 {
-  color: var(--error);
-  font-size: 13px;
-  margin-bottom: 8px;
-  text-align: center;
-}
-.enemy-unit {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.enemy-unit:hover {
-  border-color: var(--error);
-}
-.enemy-unit.selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 8px rgba(201, 169, 110, 0.3);
-}
-.enemy-unit.dead {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.enemy-name {
-  font-size: 14px;
-  font-weight: bold;
-  margin-bottom: 4px;
-}
-.enemy-hp span {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-.hp-bar {
-  width: 100%;
-  height: 6px;
-  background: var(--bg-primary);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-top: 4px;
-}
-.hp-fill {
-  height: 100%;
-  transition: width 0.3s, background 0.3s;
-}
-
-/* 玩家 */
-.player-container h4 {
-  color: var(--success);
-  font-size: 13px;
-  margin-bottom: 8px;
-  text-align: center;
-}
-.player-unit {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
-}
-.player-name {
-  font-size: 14px;
-  font-weight: bold;
-  margin-bottom: 4px;
-  color: var(--accent);
-}
-.player-hp span {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-.player-stats {
-  margin-top: 6px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-/* ---- 战斗日志 ---- */
-#combat-log {
-  padding: 10px 14px;
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  max-height: 140px;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-#combat-log h4 {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-}
-.log-container p {
-  margin-bottom: 3px;
-  color: var(--text-secondary);
-}
-.log-container p:last-child {
-  color: var(--text-primary);
-}
-
-/* ---- 行动按钮 ---- */
-#action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--bg-tertiary);
-  justify-content: center;
-  flex-shrink: 0;
-}
-.action-btn {
-  padding: 8px 16px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 13px;
-  font-family: inherit;
-  transition: all 0.15s;
-  min-width: 70px;
-}
-.action-btn:hover {
-  border-color: var(--accent);
-  background: var(--bg-primary);
-}
-.action-btn:active {
-  transform: scale(0.97);
-}
-.action-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* ---- 战斗结果 ---- */
-#combat-result {
-  padding: 12px;
-  text-align: center;
-  font-size: 16px;
-  font-weight: bold;
-  border-radius: 6px;
-  margin: 10px 14px;
-}
-
-/* ---- 背包 ---- */
-.inventory-frame {
-  padding: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.inventory-frame h3 {
-  font-size: 15px;
-  color: var(--accent);
-  text-align: center;
-}
-.inventory-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 8px;
-}
-.inventory-item {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 8px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.inventory-item:hover {
-  border-color: var(--accent);
-  transform: translateY(-1px);
-}
-.item-name {
-  font-size: 12px;
-  font-weight: bold;
-  display: block;
-}
-.item-name.white { color: #cccccc; }
-.item-name.green { color: #4caf50; }
-.item-name.blue { color: #2196f3; }
-.item-name.purple { color: #9c27b0; }
-.item-name.orange { color: #ff9800; }
-.item-name.red { color: #f44336; }
-.item-name.gold { color: #ffd700; }
-.item-level {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-.item-stack {
-  font-size: 10px;
-  color: var(--accent);
-}
-.menu-btn {
-  padding: 6px 12px;
-  border: 1px solid var(--border);
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-family: inherit;
-  transition: all 0.15s;
-}
-.menu-btn:hover {
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  border-color: var(--accent);
-}
-
-/* ---- 滚动条 ---- */
-::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: var(--bg-primary); }
+/* ================================================================
+   滚动条
+   ================================================================ */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-/* ---- 响应式 ---- */
+/* ================================================================
+   响应式
+   ================================================================ */
 @media (max-width: 480px) {
-  #game-container {
-    border-left: none;
-    border-right: none;
-  }
-  .player-info-bar {
-    font-size: 11px;
-    gap: 6px;
-  }
-  .action-btn {
-    padding: 7px 12px;
-    font-size: 12px;
-  }
+  #game-container { max-width: 100%; }
+  .bottom-btn { font-size: 11px; padding: 9px 0; }
+  .unit-grid { grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .unit-card { padding: 6px; }
+  .unit-name { font-size: 11px; }
+}
+@media (min-width: 481px) {
+  #game-container { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 }
