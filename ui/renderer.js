@@ -1,3 +1,7 @@
+// ============================================
+// 《寻亲风云录》UI渲染 — 小地图+当前帧操作版
+// ============================================
+
 const Renderer = {
   container: null,
 
@@ -50,7 +54,6 @@ const Renderer = {
   // 小地图
   renderMiniMap(state) {
     const mapData = SceneSystem.getMapData(state);
-    const cellSize = "36px";
     
     let rows = "";
     for (const row of mapData) {
@@ -61,8 +64,7 @@ const Renderer = {
         } else {
           const cls = `map-${cell.type}`;
           const label = cell.type === "current" ? "●" : (cell.type === "exit" ? "○" : "·");
-          const tooltip = cell.fullName;
-          cells += `<div class="map-cell ${cls}" title="${tooltip}" data-scene="${cell.sceneId}">${label}</div>`;
+          cells += `<div class="map-cell ${cls}" title="${cell.fullName}" data-scene="${cell.sceneId}">${label}</div>`;
         }
       }
       rows += `<div class="map-row">${cells}</div>`;
@@ -71,11 +73,9 @@ const Renderer = {
     return `
       <div class="mini-map">
         <div class="map-title">🗺️ 灰烟村</div>
-        <div class="map-grid">
-          ${rows}
-        </div>
+        <div class="map-grid">${rows}</div>
         <div class="map-legend">
-          <span><span class="legend-dot current">●</span> 当前位置</span>
+          <span><span class="legend-dot current">●</span> 当前</span>
           <span><span class="legend-dot exit">○</span> 可前往</span>
           <span><span class="legend-dot known">·</span> 已知</span>
         </div>
@@ -94,9 +94,7 @@ const Renderer = {
 
     return `
       <div class="narrative-window">
-        <div class="narrative-history">
-          ${historyHtml}
-        </div>
+        <div class="narrative-history">${historyHtml}</div>
         <div class="narrative-current">
           <p class="scene-desc">${this.escapeHtml(scene.desc)}</p>
         </div>
@@ -104,7 +102,7 @@ const Renderer = {
     `;
   },
 
-  // 场景交互按钮
+  // 场景交互按钮 — 只保留当前帧可进行的操作（NPC对话+场景物品）
   renderSceneActions(state, scene) {
     let actions = [];
 
@@ -118,21 +116,16 @@ const Renderer = {
       }
     }
 
-    // 场景物品
+    // 场景物品交互
     if (scene.objects) {
       for (const obj of scene.objects) {
         actions.push({ type: "object", text: `👁️ ${obj.name}`, action: `object:${obj.name}` });
       }
     }
 
-    // 出口（也显示在小地图，但保留按钮方便操作）
-    if (scene.exits) {
-      for (const exitId of scene.exits) {
-        const exitScene = SceneSystem.scenes[exitId];
-        if (exitScene) {
-          actions.push({ type: "exit", text: `→ ${exitScene.name}`, action: `move:${exitId}` });
-        }
-      }
+    // 安全区域：休息
+    if (scene.type === "safe") {
+      actions.push({ type: "rest", text: "🛏️ 休息", action: "rest" });
     }
 
     return `
