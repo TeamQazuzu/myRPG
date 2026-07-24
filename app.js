@@ -33,7 +33,7 @@ class GameApp {
     startGame() {
         console.log('[应用] 开始游戏');
         this.updatePlayerInfo();
-        this.sceneManager.enterScene('新手村');
+        this.sceneManager.enterScene('灰烟村');
     }
 
     // 更新玩家信息
