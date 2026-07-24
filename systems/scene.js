@@ -1,73 +1,134 @@
-// systems/scene.js - 场景系统
+// systems/scene.js - 完全按你的设计
 class SceneManager {
     constructor() {
         this.currentScene = null;
+        this.currentCombat = null;
+        
+        // ============================================
+        // 场景数据 - 完全按你的设计
+        // ============================================
         this.scenes = {
-            '新手村': {
+            // ----- 灰烟村（安全区）-----
+            '灰烟村': {
+                id: 'greyVillage',
                 type: 'safe',
-                name: '新手村',
-                npcs: ['村长', '商人', '铁匠'],
-                exits: ['新手村荒地', '森林'],
-                description: '宁静的新手村，是冒险的起点'
+                name: '灰烟村',
+                description: '你长大的地方。炉火噼啪作响，艾琳坐在窗边擦拭她的弓。外面天快黑了。',
+                exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_裁缝铺', '灰烟村_集市', '灰烟村_基地']
             },
-            '新手村荒地': {
+            '灰烟村_酒馆': {
+                id: 'greyVillage_tavern',
+                type: 'safe',
+                name: '酒馆',
+                description: '温暖的酒馆，飘着麦酒和烤肉的香气。墙上挂着旧地图。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_铁匠铺': {
+                id: 'greyVillage_blacksmith',
+                type: 'safe',
+                name: '铁匠铺',
+                description: '叮叮当当的打铁声，老铁匠正在锻造一把长剑。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_裁缝铺': {
+                id: 'greyVillage_tailor',
+                type: 'safe',
+                name: '裁缝铺',
+                description: '各色布料堆满柜台，裁缝正在缝制一件皮甲。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_集市': {
+                id: 'greyVillage_market',
+                type: 'safe',
+                name: '集市',
+                description: '人来人往的集市，各种货物琳琅满目。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_基地': {
+                id: 'greyVillage_base',
+                type: 'safe',
+                name: '基地',
+                description: '你的小窝，虽然简陋但很安心。墙上挂着旧地图。',
+                exits: ['灰烟村']
+            },
+            
+            // ----- 野外区域（战斗）-----
+            '灰烟村_荒地': {
+                id: 'greyVillage_wasteland',
                 type: 'wild',
-                name: '新手村荒地',
-                enemies: ['狼', '狼'],
+                name: '荒地',
+                description: '荒芜的野地，野狗在垃圾堆间游荡。',
+                enemies: ['野狗', '野狗'],
                 level: 1,
-                description: '荒芜的野地，偶尔有野兽出没'
+                exits: ['灰烟村']
             },
-            '森林': {
+            '灰烟村_树林': {
+                id: 'greyVillage_forest',
                 type: 'wild',
-                name: '森林',
-                enemies: ['野猪', '蛇'],
-                level: 2,
-                description: '茂密的森林，隐藏着各种危险'
+                name: '树林',
+                description: '稀疏的树林，偶尔有野兔窜过。',
+                enemies: ['野兔', '野兔'],
+                level: 1,
+                exits: ['灰烟村']
+            },
+            '灰烟村_河边': {
+                id: 'greyVillage_river',
+                type: 'wild',
+                name: '河边',
+                description: '潺潺的河水，水边有野鸭栖息。',
+                enemies: ['野鸭', '螃蟹'],
+                level: 1,
+                exits: ['灰烟村']
             }
         };
-        this.enemyData = this.loadEnemyData();
-    }
 
-    // 加载敌人数据
-    loadEnemyData() {
-        return {
-            '狼': {
-                name: '狼',
+        // ----- 敌人数据 -----
+        this.enemyData = {
+            '野狗': {
+                name: '野狗',
                 hp: 30,
                 maxHp: 30,
                 attack: 8,
                 defense: 2,
                 speed: 10,
                 exp: 12,
-                gold: 8,
-                skills: ['撕咬', '嚎叫']
+                gold: 5
             },
-            '野猪': {
-                name: '野猪',
-                hp: 50,
-                maxHp: 50,
-                attack: 12,
-                defense: 5,
-                speed: 6,
-                exp: 20,
-                gold: 15,
-                skills: ['冲撞']
+            '野兔': {
+                name: '野兔',
+                hp: 15,
+                maxHp: 15,
+                attack: 3,
+                defense: 1,
+                speed: 15,
+                exp: 8,
+                gold: 2
             },
-            '蛇': {
-                name: '蛇',
+            '野鸭': {
+                name: '野鸭',
+                hp: 20,
+                maxHp: 20,
+                attack: 5,
+                defense: 1,
+                speed: 12,
+                exp: 10,
+                gold: 3
+            },
+            '螃蟹': {
+                name: '螃蟹',
                 hp: 25,
                 maxHp: 25,
-                attack: 10,
-                defense: 1,
-                speed: 14,
-                exp: 15,
-                gold: 10,
-                skills: ['毒牙']
+                attack: 6,
+                defense: 5,
+                speed: 5,
+                exp: 12,
+                gold: 4
             }
         };
     }
 
-    // 进入场景
+    // ========== 核心方法 ==========
+
     enterScene(sceneName) {
         console.log('[场景] 进入:', sceneName);
         
@@ -79,7 +140,7 @@ class SceneManager {
         
         this.currentScene = scene;
         
-        // 更新UI显示场景信息
+        // 触发场景变化事件（通知UI）
         const event = new CustomEvent('scene-change', {
             detail: { scene: scene }
         });
@@ -87,119 +148,77 @@ class SceneManager {
         
         // 如果是野外场景且有敌人，触发战斗
         if (scene.type === 'wild' && scene.enemies && scene.enemies.length > 0) {
-            console.log('[场景] 野外场景，准备战斗，敌人:', scene.enemies.join(', '));
+            console.log('[场景] 野外场景，触发战斗，敌人:', scene.enemies.join(', '));
             this.triggerBattle(scene.enemies);
         }
     }
 
-    // 触发战斗
     triggerBattle(enemyNames) {
-        console.log('[战斗] 触发战斗，敌人名称列表:', enemyNames);
+        console.log('[战斗] 触发战斗，敌人:', enemyNames.join(', '));
         
-        // 获取玩家数据
         const player = this.getPlayerData();
         if (!player) {
-            console.error('[战斗] 玩家数据不存在，创建默认玩家');
-            // 创建默认玩家用于测试
-            const defaultPlayer = {
-                name: '勇者',
-                hp: 100,
-                maxHp: 100,
-                attack: 15,
-                defense: 5,
-                speed: 12,
-                level: 1,
-                exp: 0,
-                gold: 50
-            };
-            this.startCombat(defaultPlayer, enemyNames);
+            console.error('[战斗] 没有玩家数据');
             return;
         }
         
-        this.startCombat(player, enemyNames);
-    }
-
-    // 启动战斗
-    startCombat(player, enemyNames) {
-        // 创建敌人实例
         const enemies = enemyNames.map(name => {
             const data = this.enemyData[name];
             if (!data) {
                 console.error('[战斗] 找不到敌人数据:', name);
                 return null;
             }
-            // 创建敌人副本（深拷贝）
             return {
                 ...data,
                 id: Date.now() + Math.random() * 1000,
                 status: 'normal',
-                // 确保所有属性都存在
-                hp: data.hp || data.maxHp || 30,
-                maxHp: data.maxHp || data.hp || 30,
-                speed: data.speed || 5,
-                attack: data.attack || 5,
-                defense: data.defense || 2
+                hp: data.hp || 30,
+                maxHp: data.maxHp || 30,
+                speed: data.speed || 5
             };
         }).filter(e => e !== null);
         
         if (enemies.length === 0) {
-            console.error('[战斗] 没有有效的敌人');
+            console.error('[战斗] 没有有效敌人');
             return;
         }
         
-        console.log('[战斗] 创建敌人实例:', enemies.map(e => e.name).join(', '));
-        console.log('[战斗] 玩家数据:', player.name, 'HP:', player.hp);
-        
-        // 创建战斗引擎并保存到全局
         const combat = new CombatEngine();
         window.currentCombat = combat;
-        
-        // 保存到场景管理器
         this.currentCombat = combat;
-        
-        // 启动战斗
         combat.startCombat(player, enemies);
     }
 
-    // 获取玩家数据
     getPlayerData() {
         try {
-            // 从全局游戏状态获取
             if (window.gameApp && window.gameApp.player) {
                 return window.gameApp.player;
             }
-            
-            // 从localStorage获取
             const saved = localStorage.getItem('myRPG_player');
             if (saved) {
-                const player = JSON.parse(saved);
-                // 确保有必需属性
-                player.maxHp = player.maxHp || player.hp || 100;
-                player.hp = player.hp || player.maxHp;
-                player.speed = player.speed || 10;
-                player.attack = player.attack || 10;
-                player.defense = player.defense || 5;
-                return player;
+                const p = JSON.parse(saved);
+                p.maxHp = p.maxHp || p.hp || 100;
+                p.hp = p.hp || p.maxHp;
+                p.speed = p.speed || 10;
+                p.attack = p.attack || 10;
+                p.defense = p.defense || 5;
+                return p;
             }
-            
             return null;
-        } catch (error) {
-            console.error('[场景] 获取玩家数据失败:', error);
+        } catch (e) {
+            console.error('[战斗] 获取玩家失败:', e);
             return null;
         }
     }
 
-    // 获取当前场景
     getCurrentScene() {
         return this.currentScene;
     }
 
-    // 获取场景列表
     getScenes() {
         return this.scenes;
     }
 
-    // 获取可用出口
     getExits() {
         return this.currentScene ? this.currentScene.exits || [] : [];
     }
