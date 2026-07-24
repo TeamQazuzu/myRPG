@@ -357,8 +357,8 @@ const StateUtils = {
   checkEquipLimit(state, item) {
     const limits = DATA.equipLimits.find(l => state.player.level >= l.levelRange[0] && state.player.level <= l.levelRange[1]);
     if (!limits) return { ok: true };
-    const rarityTier = DATA.rarity[item.rarity]?.tier ?? 0;
-    const maxTier = DATA.rarity[limits.maxRarity]?.tier ?? 99;
+    const rarityTier = (DATA.rarity[item.rarity] || {}).tier || 0;
+    const maxTier = (DATA.rarity[limits.maxRarity] || {}).tier || 99;
     if (rarityTier > maxTier) {
       return { ok: false, reason: `等级${state.player.level}无法穿戴${DATA.rarity[item.rarity].name}装备，最高${DATA.rarity[limits.maxRarity].name}` };
     }
