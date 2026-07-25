@@ -121,11 +121,22 @@ var SkillSystem = {
       combat.cooldowns[skillId] = skill.cooldown;
     }
 
-    // —— 计算伤害 ——
+    // —— 计算伤害（使用战斗引擎的四系伤害计算）——
     if (skill.baseDamage !== null && skill.baseDamage !== undefined) {
       var baseAtk = attacker.attack || 10;
-      // damage = attacker.attack * skill.baseDamage
-      var rawDamage = baseAtk * skill.baseDamage;
+      // 使用 combat.calculateDamage 计算基础伤害（含防御减伤）
+      var dmgType = skill.element || 'physical';
+      var baseDamage = 0;
+      if (combat && combat.calculateDamage) {
+        // 使用战斗引擎计算（含防御减伤和伤害类型）
+        baseDamage = combat.calculateDamage(attacker, target, dmgType);
+      } else {
+        // 降级：简单计算
+        var rawDmg = baseAtk - (target.defense || 0) * 0.4;
+        baseDamage = Math.max(1, rawDmg);
+      }
+      // 乘以技能倍率
+      var rawDamage = baseDamage * skill.baseDamage;
       // 加入随机浮动（0.85 ~ 1.15）
       var variance = 0.85 + Math.random() * 0.3;
       result.damage = Math.floor(rawDamage * variance);
@@ -139,7 +150,29 @@ var SkillSystem = {
         }
       }
 
-      result.log = attacker.name + " 使用 " + skill.name + "，对 " + (target ? target.name : "目标") + " 造成 " + result.damage + " 点伤害";
+      var dmgTypeName = '';
+      if (combat && combat.getDamageTypeName) {
+        dmgTypeName = combat.getDamageTypeName(dmgType);
+      }
+      result.log = attacker.name + " 使用 " + skill.name + "，对 " + (target ? target.name : "目标") + " 造成 " + result.damage + " 点" + dmgTypeName + "伤害";
+
+      // 元素伤害自动触发状态效果（即使技能没有显式 apply_status）
+      // 火焰→灼烧、冰霜→减速、雷电→僵直，概率较低
+      if (combat && combat.tryApplyStatusFromDamageType && target && target.alive) {
+        if (dmgType === 'fire' || dmgType === 'frost' || dmgType === 'lightning') {
+          // 检查技能是否已有显式的 apply_status（避免重复触发）
+          var hasExplicitStatus = false;
+          if (skill.effects) {
+            for (var se = 0; se < skill.effects.length; se++) {
+              if (skill.effects[se].type === 'apply_status') { hasExplicitStatus = true; break; }
+            }
+          }
+          // 没有显式状态效果时，有较低概率自动触发
+          if (!hasExplicitStatus) {
+            combat.tryApplyStatusFromDamageType(target, dmgType, attacker, 0.10);
+          }
+        }
+      }
     }
 
     // —— 计算治疗 ——
@@ -212,12 +245,22 @@ var SkillSystem = {
             statusName = statusInfo.statusName || statusName;
             statusDesc = "（" + (statusInfo.statusDesc || statusName) + "）";
           }
-          result.log += "，附加 " + statusName + statusDesc;
+          // 实际施加状态到目标
+          var statusApplied = false;
+          if (combat && combat.applyStatusEffect && target && target.alive) {
+            statusApplied = combat.applyStatusEffect(target, eff.status, attacker, eff.duration);
+          }
+          if (statusApplied) {
+            result.log += "，附加 " + statusName + statusDesc;
+          } else {
+            result.log += "，" + statusName + "状态未生效";
+          }
           result.statusEffect = {
             type: "apply_status",
             status: eff.status,
             duration: eff.duration || 2,
             targetId: target && target.id,
+            applied: statusApplied,
           };
         }
       }

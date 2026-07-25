@@ -162,11 +162,57 @@ class UIRenderer {
         this.addGameLog('你仔细查看了一番...（inspect系统开发中）');
         break;
       case 'idle_gather':
-        this.addGameLog('挂机采集功能开发中...');
+        this.startIdleGather(action.target);
         break;
       default:
         console.warn('[UI] 未知行动类型:', action.type);
     }
+  }
+
+  // ========== 挂机采集 ==========
+  startIdleGather(target) {
+    var sm = window.gameApp && window.gameApp.sceneManager ? window.gameApp.sceneManager : null;
+    if (!sm) {
+      this.addGameLog('场景管理器不可用');
+      return;
+    }
+
+    // 执行挂机采集
+    var results = sm.idleGather(target, 8);
+
+    // 构建结算面板HTML
+    var html = '<div class="idle-gather-results">';
+    html += '<div class="idle-gather-title">📦 挂机采集结算</div>';
+    html += '<div class="idle-gather-summary">';
+
+    // 汇总数据
+    html += '<div class="idle-gather-stat">采集目标：<span>' + results.target + '</span></div>';
+    html += '<div class="idle-gather-stat">采集轮数：<span>' + results.cycles + ' 轮</span></div>';
+    html += '<div class="idle-gather-stat">材料获得：<span class="stat-success">' + results.itemsGathered + ' 个</span></div>';
+    html += '<div class="idle-gather-stat">金币获得：<span class="stat-gold">' + results.goldFound + ' 金</span></div>';
+    html += '<div class="idle-gather-stat">遭遇敌人：<span class="stat-danger">' + results.enemiesEncountered + ' 次（全部击败）</span></div>';
+
+    if (results.rareFinds.length > 0) {
+      html += '<div class="idle-gather-stat">稀有发现：<span class="stat-rare">' + results.rareFinds.join('、') + '</span></div>';
+    }
+
+    html += '</div>';
+
+    // 详细日志
+    html += '<div class="idle-gather-log-title">📜 采集日志</div>';
+    html += '<div class="idle-gather-log">';
+    for (var i = 0; i < results.log.length; i++) {
+      html += '<p>' + results.log[i] + '</p>';
+    }
+    html += '</div>';
+
+    html += '</div>';
+
+    // 显示结算面板
+    this.showPanel('挂机采集结算', html);
+
+    // 同时在游戏日志中添加简报
+    this.addGameLog('挂机采集完成：获得' + results.target + ' x' + results.itemsGathered + '，金币 +' + results.goldFound);
   }
 
   // ========== 战斗画面 ==========
@@ -240,6 +286,7 @@ class UIRenderer {
     const hpColor = hpPct > 50 ? '#5a9e5a' : hpPct > 25 ? '#d4a040' : '#c05050';
     const dead = !unit.alive || hp <= 0;
     const sideIcon = side === 'enemy' ? '🔴' : '🟢';
+    const statusIcons = this.renderStatusIcons(unit);
 
     return `
       <div class="unit-card ${side} ${dead ? 'dead' : ''}" data-idx="${idx}" data-unit-id="${unit.id}">
@@ -249,8 +296,36 @@ class UIRenderer {
           <div class="hp-fill" style="width:${hpPct}%;background:${hpColor}"></div>
         </div>
         <div class="unit-stats">⚔${Math.round(unit.attack || 0)} 🛡${Math.round(unit.defense || 0)} 💨${(unit.speed || 0).toFixed(1)}</div>
+        ${statusIcons}
       </div>
     `;
+  }
+
+  // ========== 渲染异常状态图标 ==========
+  renderStatusIcons(unit) {
+    if (!unit || !unit.statusEffects) return '';
+    var icons = [];
+    var se = unit.statusEffects;
+
+    // 流血 🩸
+    if (se.bleed && se.bleed.duration > 0) {
+      icons.push('<span class="status-icon status-bleed" title="流血（每回合受到伤害，剩' + se.bleed.duration + '回合）">🩸' + se.bleed.duration + '</span>');
+    }
+    // 灼烧 🔥
+    if (se.burn && se.burn.duration > 0) {
+      icons.push('<span class="status-icon status-burn" title="灼烧（' + se.burn.stacks + '层，每回合受到伤害，剩' + se.burn.duration + '回合）">🔥' + se.burn.stacks + '</span>');
+    }
+    // 减速 ❄
+    if (se.slow && se.slow.duration > 0) {
+      icons.push('<span class="status-icon status-slow" title="减速（速度-30%，剩' + se.slow.duration + '回合）">❄' + se.slow.duration + '</span>');
+    }
+    // 僵直 ⚡
+    if (se.stun && se.stun.duration > 0) {
+      icons.push('<span class="status-icon status-stun" title="僵直（无法行动，剩' + se.stun.duration + '回合）">⚡' + se.stun.duration + '</span>');
+    }
+
+    if (icons.length === 0) return '';
+    return '<div class="unit-status-icons">' + icons.join('') + '</div>';
   }
 
   // ========== 渲染战斗日志 ==========
@@ -400,12 +475,22 @@ class UIRenderer {
     const nameEl = card.querySelector('.unit-name');
     const hpTextEl = card.querySelector('.unit-hp-text');
     const hpFillEl = card.querySelector('.hp-fill');
+    const statsEl = card.querySelector('.unit-stats');
 
     if (nameEl) nameEl.innerHTML = `${side === 'enemy' ? '🔴' : '🟢'} ${unit.name} ${dead ? '💀' : ''}`;
     if (hpTextEl) hpTextEl.textContent = `HP: ${hp}/${maxHp}`;
     if (hpFillEl) {
       hpFillEl.style.width = hpPct + '%';
       hpFillEl.style.background = hpColor;
+    }
+    if (statsEl) statsEl.textContent = `⚔${Math.round(unit.attack || 0)} 🛡${Math.round(unit.defense || 0)} 💨${(this.combatEngine ? this.combatEngine.getEffectiveSpeed(unit).toFixed(1) : (unit.speed || 0).toFixed(1))}`;
+
+    // 更新状态图标
+    var oldStatusEl = card.querySelector('.unit-status-icons');
+    if (oldStatusEl) oldStatusEl.remove();
+    var statusHtml = this.renderStatusIcons(unit);
+    if (statusHtml) {
+      card.insertAdjacentHTML('beforeend', statusHtml);
     }
 
     if (dead) card.classList.add('dead');

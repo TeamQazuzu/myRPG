@@ -249,6 +249,13 @@ class SceneManager {
     try {
       if (window.gameApp && window.gameApp.state && window.gameApp.state.companions) {
         return window.gameApp.state.companions.filter(c => c.alive !== false).map(c => {
+          // 根据职业分配AI策略
+          var aiStrategy = c.aiStrategy || 'balanced';
+          if (!c.aiStrategy && c.class) {
+            if (c.class === 'warrior') aiStrategy = 'aggressive';
+            else if (c.class === 'mage') aiStrategy = 'healer';
+            else aiStrategy = 'balanced';
+          }
           return {
             id: c.id,
             name: c.name,
@@ -262,6 +269,7 @@ class SceneManager {
             speed: c.speed || 8,
             isCompanion: true,
             status: 'normal',
+            aiStrategy: aiStrategy,
           };
         });
       }
@@ -292,6 +300,118 @@ class SceneManager {
         this.showLog(result.reason || '背包已满');
       }
     }
+  }
+
+  // ========== 挂机采集系统 ==========
+  // 模拟多次采集循环，有概率遇到敌人或发现稀有物品
+  idleGather(target, cycles) {
+    var totalCycles = cycles || 8;
+    var results = {
+      target: target,
+      cycles: totalCycles,
+      itemsGathered: 0,
+      goldFound: 0,
+      enemiesEncountered: 0,
+      enemyDefeated: 0,
+      rareFinds: [],
+      log: [],
+    };
+
+    console.log('[挂机采集] 开始，目标:', target, '循环数:', totalCycles);
+
+    for (var i = 1; i <= totalCycles; i++) {
+      var roll = Math.random();
+      var cycleLog = '第' + i + '轮：';
+
+      if (roll < 0.70) {
+        // 70%：采集成功
+        var amount = 1 + Math.floor(Math.random() * 3); // 1-3个
+        var item = {
+          id: Utils.uuid(),
+          name: target,
+          type: 'material',
+          rarity: 'white',
+          level: 1,
+          stack: amount,
+        };
+        if (window.gameApp && window.gameApp.state) {
+          var addResult = StateUtils.addToInventory(window.gameApp.state, item);
+          if (addResult.ok) {
+            results.itemsGathered += amount;
+            cycleLog += '采集获得 ' + target + ' x' + amount;
+          } else {
+            cycleLog += '背包已满，采集中断';
+            results.log.push(cycleLog);
+            break;
+          }
+        } else {
+          results.itemsGathered += amount;
+          cycleLog += '采集获得 ' + target + ' x' + amount;
+        }
+      } else if (roll < 0.85) {
+        // 15%：遇到敌人（自动战斗，简化处理）
+        results.enemiesEncountered++;
+        var enemyAtk = 5 + Math.floor(Math.random() * 5);
+        var enemyHp = 20 + Math.floor(Math.random() * 20);
+        var playerAtk = 10;
+        if (window.gameApp && window.gameApp.state) {
+          playerAtk = window.gameApp.state.player.attack || 10;
+        }
+        // 简化自动战斗
+        var rounds = Math.ceil(enemyHp / Math.max(1, playerAtk));
+        var playerDmg = Math.floor(enemyAtk * rounds * 0.6);
+        if (window.gameApp && window.gameApp.state) {
+          window.gameApp.state.player.hp = Math.max(1, window.gameApp.state.player.hp - playerDmg);
+        }
+        var goldReward = 3 + Math.floor(Math.random() * 8);
+        if (window.gameApp && window.gameApp.state) {
+          StateUtils.addGold(window.gameApp.state, goldReward);
+        }
+        results.goldFound += goldReward;
+        results.enemyDefeated++;
+        cycleLog += '遇到敌人！战斗胜利，获得 ' + goldReward + ' 金币，损失 ' + playerDmg + ' HP';
+      } else if (roll < 0.95) {
+        // 10%：发现金币
+        var gold = 2 + Math.floor(Math.random() * 6);
+        if (window.gameApp && window.gameApp.state) {
+          StateUtils.addGold(window.gameApp.state, gold);
+        }
+        results.goldFound += gold;
+        cycleLog += '发现 ' + gold + ' 金币';
+      } else {
+        // 5%：发现稀有物品
+        var rareItem = {
+          id: Utils.uuid(),
+          name: '精炼' + target,
+          type: 'material',
+          rarity: 'green',
+          level: 1,
+          stack: 1,
+        };
+        if (window.gameApp && window.gameApp.state) {
+          var rareResult = StateUtils.addToInventory(window.gameApp.state, rareItem);
+          if (rareResult.ok) {
+            results.rareFinds.push(rareItem.name);
+            cycleLog += '✨ 发现稀有物品：' + rareItem.name;
+          } else {
+            cycleLog += '背包已满，无法拾取稀有物品';
+          }
+        } else {
+          results.rareFinds.push(rareItem.name);
+          cycleLog += '✨ 发现稀有物品：' + rareItem.name;
+        }
+      }
+
+      results.log.push(cycleLog);
+    }
+
+    // 更新玩家信息
+    if (window.gameApp && window.gameApp.updatePlayerInfo) {
+      window.gameApp.updatePlayerInfo();
+    }
+
+    console.log('[挂机采集] 完成', results);
+    return results;
   }
 
   // ========== 与NPC对话（委托给DialogueSystem）==========

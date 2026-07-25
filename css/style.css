@@ -327,6 +327,29 @@ html, body {
   color: var(--text-muted);
 }
 
+/* 异常状态图标 */
+.unit-status-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.status-icon {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  cursor: help;
+  font-weight: bold;
+}
+
+.status-bleed { background: rgba(200, 50, 50, 0.3); border: 1px solid rgba(200, 50, 50, 0.5); }
+.status-burn { background: rgba(255, 100, 30, 0.3); border: 1px solid rgba(255, 100, 30, 0.5); }
+.status-slow { background: rgba(80, 170, 230, 0.3); border: 1px solid rgba(80, 170, 230, 0.5); }
+.status-stun { background: rgba(255, 220, 50, 0.3); border: 1px solid rgba(255, 220, 50, 0.5); }
+
 /* ============================================
    战斗日志
    ============================================ */
@@ -1279,6 +1302,69 @@ html, body {
 .shop-buy-btn:hover {
   background: var(--accent);
   color: var(--bg-primary);
+}
+
+/* ============================================
+   挂机采集结算面板
+   ============================================ */
+.idle-gather-results {
+  padding: 4px 0;
+}
+
+.idle-gather-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--accent);
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.idle-gather-summary {
+  background: var(--bg-primary);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.idle-gather-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.idle-gather-stat:last-child {
+  border-bottom: none;
+}
+
+.idle-gather-stat span {
+  font-weight: bold;
+}
+
+.stat-success { color: var(--success); }
+.stat-gold { color: var(--warning); }
+.stat-danger { color: var(--error); }
+.stat-rare { color: #c77dff; }
+
+.idle-gather-log-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 5px;
+}
+
+.idle-gather-log {
+  max-height: 150px;
+  overflow-y: auto;
+  background: var(--bg-primary);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.idle-gather-log p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 2px 0;
 }
 
 /* ============================================
