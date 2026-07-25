@@ -1,3 +1,4 @@
+// core/data.js - 游戏数据定义
 const DATA = {
   // ========== 版本 ==========
   version: "1.0.0",
@@ -74,14 +75,30 @@ const DATA = {
     purple: { name: "紫色", tier: 3, minAffixes: 3, maxAffixes: 4, color: "#9c27b0" },
     orange: { name: "橙色", tier: 4, minAffixes: 4, maxAffixes: 5, color: "#ff9800" },
     red:    { name: "红色", tier: 5, minAffixes: 6, maxAffixes: 6, color: "#f44336" },
-    gold:   { name: "金色", tier: 6, minAffixes: 3, maxAffixes: 3, color: "#ffd700" },
+    gold:   { name: "金色", tier: 6, minAffixes: 3, maxAffixes: 3, color: "#ffd700" }, // 传家宝专用
   },
 
-  // 品质顺序辅助（用于 equipment.js）
-  Q_ORDER: { white: 0, green: 1, blue: 2, purple: 3, orange: 4, red: 5, gold: 6 },
+  // ========== 品质等级排序 ==========
+  Q_ORDER: {
+    white: 0,
+    green: 1,
+    blue: 2,
+    purple: 3,
+    orange: 4,
+    red: 5,
+    gold: 6,
+  },
 
-  // 品质属性倍率（用于锻造升级时计算新属性）
-  Q_MULTI: { white: 1.0, green: 1.2, blue: 1.5, purple: 2.0, orange: 2.8, red: 4.0, gold: 3.0 },
+  // ========== 品质倍率 ==========
+  Q_MULTI: {
+    white: 1.0,
+    green: 1.3,
+    blue: 1.7,
+    purple: 2.2,
+    orange: 3.0,
+    red: 4.0,
+    gold: 2.0,
+  },
 
   // ========== 装备承载上限 ==========
   equipLimits: [
@@ -92,13 +109,12 @@ const DATA = {
     { levelRange: [81, 99], maxRarity: "red",    sameColorMax: 99 },
   ],
 
-  // 按等级段限制的最高品质（equipment.js 辅助）
+  // ========== 品质持有上限 ==========
   qualityLimits: {
-    bracket1: { maxQuality: "blue", sameLimit: 2 },
-    bracket2: { maxQuality: "purple", sameLimit: 2 },
-    bracket3: { maxQuality: "orange", sameLimit: 2 },
-    bracket4: { maxQuality: "red", sameLimit: 2 },
-    bracket5: { maxQuality: "red", sameLimit: 99 },
+    early:   { maxQuality: "blue",   sameLimit: 2 },
+    mid:     { maxQuality: "purple", sameLimit: 2 },
+    late:    { maxQuality: "orange", sameLimit: 2 },
+    endgame: { maxQuality: "red",    sameLimit: 2 },
   },
 
   // ========== 装备槽位 ==========
@@ -107,10 +123,15 @@ const DATA = {
     "boots", "gloves", "necklace", "ring1", "ring2",
   ],
 
-  // 槽位中文名
+  // ========== 槽位名称 ==========
   slots: {
-    weapon: "武器", offhand: "副手", helmet: "头盔", chest: "胸甲", legs: "腿甲",
-    boots: "靴子", gloves: "手套", necklace: "项链", ring1: "戒指", ring2: "戒指"
+    weapon: "武器", offhand: "副手", helmet: "头盔", chest: "胸甲",
+    legs: "腿甲", boots: "靴子", gloves: "手套", necklace: "项链",
+    ring1: "戒指1", ring2: "戒指2",
+    sword: "单手剑", axe: "斧头", hammer: "锤子", shield: "盾牌",
+    bow: "弓", crossbow: "弩", dagger: "匕首",
+    staff: "法杖", wand: "魔杖",
+    cloth: "布甲", leather: "皮甲", mail: "锁甲", plate: "板甲",
   },
 
   // ========== 装备词条池（80条·四系重构版）==========
@@ -268,279 +289,365 @@ const DATA = {
       combat: { hp: 5000, atk: 300, armor: 50, crit: 0.3, style: "glassCannon" },
       reward: "组织铭牌",
       onDefeat: "unlock_ashMines",
-      foreshadow: [37, 38],
+      foreshadow: [37, 38], // 暗杀事件等级
     },
     mechanicalGuard: {
       name: "机械守卫",
       level: 60,
-      knows: "组织的中坚力量，守护矿场。",
-      stance: "检测到入侵者。执行清除协议。",
-      combat: { hp: 8000, atk: 400, armor: 300, style: "tank" },
+      knows: "组织的底层逻辑，但无法反抗指令。",
+      stance: "…指令执行中。检测到未授权入侵者。",
+      combat: { hp: 8000, atk: 500, armor: 400, crit: 0.1, style: "meleeBoss" },
       reward: "机械核心",
       onDefeat: "unlock_newWorld",
     },
     hermit: {
-      name: "隐修者",
+      name: "隐者",
       level: 80,
-      knows: "组织的真相，碎片秘密。",
-      stance: "你终于来了。我等你很久了。",
-      combat: { hp: 12000, atk: 600, armor: 200, style: "mage" },
-      reward: "十二碎片之钥",
+      knows: "组织高层秘密，知道父母真相。",
+      stance: "你终于来了。坐吧，有些事是时候告诉你了。",
+      combat: { hp: 12000, atk: 800, armor: 300, crit: 0.4, style: "spellSword" },
+      reward: "父母的遗物",
       onDefeat: "unlock_skyTower",
     },
     finalBoss: {
       name: "主人",
       level: 99,
-      knows: "一切。",
-      stance: "欢迎来到餐桌。",
-      combat: { hp: 50000, atk: 1000, armor: 500, style: "final" },
-      reward: "真相",
-      onDefeat: "game_complete",
+      knows: "一切真相。组织创始人。",
+      stance: "你以为走到这里就算结束了吗？",
+      combat: { hp: 20000, atk: 1500, armor: 500, crit: 0.5, style: "finalBoss" },
+      reward: "真相碎片",
+      onDefeat: "game_clear",
     },
   },
 
-  // ========== NPC / 随从 ==========
+  // ========== NPC ==========
   npcs: {
-    ailin: {
-      id: "ailin",
+    elin: {
       name: "艾琳",
-      class: "ranger",
-      recruit: false,
-      desc: "你的青梅竹马，开局就在队伍里。",
+      role: "青梅竹马·弓箭手",
+      desc: "村里长大的弓箭手少女，与你情同手足。",
+      location: "greyVillage",
+      personality: "温柔但倔强",
     },
     blacksmith: {
-      id: "blacksmith",
-      name: "老铁匠",
-      class: "warrior",
-      recruit: true,
-      desc: "灰烟村的铁匠，擅长锻造。",
-      reqLevel: 10,
+      name: "铁匠老哈",
+      role: "铁匠·装备商人",
+      desc: "沉默寡言的老铁匠，手艺一绝。",
+      location: "greyVillage",
+      personality: "粗犷",
     },
-    hunter: {
-      id: "hunter",
-      name: "老猎人",
-      class: "ranger",
-      recruit: true,
-      desc: "经验丰富的猎人。",
-      reqLevel: 15,
+    mira: {
+      name: "米拉",
+      role: "杂货店主·消耗品商人",
+      desc: "笑盈盈的杂货铺老板娘，什么都有。",
+      location: "greyVillage",
+      personality: "热情",
     },
-    mageApprentice: {
-      id: "mageApprentice",
-      name: "魔法学徒",
-      class: "mage",
-      branch: "fire",
-      recruit: true,
-      desc: "渴望冒险的魔法学徒。",
-      reqLevel: 20,
+    auntie: {
+      name: "三婶",
+      role: "杂货铺三婶·村庄八卦",
+      desc: "消息灵通的村里三婶，闲聊可得情报。",
+      location: "greyVillage",
+      personality: "健谈",
     },
   },
 
   // ========== 货币系统 ==========
   currency: {
-    maxCarry: 999999,
+    name: "金币",
+    maxCarry: 99999,
+    copperName: "铜",
+    silverName: "银",
+    goldName: "金",
   },
 
-  // ========== 消耗品数据库 ==========
+  // ========== 消耗品 ==========
   consumables: {
-    potion_s: { name: '小型生命药水', type: 'consumable', price: 30, healHp: 40, healMp: 0, desc: '恢复40点生命' },
-    potion_m: { name: '中型生命药水', type: 'consumable', price: 80, healHp: 100, healMp: 0, desc: '恢复100点生命' },
-    ether_s: { name: '小型法力药水', type: 'consumable', price: 40, healHp: 0, healMp: 30, desc: '恢复30点法力' },
-    bread: { name: '面包', type: 'consumable', price: 10, healHp: 20, healMp: 0, desc: '恢复20点生命' },
+    potion_s: {
+      name: "小型生命药水",
+      type: "consumable",
+      healHp: 40,
+      healMp: 0,
+      price: 30,
+      desc: "恢复40点生命",
+      stackable: true,
+      maxStack: 99,
+    },
+    potion_m: {
+      name: "中型生命药水",
+      type: "consumable",
+      healHp: 100,
+      healMp: 0,
+      price: 80,
+      desc: "恢复100点生命",
+      stackable: true,
+      maxStack: 99,
+    },
+    ether_s: {
+      name: "小型法力药水",
+      type: "consumable",
+      healHp: 0,
+      healMp: 30,
+      price: 40,
+      desc: "恢复30点法力",
+      stackable: true,
+      maxStack: 99,
+    },
+    bread: {
+      name: "面包",
+      type: "consumable",
+      healHp: 20,
+      healMp: 0,
+      price: 10,
+      desc: "恢复20点生命",
+      stackable: true,
+      maxStack: 99,
+    },
   },
 
   // ========== 背包系统 ==========
   inventory: {
-    perGatekeeperBonus: 20,
+    capacity: 30,
+    perGatekeeperBonus: 5,
     stackLimits: {
-      gold: 9999,
+      gold: 1,
       basic: 99,
-      rare: 20,
+      rare: 1,
     },
   },
 
   // ========== 经验锁提示 ==========
   expLockMessages: {
-    20: "你感到身体达到了瓶颈，需要击败村长才能继续成长。",
-    40: "守夜人的阴影笼罩着你，必须战胜他才能突破。",
-    60: "机械守卫阻挡了你的去路，击败它才能继续前进。",
-    80: "隐修者的试炼 awaits，通过后才能触及巅峰。",
-    99: "你已达凡人极限。",
+    20: "击败村长才能继续成长。他在村长家等你。",
+    40: "守夜人挡住了前路。灰烬山脉深处见。",
+    60: "机械守卫封锁了通道。灰烬矿场深处见。",
+    80: "隐者在前方等待。新世界的深处。",
+    99: "主人就在塔顶。一切答案在那里。",
   },
 
-  // ========== 符文之语（equipment.js 依赖）==========
+  // ========== 符文之语（3组）==========
   runewords: {
-    fury: {
-      name: "愤怒",
-      c: ["ruby", "ruby", "diamond"],
-      effect: { physDmg: 0.25 },
-      desc: "三颗红宝石镶嵌触发：物理伤害+25%"
+    flameStorm: {
+      name: "烈焰风暴",
+      c: ["fire", "fire", "lightning"],
+      effects: [
+        { stat: "fireDmg", value: 0.20 },
+        { stat: "lightDmg", value: 0.10 },
+        { stat: "burnOnHit", value: 0.30 },
+      ],
+      desc: "攻击附带烈焰与雷电之力，有概率灼烧目标",
     },
-    frostguard: {
-      name: "霜卫",
-      c: ["sapphire", "sapphire", "emerald"],
-      effect: { frostRes: 0.30 },
-      desc: "双蓝宝石+绿宝石：冰霜抗性+30%"
+    frostGuard: {
+      name: "冰霜守护",
+      c: ["frost", "frost", "physical"],
+      effects: [
+        { stat: "frostRes", value: 0.30 },
+        { stat: "physDef", value: 0.20 },
+        { stat: "slowOnHit", value: 0.40 },
+      ],
+      desc: "大幅提升冰霜抗性与物理防御，攻击附带减速",
     },
-    thunderlord: {
-      name: "雷霆领主",
-      c: ["topaz", "topaz", "topaz"],
-      effect: { lightDmg: 0.20 },
-      desc: "三颗黄宝石：雷电伤害+20%"
+    thunderBlade: {
+      name: "雷霆之刃",
+      c: ["lightning", "physical", "physical"],
+      effects: [
+        { stat: "lightDmg", value: 0.15 },
+        { stat: "physDmg", value: 0.15 },
+        { stat: "stunOnHit", value: 0.25 },
+      ],
+      desc: "物理与雷电双重增幅，有概率使目标僵直",
     },
   },
 
-  // ========== 装备类型到槽位映射（inventory.js / equipment.js 依赖）==========
+  // ========== 装备类型到槽位映射 ==========
   typeToSlot: {
-    sword: "weapon", axe: "weapon", hammer: "weapon", bow: "weapon",
-    staff: "weapon", wand: "weapon", dagger: "weapon",
+    sword: "weapon", axe: "weapon", hammer: "weapon",
+    bow: "weapon", crossbow: "weapon", dagger: "weapon",
+    staff: "weapon", wand: "weapon",
     shield: "offhand",
-    helmet: "helmet", armor: "chest", chest: "chest",
-    legs: "legs", boots: "boots", gloves: "gloves",
+    helmet: "helmet", chest: "chest", legs: "legs",
+    boots: "boots", gloves: "gloves",
     necklace: "necklace", ring: "ring1",
   },
 
-  // ========== 技能数据（skills.js 依赖）==========
+  // ========== 技能系统 ==========
   skills: {
-    // —— 战士技能 ——
-    warrior_slash: {
-      id: "warrior_slash",
-      name: "猛击",
-      desc: "蓄力猛击，造成1.8倍物理伤害",
-      type: "active",
-      mpCost: 8,
-      cooldown: 3,
-      element: "physical",
-      baseDamage: 1.8,
-      baseHeal: null,
+    // ---------- 新手技能（3个）----------
+    warrior_heavyhit: {
+      name: "重击",
+      desc: "蓄力一击，造成1.5倍物理伤害，附加流血效果",
+      reqLevel: 1,
       reqClass: "warrior",
-      reqLevel: 20,
       reqBranch: null,
-      effects: [],
-    },
-    warrior_shieldwall: {
-      id: "warrior_shieldwall",
-      name: "盾墙",
-      desc: "举起巨盾，防御力提升50%，持续2回合",
-      type: "active",
       mpCost: 10,
-      cooldown: 5,
-      element: "physical",
-      baseDamage: null,
-      baseHeal: null,
-      reqClass: "warrior",
-      reqLevel: 20,
-      reqBranch: null,
-      effects: [{ type: "buff_defense", value: 0.5, duration: 2 }],
-    },
-    warrior_warcry: {
-      id: "warrior_warcry",
-      name: "战吼",
-      desc: "发出震天战吼，全体攻击力提升30%，持续3回合",
-      type: "active",
-      mpCost: 15,
-      cooldown: 6,
-      element: "physical",
-      baseDamage: null,
-      baseHeal: null,
-      reqClass: "warrior",
-      reqLevel: 40,
-      reqBranch: null,
-      effects: [{ type: "buff_attack", value: 0.3, duration: 3, aoe: true }],
-    },
-    // —— 游侠技能 ——
-    ranger_multishot: {
-      id: "ranger_multishot",
-      name: "连射",
-      desc: "快速连射，造成1.5倍物理伤害，50%概率攻击第二个目标",
-      type: "active",
-      mpCost: 10,
-      cooldown: 3,
-      element: "physical",
+      cooldown: 2,
       baseDamage: 1.5,
       baseHeal: null,
-      reqClass: "ranger",
-      reqLevel: 20,
-      reqBranch: null,
-      effects: [{ type: "multi_target", chance: 0.5 }],
-    },
-    ranger_slowarrow: {
-      id: "ranger_slowarrow",
-      name: "减速箭",
-      desc: "射击附带冰霜毒液的箭矢，造成1.2倍伤害并附加减速状态",
-      type: "active",
-      mpCost: 8,
-      cooldown: 2,
       element: "physical",
+      effects: [
+        { type: "apply_status", status: "bleed", chance: 0.80, duration: 3 },
+      ],
+    },
+    ranger_quickshot: {
+      name: "快速射击",
+      desc: "快速射出一箭，造成1.3倍物理伤害",
+      reqLevel: 1,
+      reqClass: "ranger",
+      reqBranch: null,
+      mpCost: 8,
+      cooldown: 1,
+      baseDamage: 1.3,
+      baseHeal: null,
+      element: "physical",
+      effects: [],
+    },
+    mage_minorheal: {
+      name: "小治疗",
+      desc: "恢复目标20%最大生命值",
+      reqLevel: 1,
+      reqClass: "mage",
+      reqBranch: null,
+      mpCost: 12,
+      cooldown: 2,
+      baseDamage: null,
+      baseHeal: 0.2,
+      element: "heal",
+      effects: [],
+    },
+
+    // ---------- 原有技能（9个）----------
+    shield_wall: {
+      name: "盾墙",
+      desc: "举起盾牌，本回合受到的伤害减少50%",
+      reqLevel: 20,
+      reqClass: "warrior",
+      reqBranch: null,
+      mpCost: 15,
+      cooldown: 3,
+      baseDamage: null,
+      baseHeal: null,
+      element: null,
+      effects: [
+        { type: "buff_defense", value: 0.5, duration: 1 },
+      ],
+    },
+    fierce_strike: {
+      name: "猛击",
+      desc: "全力一击，造成1.8倍物理伤害",
+      reqLevel: 20,
+      reqClass: "warrior",
+      reqBranch: null,
+      mpCost: 20,
+      cooldown: 2,
+      baseDamage: 1.8,
+      baseHeal: null,
+      element: "physical",
+      effects: [],
+    },
+    double_shot: {
+      name: "连射",
+      desc: "连续射出两箭，对目标造成1.2倍物理伤害×2",
+      reqLevel: 20,
+      reqClass: "ranger",
+      reqBranch: null,
+      mpCost: 18,
+      cooldown: 2,
       baseDamage: 1.2,
       baseHeal: null,
+      element: "physical",
+      effects: [
+        { type: "multi_target", hits: 2 },
+      ],
+    },
+    slow_arrow: {
+      name: "减速箭",
+      desc: "射出冰冷的箭矢，造成伤害并减速目标",
+      reqLevel: 20,
       reqClass: "ranger",
-      reqLevel: 20,
       reqBranch: null,
-      effects: [{ type: "apply_status", status: "slow", duration: 2 }],
-    },
-    // —— 法师技能（框架预留，实际数值暂用占位）——
-    mage_fireball: {
-      id: "mage_fireball",
-      name: "火球",
-      desc: "投掷一颗灼热的火球，造成2.0倍火焰伤害",
-      type: "active",
-      mpCost: 12,
-      cooldown: 2,
-      element: "fire",
-      baseDamage: 2.0,
-      baseHeal: null,
-      reqClass: "mage",
-      reqLevel: 20,
-      reqBranch: "fire",
-      effects: [],
-    },
-    mage_icearrow: {
-      id: "mage_icearrow",
-      name: "冰箭",
-      desc: "发射冰寒箭矢，造成1.5倍冰霜伤害并附加减速",
-      type: "active",
-      mpCost: 10,
-      cooldown: 2,
-      element: "frost",
-      baseDamage: 1.5,
-      baseHeal: null,
-      reqClass: "mage",
-      reqLevel: 20,
-      reqBranch: "frost",
-      effects: [{ type: "apply_status", status: "slow", duration: 2 }],
-    },
-    mage_thunder: {
-      id: "mage_thunder",
-      name: "雷击",
-      desc: "召唤雷电轰击目标，造成1.8倍雷电伤害并附加僵直",
-      type: "active",
-      mpCost: 12,
-      cooldown: 3,
-      element: "lightning",
-      baseDamage: 1.8,
-      baseHeal: null,
-      reqClass: "mage",
-      reqLevel: 20,
-      reqBranch: "lightning",
-      effects: [{ type: "apply_status", status: "stun", duration: 1 }],
-    },
-    mage_heal: {
-      id: "mage_heal",
-      name: "治疗术",
-      desc: "运用治愈之力，恢复目标30%最大生命值",
-      type: "active",
       mpCost: 15,
       cooldown: 3,
-      element: "heal",
+      baseDamage: 1.0,
+      baseHeal: null,
+      element: "frost",
+      effects: [
+        { type: "apply_status", status: "slow", chance: 0.80, duration: 2 },
+      ],
+    },
+    fireball: {
+      name: "火球",
+      desc: "投掷火球，造成1.5倍火焰伤害，有概率灼烧目标",
+      reqLevel: 20,
+      reqClass: "mage",
+      reqBranch: "fire",
+      mpCost: 22,
+      cooldown: 2,
+      baseDamage: 1.5,
+      baseHeal: null,
+      element: "fire",
+      effects: [
+        { type: "apply_status", status: "burn", chance: 0.60, duration: 3 },
+      ],
+    },
+    ice_arrow: {
+      name: "冰箭",
+      desc: "发射冰箭，造成1.3倍冰霜伤害，有概率减速目标",
+      reqLevel: 20,
+      reqClass: "mage",
+      reqBranch: "frost",
+      mpCost: 18,
+      cooldown: 2,
+      baseDamage: 1.3,
+      baseHeal: null,
+      element: "frost",
+      effects: [
+        { type: "apply_status", status: "slow", chance: 0.70, duration: 2 },
+      ],
+    },
+    lightning_bolt: {
+      name: "雷击",
+      desc: "召唤雷电，造成1.4倍雷电伤害，有概率使目标僵直",
+      reqLevel: 20,
+      reqClass: "mage",
+      reqBranch: "lightning",
+      mpCost: 20,
+      cooldown: 2,
+      baseDamage: 1.4,
+      baseHeal: null,
+      element: "lightning",
+      effects: [
+        { type: "apply_status", status: "stun", chance: 0.50, duration: 1 },
+      ],
+    },
+    heal: {
+      name: "治疗术",
+      desc: "为友方目标恢复30%最大生命值",
+      reqLevel: 20,
+      reqClass: "mage",
+      reqBranch: "heal",
+      mpCost: 25,
+      cooldown: 3,
       baseDamage: null,
       baseHeal: 0.3,
-      reqClass: "mage",
-      reqLevel: 20,
-      reqBranch: "heal",
+      element: null,
       effects: [],
+    },
+    war_cry: {
+      name: "战吼",
+      desc: "发出战吼，鼓舞自身，攻击力提升30%，持续3回合",
+      reqLevel: 40,
+      reqClass: "warrior",
+      reqBranch: null,
+      mpCost: 25,
+      cooldown: 4,
+      baseDamage: null,
+      baseHeal: null,
+      element: null,
+      effects: [
+        { type: "buff_attack", value: 0.3, duration: 3 },
+      ],
     },
   },
 };
 
-// 导出
-try { module.exports = DATA; } catch(e) {}
+try{module.exports=DATA;}catch(e){}

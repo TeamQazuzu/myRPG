@@ -276,6 +276,37 @@ class UIRenderer {
         }
       });
     });
+
+    // 绑定己方单位选择（治疗技能需要选己方目标）
+    container.querySelectorAll('.unit-card.player, .unit-card.ally').forEach(el => {
+      el.addEventListener('click', () => {
+        if (!combat.isPlayerTurn) return;
+        if (!combat.selectedSkill) return; // 没有选中技能时不响应
+        // 检查选中技能是否为治疗型
+        var skill = DATA && DATA.skills && DATA.skills[combat.selectedSkill] ? DATA.skills[combat.selectedSkill] : null;
+        if (!skill) return;
+        var isHeal = skill.element === 'heal' || (skill.baseHeal !== null && skill.baseHeal !== undefined);
+        if (!isHeal) return; // 非治疗技能不能选己方
+
+        // 获取点击的己方单位
+        var idx = parseInt(el.dataset.idx);
+        var targetUnit = null;
+        if (idx === 0) {
+          targetUnit = combat.getPlayerUnit();
+        } else {
+          var allies = combat.getAllyUnits();
+          if (idx - 1 < allies.length) targetUnit = allies[idx - 1];
+        }
+        if (!targetUnit || !targetUnit.alive || targetUnit.hp <= 0) return;
+
+        container.querySelectorAll('.unit-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+        el.classList.add('heal-target');
+        combat.setSelectedTarget(targetUnit);
+        this.disableButtons();
+        combat.playerAction('skill', targetUnit);
+      });
+    });
   }
 
   // ========== 渲染单位卡片 ==========
