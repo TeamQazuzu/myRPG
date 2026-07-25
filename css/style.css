@@ -469,6 +469,74 @@ html, body {
   font-weight: bold;
 }
 
+.result-rewards .exp-locked {
+  color: var(--error);
+  font-weight: bold;
+}
+
+.result-rewards .exp-lock-hint {
+  width: 100%;
+  margin-top: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--warning);
+  background: rgba(212, 160, 64, 0.1);
+  border: 1px solid rgba(212, 160, 64, 0.3);
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+/* 多波次Boss波次指示器 */
+.wave-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.wave-label {
+  color: var(--text-secondary);
+}
+
+.wave-dots {
+  color: var(--accent);
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+/* 等级上限指示器 */
+.enhance-badge {
+  color: #00ccff;
+  font-weight: bold;
+  font-size: 12px;
+  text-shadow: 0 0 4px rgba(0, 204, 255, 0.5);
+}
+
+.btn-enhance {
+  background: rgba(0, 150, 200, 0.2);
+  border-color: rgba(0, 150, 200, 0.5);
+  color: #00ccff;
+}
+
+.btn-enhance:hover {
+  background: rgba(0, 150, 200, 0.4);
+}
+
+.level-cap-indicator {
+  font-size: 11px;
+  color: var(--error);
+  font-weight: bold;
+  margin-left: 2px;
+}
+
+.level-cap-indicator.cap-normal {
+  color: var(--text-muted);
+  font-weight: normal;
+}
+
 /* ============================================
    底部管理栏
    ============================================ */
@@ -1396,6 +1464,92 @@ html, body {
   font-size: 12px;
   color: var(--text-secondary);
   padding: 2px 0;
+}
+
+/* 传送门样式 */
+.scene-portal {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.portal-btn {
+  padding: 12px 16px;
+  border: 2px solid;
+  border-radius: 6px;
+  font-size: 15px;
+  cursor: pointer;
+  text-align: center;
+  min-height: 44px;
+}
+
+.portal-unlocked {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: rgba(168, 85, 247, 0.6);
+  color: #c084fc;
+}
+
+.portal-unlocked:hover {
+  background: rgba(168, 85, 247, 0.3);
+}
+
+.portal-locked {
+  background: rgba(100, 100, 120, 0.1);
+  border-color: rgba(100, 100, 120, 0.3);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.portal-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  font-style: italic;
+}
+
+/* 离线结算样式 */
+.offline-gather-results {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.offline-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.offline-duration {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.offline-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  font-size: 14px;
+}
+
+.offline-summary .stat-success {
+  color: var(--success);
+  font-weight: bold;
+}
+
+.offline-summary .stat-gold {
+  color: var(--warning);
+  font-weight: bold;
+}
+
+.offline-summary .stat-rare {
+  color: #a855f7;
+  font-weight: bold;
 }
 
 /* ============================================

@@ -20,6 +20,12 @@ class CombatEngine {
     this.selectedTarget = null; // 玩家选中的目标
     this.cooldowns = {};      // 技能冷却 { skillId: remainingTurns }
     this.selectedSkill = null; // 当前选中的技能ID
+
+    // 稀有词条战斗状态追踪
+    this._divineImmuneUsed = false;  // 神佑：每场一次
+    this._divineCritUsed = false;    // 神罚：每场一次
+    this._extraTurnUsed = false;     // 神速：每场一次
+    this._dragonFireApplied = false; // 龙之息：战斗开始时触发一次
   }
 
   // ========== 启动战斗 ==========
@@ -44,6 +50,9 @@ class CombatEngine {
     this.selectedSkill = null;
 
     this.calculateTurnOrder();
+
+    // 龙之息：战斗开始对全体敌人造成火焰伤害
+    this._applyDragonFireOnBattleStart();
 
     const event = new CustomEvent('combat-start', { detail: { combat: this } });
     document.dispatchEvent(event);
@@ -492,11 +501,34 @@ class CombatEngine {
     var dmgResult = this.calculateDamage(attacker, target, dmgType);
     finalDamage = dmgResult.damage;
 
-    // ---- 2. 暴击判定 ----
+    // ---- 2. 暴击判定（神罚：每场一次必定暴击）----
     var critResult = this.rollCrit(attacker);
     isCrit = critResult.isCrit;
+    // 神罚：每场战斗一次，必定暴击
+    var ab = attacker.affixBonuses || {};
+    if (!isCrit && ab.divineCrit && !this._divineCritUsed && (attacker.side === 'player' || attacker.side === 'ally')) {
+      isCrit = true;
+      critResult.isCrit = true;
+      critResult.multiplier = (1.5 + (ab.critDmg || 0));
+      this._divineCritUsed = true;
+      var divineCritMsg = '神罚发动！必定暴击！';
+      this.combatLog.push(divineCritMsg);
+      this.dispatchUpdate(divineCritMsg);
+    }
     if (isCrit) {
       finalDamage = Math.floor(finalDamage * critResult.multiplier);
+    }
+
+    // ---- 2.5 龙之怒（5%概率3倍伤害）----
+    var dragonMult = this.tryDragonRage(attacker);
+    if (dragonMult > 1.0) {
+      finalDamage = Math.floor(finalDamage * dragonMult);
+    }
+
+    // ---- 2.6 天雷（5%概率1.5倍雷伤）----
+    var thunderMult = this.trySkyThunder(attacker);
+    if (thunderMult > 1.0) {
+      finalDamage = Math.floor(finalDamage * thunderMult);
     }
 
     // ---- 3. 条件增伤 ----
@@ -519,6 +551,19 @@ class CombatEngine {
 
     finalDamage = Math.max(1, finalDamage);
 
+    // ---- 5.5 龙之鳞：受到攻击时5%概率免疫（防守方）----
+    var defenderAb = target.affixBonuses || {};
+    if (defenderAb.dragonImmune && defenderAb.dragonImmune > 0) {
+      if (this.tryDragonImmune(target)) {
+        logMessage = target.name + ' 龙之鳞发动，免疫了 ' + attacker.name + ' 的攻击！';
+        this.combatLog.push(logMessage);
+        this.dispatchUpdate(logMessage);
+        if (this.checkBattleEnd()) return;
+        this.nextTurn();
+        return;
+      }
+    }
+
     // ---- 6. 扣血 ----
     target.hp = Math.max(0, target.hp - finalDamage);
 
@@ -538,6 +583,9 @@ class CombatEngine {
       this.dispatchUpdate(hitLogs[hi]);
     }
 
+    // ---- 8.5 龙之息（30%概率附加火焰伤害+灼烧）----
+    this.tryDragonFire(attacker, target);
+
     // ---- 9. 生命/法力窃取 ----
     var stealLogs = this.applyLifeManaSteal(attacker, finalDamage);
     for (var si = 0; si < stealLogs.length; si++) {
@@ -549,8 +597,33 @@ class CombatEngine {
       this.tryApplyStatusFromDamageType(target, dmgType, attacker);
     }
 
-    // ---- 11. 死亡判定 + 不可屈挠 + 击杀爆炸 ----
+    // ---- 10.5 冰河（5%概率全体冰冻）----
+    this.tryIceAge(attacker);
+
+    // ---- 10.6 连锁闪电 ----
+    this.tryChainLightning(attacker, target, finalDamage);
+
+    // ---- 10.7 冰霜新星（概率全体减速）----
+    this.tryFrostNova(attacker);
+
+    // ---- 11. 死亡判定 + 神佑 + 不可屈挠 + 击杀爆炸 ----
     if (target.hp <= 0) {
+      // 神佑：每场战斗一次，免疫致命伤害（仅玩家方）
+      if ((target.side === 'player' || target.side === 'ally') && ab.divineImmune && !this._divineImmuneUsed) {
+        target.hp = 1;
+        target.alive = true;
+        this._divineImmuneUsed = true;
+        logMessage += '（神佑发动！' + target.name + ' 免疫了致命伤害！）';
+        this.combatLog.push('神佑！' + target.name + ' 免疫了致命伤害，保留1点生命！');
+        this.dispatchUpdate('神佑！' + target.name + ' 免疫了致命伤害，保留1点生命！');
+        this.combatLog.push(logMessage);
+        this.dispatchUpdate(logMessage);
+        if (this.checkBattleEnd()) return;
+        this.nextTurn();
+        return;
+      }
+      // 龙之鳞：5%免疫伤害（防守方）
+      // （龙之鳞在受到攻击时判定，在扣血前更好，但为简化逻辑放在死亡判定前也可）
       // 不可屈挠（仅玩家方）
       if (target.side === 'player' || target.side === 'ally') {
         if (this.tryCheatDeath(target)) {
@@ -891,6 +964,28 @@ class CombatEngine {
         if (e === 'iceAge') { b.iceAge = Math.max(b.iceAge, v); continue; }
       }
     }
+    // ===== 收集宝石加成 =====
+    if (GemSystem && equipment) {
+      var slots = ['weapon', 'armor', 'accessory'];
+      for (var si = 0; si < slots.length; si++) {
+        var slotEquip = equipment[slots[si]];
+        if (slotEquip && slotEquip.sockets && slotEquip.sockets.length > 0) {
+          var gemBonus = GemSystem.getGemBonuses(slotEquip);
+          for (var gk in gemBonus) {
+            if (!gemBonus.hasOwnProperty(gk)) continue;
+            var gv = gemBonus[gk];
+            if (typeof gv === 'number') {
+              // 直接加到 affixBonuses
+              if (b[gk] !== undefined) {
+                b[gk] += gv;
+              } else {
+                b[gk] = gv;
+              }
+            }
+          }
+        }
+      }
+    }
     return b;
   }
 
@@ -1048,6 +1143,192 @@ class CombatEngine {
       this.combatLog.push(msg);
       this.dispatchUpdate(msg);
     }
+  }
+
+  // ========== 链式攻击 ==========
+  tryChainLightning(attacker, originalTarget, damage) {
+    var ab = attacker.affixBonuses || {};
+    if (ab.chainTarget <= 0) return;
+    if (Math.random() >= 0.30) return; // 30%触发概率
+    // 对另一个随机存活敌人造成50%伤害
+    var enemies = this.getAliveEnemies().filter(function(e) { return e.id !== originalTarget.id; });
+    if (enemies.length === 0) return;
+    var chainTarget = enemies[Math.floor(Math.random() * enemies.length)];
+    var chainDmg = Math.floor(damage * 0.5);
+    chainTarget.hp = Math.max(0, chainTarget.hp - chainDmg);
+    if (chainTarget.hp <= 0) { chainTarget.alive = false; }
+    var msg = '连锁闪电对 ' + chainTarget.name + ' 造成 ' + chainDmg + ' 点伤害';
+    this.combatLog.push(msg);
+    this.dispatchUpdate(msg);
+  }
+
+  // ========== 冰霜新星（全体冰冻） ==========
+  tryFrostNova(attacker) {
+    var ab = attacker.affixBonuses || {};
+    if (ab.freezeAllChance <= 0) return;
+    if (Math.random() >= ab.freezeAllChance) return;
+    var enemies = this.getAliveEnemies();
+    var frozenCount = 0;
+    for (var i = 0; i < enemies.length; i++) {
+      this.applyStatusEffect(enemies[i], 'slow', attacker, 2);
+      frozenCount++;
+    }
+    if (frozenCount > 0) {
+      var msg = '冰霜新星！所有 ' + frozenCount + ' 个敌人被减速！';
+      this.combatLog.push(msg);
+      this.dispatchUpdate(msg);
+    }
+  }
+
+  // ========== 净化（自动清除debuff） ==========
+  tryDebuffCleanse(unit) {
+    var ab = unit.affixBonuses || {};
+    if (ab.debuffCleanse <= 0) return;
+    var se = unit.statusEffects || {};
+    var cleansed = [];
+    if (se.bleed && se.bleed.duration > 0 && Math.random() < ab.debuffCleanse) {
+      se.bleed.duration = 0;
+      cleansed.push('流血');
+    }
+    if (se.burn && se.burn.duration > 0 && Math.random() < ab.debuffCleanse) {
+      se.burn.duration = 0;
+      se.burn.stacks = 0;
+      cleansed.push('灼烧');
+    }
+    if (se.slow && se.slow.duration > 0 && Math.random() < ab.debuffCleanse) {
+      se.slow.duration = 0;
+      cleansed.push('减速');
+    }
+    if (se.stun && se.stun.duration > 0 && Math.random() < ab.debuffCleanse) {
+      se.stun.duration = 0;
+      cleansed.push('僵直');
+    }
+    if (cleansed.length > 0) {
+      var msg = unit.name + ' 的净化清除了 ' + cleansed.join('、');
+      this.combatLog.push(msg);
+      this.dispatchUpdate(msg);
+    }
+  }
+
+  // ========== 守护之约（替随从挡伤） ==========
+  tryProtect(companion, damage, attacker) {
+    if (!this.playerUnit || !this.playerUnit.alive || this.playerUnit.hp <= 0) return false;
+    var ab = this.playerUnit.affixBonuses || {};
+    if (ab.protectChance <= 0) return false;
+    if (Math.random() >= ab.protectChance) return false;
+    // 玩家替随从承受伤害
+    var mitigatedDmg = Math.floor(damage * 0.5);
+    this.playerUnit.hp = Math.max(1, this.playerUnit.hp - mitigatedDmg);
+    var msg = this.playerUnit.name + ' 挡在 ' + companion.name + ' 面前，替其承受了 ' + mitigatedDmg + ' 点伤害！';
+    this.combatLog.push(msg);
+    this.dispatchUpdate(msg);
+    return true;
+  }
+
+  // ========== 龙之怒（5%概率3倍伤害） ==========
+  tryDragonRage(attacker) {
+    var ab = attacker.affixBonuses || {};
+    if (!ab.dragonDmg) return 1.0;
+    var dragonInfo = ab.dragonDmg;
+    if (typeof dragonInfo === 'object' && dragonInfo.chance && Math.random() < dragonInfo.chance) {
+      var msg = '龙之怒发动！伤害 x' + dragonInfo.mult + '！';
+      this.combatLog.push(msg);
+      this.dispatchUpdate(msg);
+      return dragonInfo.mult;
+    }
+    return 1.0;
+  }
+
+  // ========== 龙之息（命中附加80火焰伤害） ==========
+  tryDragonFire(attacker, target) {
+    var ab = attacker.affixBonuses || {};
+    if (!ab.dragonFire || ab.dragonFire <= 0) return;
+    if (Math.random() >= 0.30) return; // 30%触发
+    var fireDmg = ab.dragonFire;
+    target.hp = Math.max(0, target.hp - fireDmg);
+    this.applyStatusEffect(target, 'burn', attacker);
+    var msg = '龙之息！对 ' + target.name + ' 附加 ' + fireDmg + ' 点火焰伤害并灼烧';
+    this.combatLog.push(msg);
+    this.dispatchUpdate(msg);
+  }
+
+  // ========== 天雷（5%概率1.5倍雷伤） ==========
+  trySkyThunder(attacker) {
+    var ab = attacker.affixBonuses || {};
+    if (!ab.skyThunder) return 1.0;
+    var thunderInfo = ab.skyThunder;
+    if (typeof thunderInfo === 'object' && thunderInfo.chance && Math.random() < thunderInfo.chance) {
+      var msg = '天雷降下！雷电伤害 x' + thunderInfo.dmg + '！';
+      this.combatLog.push(msg);
+      this.dispatchUpdate(msg);
+      return thunderInfo.dmg;
+    }
+    return 1.0;
+  }
+
+  // ========== 冰河（5%概率全体冰冻） ==========
+  tryIceAge(attacker) {
+    var ab = attacker.affixBonuses || {};
+    if (!ab.iceAge) return false;
+    var iceInfo = ab.iceAge;
+    if (typeof iceInfo === 'object' && iceInfo.chance && Math.random() < iceInfo.chance) {
+      var enemies = this.getAliveEnemies();
+      for (var i = 0; i < enemies.length; i++) {
+        enemies[i].speed = Math.max(1, Math.floor(enemies[i].speed * 0.5));
+        this.applyStatusEffect(enemies[i], 'slow', attacker, 2);
+      }
+      var msg = '冰河时代！所有敌人被冰冻减速！';
+      this.combatLog.push(msg);
+      this.dispatchUpdate(msg);
+      return true;
+    }
+    return false;
+  }
+
+  // ========== 龙之鳞（5%免疫伤害） ==========
+  tryDragonImmune(unit) {
+    var ab = unit.affixBonuses || {};
+    if (!ab.dragonImmune || ab.dragonImmune <= 0) return false;
+    if (Math.random() >= ab.dragonImmune) return false;
+    var msg = unit.name + ' 龙之鳞发动，免疫了攻击！';
+    this.combatLog.push(msg);
+    this.dispatchUpdate(msg);
+    return true;
+  }
+
+  // ========== 龙之息：战斗开始时对全体敌人造成火焰伤害 ==========
+  _applyDragonFireOnBattleStart() {
+    if (this._dragonFireApplied) return;
+    var ab = this.playerUnit && this.playerUnit.affixBonuses ? this.playerUnit.affixBonuses : {};
+    if (!ab.dragonFire || ab.dragonFire <= 0) return;
+    this._dragonFireApplied = true;
+    var fireDmg = ab.dragonFire;
+    var enemies = this.enemyUnits;
+    var msg = '龙之息发动！对所有敌人造成 ' + fireDmg + ' 点火焰伤害！';
+    this.combatLog.push(msg);
+    this.dispatchUpdate(msg);
+    for (var i = 0; i < enemies.length; i++) {
+      enemies[i].hp = Math.max(0, enemies[i].hp - fireDmg);
+      this.applyStatusEffect(enemies[i], 'burn', this.playerUnit);
+      if (enemies[i].hp <= 0) enemies[i].alive = false;
+    }
+    // 检查是否有人被龙息直接打死
+    if (this.checkBattleEnd()) return;
+  }
+
+  // ========== 神速：每场战斗一次，额外行动一回合 ==========
+  tryExtraTurn(unit) {
+    var ab = unit.affixBonuses || {};
+    if (!ab.extraTurn) return false;
+    if (this._extraTurnUsed) return false;
+    if (unit.side !== 'player' && unit.side !== 'ally') return false;
+    // 30%概率触发
+    if (Math.random() >= 0.30) return false;
+    this._extraTurnUsed = true;
+    var msg = unit.name + ' 神速发动！获得额外行动回合！';
+    this.combatLog.push(msg);
+    this.dispatchUpdate(msg);
+    return true;
   }
 
   // 尝试施加伤害类型对应的异常状态
@@ -1269,6 +1550,18 @@ class CombatEngine {
         this.combatLog.push(equipSummaryMsg);
       }
 
+      // 宝石掉落判定
+      if (GemSystem) {
+        for (var gi = 0; gi < this.enemyUnits.length; gi++) {
+          var eUnit = this.enemyUnits[gi];
+          var gemDrop = GemSystem.generateGemDrop(eUnit.level || 1);
+          if (gemDrop) {
+            StateUtils.addToInventory(state, gemDrop);
+            drops.push({ name: gemDrop.name, type: 'gem', rarity: gemDrop.rarity });
+          }
+        }
+      }
+
       return { exp: totalExp, gold: totalGold, drops: drops, equipmentDrops: equipmentDrops, expResult: expResult };
     }
     return { exp: totalExp, gold: totalGold, drops: drops, equipmentDrops: equipmentDrops };
@@ -1466,6 +1759,254 @@ class BossCombatEngine extends CombatEngine {
     super.nextTurn();
   }
 
+  // ========== 重写敌人回合：Boss特殊技能AI ==========
+  enemyTurn(unit) {
+    if (!this.battleActive || !unit.alive) {
+      this.nextTurn();
+      return;
+    }
+
+    var style = this.gkData.combat && this.gkData.combat.style ? this.gkData.combat.style : 'meleeBoss';
+    var targets = [this.playerUnit].concat(this.allyUnits).filter(function(u) { return u.alive && u.hp > 0; });
+    if (targets.length === 0) {
+      this.nextTurn();
+      return;
+    }
+
+    // 选择目标
+    var target = this.playerUnit.alive && this.playerUnit.hp > 0 ? this.playerUnit : targets[0];
+
+    // ===== 村长AI（tank）：嘲讽/治疗/重击轮转 =====
+    if (style === 'tank') {
+      this._tankBossAI(unit, targets, target);
+      return;
+    }
+
+    // ===== 守夜人AI（glassCannon）：暗袭/连斩/弱点打击 =====
+    if (style === 'glassCannon') {
+      this._glassCannonBossAI(unit, targets, target);
+      return;
+    }
+
+    // ===== 机械守卫AI（meleeBoss）：蓄力重击/护盾/群体攻击 =====
+    if (style === 'meleeBoss') {
+      this._meleeBossAI(unit, targets, target);
+      return;
+    }
+
+    // 默认：普通攻击
+    this.executeAction(unit, 'attack', target);
+  }
+
+  // ===== 村长技能AI =====
+  _tankBossAI(boss, targets, primaryTarget) {
+    var self = this;
+    var bossHpPct = boss.maxHp > 0 ? boss.hp / boss.maxHp : 1;
+
+    // 技能1：嘲讽（CD 5回合）— 下2回合所有敌人强制攻击Boss
+    if (this.canUseBossSkill('taunt') && Math.random() < 0.3) {
+      this.setBossSkillCooldown('taunt', 5);
+      var tauntMsg = boss.name + ' 发出挑衅的战吼！你的攻击会被吸引。';
+      this.combatLog.push(tauntMsg);
+      this.dispatchUpdate(tauntMsg);
+      // 嘲讽标记：玩家和随从下2回合攻击力-20%（模拟被嘲讽后慌乱）
+      for (var ti = 0; ti < targets.length; ti++) {
+        targets[ti]._taunted = 2;
+        if (targets[ti].attack) {
+          targets[ti].attack = Math.max(1, Math.floor(targets[ti].attack * 0.8));
+        }
+      }
+      // Boss防御+50%持续2回合
+      boss._tauntDefBuff = 2;
+      boss.defense = (boss.defense || 5) + Math.floor(boss.defense * 0.5);
+      this.nextTurn();
+      return;
+    }
+
+    // 技能2：强力治疗（CD 6回合）— 恢复15%最大HP
+    if (this.canUseBossSkill('heal') && bossHpPct < 0.7 && Math.random() < 0.4) {
+      this.setBossSkillCooldown('heal', 6);
+      var healAmt = Math.max(1, Math.floor(boss.maxHp * 0.15));
+      var before = boss.hp;
+      boss.hp = Math.min(boss.maxHp, boss.hp + healAmt);
+      var actual = boss.hp - before;
+      var healMsg = boss.name + ' 使用了治疗术，恢复 ' + actual + ' 点HP！';
+      this.combatLog.push(healMsg);
+      this.dispatchUpdate(healMsg);
+      this.nextTurn();
+      return;
+    }
+
+    // 技能3：铁壁（CD 8回合）— 本回合防御翻倍
+    if (this.canUseBossSkill('ironWall') && bossHpPct < 0.4) {
+      this.setBossSkillCooldown('ironWall', 8);
+      this.defenseBoosts[boss.id] = (this.defenseBoosts[boss.id] || 0) + Math.floor(boss.defense * 0.5);
+      var wallMsg = boss.name + ' 举起重盾，进入铁壁防御姿态！';
+      this.combatLog.push(wallMsg);
+      this.dispatchUpdate(wallMsg);
+      this.nextTurn();
+      return;
+    }
+
+    // 阶段2特殊：重击（50%概率，1.5倍伤害）
+    if (this.phase >= 2 && Math.random() < 0.5) {
+      var origAtk = boss.attack;
+      boss.attack = Math.floor(boss.attack * 1.5);
+      var heavyMsg = boss.name + ' 蓄力后挥出重击！';
+      this.combatLog.push(heavyMsg);
+      this.dispatchUpdate(heavyMsg);
+      this.executeAction(boss, 'attack', primaryTarget);
+      boss.attack = origAtk;
+      return;
+    }
+
+    // 默认攻击
+    this.executeAction(boss, 'attack', primaryTarget);
+  }
+
+  // ===== 守夜人技能AI =====
+  _glassCannonBossAI(boss, targets, primaryTarget) {
+    // 技能1：暗袭（CD 4回合）— 对HP最低的目标造成1.8倍伤害
+    if (this.canUseBossSkill('ambush') && Math.random() < 0.35) {
+      this.setBossSkillCooldown('ambush', 4);
+      var weakest = targets.reduce(function(min, u) { return u.hp < min.hp ? u : min; }, targets[0]);
+      var origAtk = boss.attack;
+      boss.attack = Math.floor(boss.attack * 1.8);
+      var ambushMsg = boss.name + ' 从暗影中发动突袭，锁定 ' + weakest.name + '！';
+      this.combatLog.push(ambushMsg);
+      this.dispatchUpdate(ambushMsg);
+      this.executeAction(boss, 'attack', weakest);
+      boss.attack = origAtk;
+      return;
+    }
+
+    // 技能2：连斩（CD 5回合）— 连续攻击2次
+    if (this.canUseBossSkill('doubleStrike') && Math.random() < 0.25) {
+      this.setBossSkillCooldown('doubleStrike', 5);
+      var dsMsg = boss.name + ' 拔刀连斩！';
+      this.combatLog.push(dsMsg);
+      this.dispatchUpdate(dsMsg);
+      // 第一次攻击
+      this.executeAction(boss, 'attack', primaryTarget);
+      // 如果目标还活着且战斗未结束，第二次攻击
+      if (this.battleActive && primaryTarget.alive && primaryTarget.hp > 0) {
+        setTimeout(function() {
+          if (self.battleActive && primaryTarget.alive && primaryTarget.hp > 0) {
+            self.executeAction(boss, 'attack', primaryTarget);
+          }
+        }, 300);
+      }
+      return;
+    }
+
+    // 技能3：弱点打击（CD 6回合）— 降低目标防御30%
+    if (this.canUseBossSkill('weaknessStrike') && Math.random() < 0.3) {
+      this.setBossSkillCooldown('weaknessStrike', 6);
+      var weakTarget = targets.reduce(function(min, u) { return u.hp < min.hp ? u : min; }, targets[0]);
+      if (weakTarget.defense) {
+        weakTarget.defense = Math.max(1, Math.floor(weakTarget.defense * 0.7));
+      }
+      var weakMsg = boss.name + ' 击中 ' + weakTarget.name + ' 的弱点，防御降低！';
+      this.combatLog.push(weakMsg);
+      this.dispatchUpdate(weakMsg);
+      this.executeAction(boss, 'attack', weakTarget);
+      return;
+    }
+
+    // 阶段2+特殊：暴风斩（CD 7回合）— AOE对所有目标造成0.6倍伤害
+    if (this.phase >= 2 && this.canUseBossSkill('whirlwind') && Math.random() < 0.3) {
+      this.setBossSkillCooldown('whirlwind', 7);
+      var aoeDmg = Math.max(1, Math.floor((boss.attack || 10) * 0.6));
+      var wwMsg = boss.name + ' 释放暴风斩！';
+      this.combatLog.push(wwMsg);
+      this.dispatchUpdate(wwMsg);
+      for (var wi = 0; wi < targets.length; wi++) {
+        if (targets[wi].alive && targets[wi].hp > 0) {
+          targets[wi].hp = Math.max(0, targets[wi].hp - aoeDmg);
+          var hitMsg = targets[wi].name + ' 受到 ' + aoeDmg + ' 点AOE伤害';
+          this.combatLog.push(hitMsg);
+          this.dispatchUpdate(hitMsg);
+          if (targets[wi].hp <= 0) {
+            targets[wi].alive = false;
+            var killMsg = targets[wi].name + ' 倒下了';
+            this.combatLog.push(killMsg);
+            this.dispatchUpdate(killMsg);
+          }
+        }
+      }
+      if (this.checkBattleEnd()) return;
+      this.nextTurn();
+      return;
+    }
+
+    // 默认攻击（守夜人优先攻击HP最低的）
+    var weakT = targets.reduce(function(min, u) { return u.hp < min.hp ? u : min; }, targets[0]);
+    this.executeAction(boss, 'attack', weakT);
+  }
+
+  // ===== 机械守卫技能AI =====
+  _meleeBossAI(boss, targets, primaryTarget) {
+    // 递增回合计数
+    boss.bossSkillTurnCount = (boss.bossSkillTurnCount || 0) + 1;
+
+    // 技能1：蓄力重击（每3回合）— 2倍伤害
+    if (boss.bossSkillTurnCount % 3 === 0) {
+      var origAtk = boss.attack;
+      boss.attack = Math.floor(boss.attack * 2);
+      var chargeMsg = boss.name + ' 的机械臂蓄力完毕，发动重击！';
+      this.combatLog.push(chargeMsg);
+      this.dispatchUpdate(chargeMsg);
+      this.executeAction(boss, 'attack', primaryTarget);
+      boss.attack = origAtk;
+      return;
+    }
+
+    // 技能2：护盾修复（HP<50%且CD就绪时）
+    if (this.canUseBossSkill('shieldRepair') && boss.hp < boss.maxHp * 0.5) {
+      this.setBossSkillCooldown('shieldRepair', 8);
+      var repairAmt = Math.max(1, Math.floor(boss.maxHp * 0.1));
+      var before = boss.hp;
+      boss.hp = Math.min(boss.maxHp, boss.hp + repairAmt);
+      var actual = boss.hp - before;
+      var repairMsg = boss.name + ' 启动自我修复程序，恢复 ' + actual + ' 点HP！';
+      this.combatLog.push(repairMsg);
+      this.dispatchUpdate(repairMsg);
+      this.nextTurn();
+      return;
+    }
+
+    // 技能3：震地（CD 6回合）— 对所有目标造成0.8倍伤害+减速1回合
+    if (this.canUseBossSkill('groundSlam') && Math.random() < 0.25) {
+      this.setBossSkillCooldown('groundSlam', 6);
+      var slamDmg = Math.max(1, Math.floor((boss.attack || 10) * 0.8));
+      var slamMsg = boss.name + ' 重重踏地，大地震颤！';
+      this.combatLog.push(slamMsg);
+      this.dispatchUpdate(slamMsg);
+      for (var si = 0; si < targets.length; si++) {
+        if (targets[si].alive && targets[si].hp > 0) {
+          targets[si].hp = Math.max(0, targets[si].hp - slamDmg);
+          // 施加减速
+          this.applyStatusEffect(targets[si], 'slow', boss, 1);
+          var hitMsg = targets[si].name + ' 受到 ' + slamDmg + ' 点伤害并被减速';
+          this.combatLog.push(hitMsg);
+          this.dispatchUpdate(hitMsg);
+          if (targets[si].hp <= 0) {
+            targets[si].alive = false;
+            var killMsg = targets[si].name + ' 倒下了';
+            this.combatLog.push(killMsg);
+            this.dispatchUpdate(killMsg);
+          }
+        }
+      }
+      if (this.checkBattleEnd()) return;
+      this.nextTurn();
+      return;
+    }
+
+    // 默认攻击
+    this.executeAction(boss, 'attack', primaryTarget);
+  }
+
   // 设置击败回调函数
   setDefeatCallback(callback) {
     this.defeatCallback = callback;
@@ -1547,6 +2088,149 @@ class BossCombatEngine extends CombatEngine {
       var rewardMsg = '获得守门员奖励：' + rewardName;
       this.combatLog.push(rewardMsg);
       console.log('[Boss战斗]', rewardMsg);
+    }
+
+    return rewards;
+  }
+}
+
+// ============================================
+// 多波次Boss战斗引擎
+// ============================================
+// 继承 BossCombatEngine，支持2-4波敌人独立回合
+// 每波有自己的敌人列表，击败当前波后进入下一波
+// 玩家HP/MP在波次间不恢复，但每波之间有短暂喘息
+// ============================================
+class MultiWaveBossCombatEngine extends BossCombatEngine {
+  constructor(bossId, waveConfigs) {
+    super(bossId);
+    this.waveConfigs = waveConfigs || []; // [{enemies: [...], intro: '...', perWaveRounds: 30}]
+    this.currentWave = 0;
+    this.totalWaves = waveConfigs ? waveConfigs.length : 1;
+    this.isMultiWave = this.totalWaves > 1;
+    this.waveRewards = []; // 每波的奖励累积
+  }
+
+  // 重写 startCombat：启动第一波
+  startCombat(player, allies, enemies) {
+    // 如果是第一波，正常启动；否则忽略传入的enemies，使用波次配置
+    if (this.currentWave === 0) {
+      // 将波次配置存起来
+      this._playerRef = player;
+      this._alliesRef = allies;
+
+      // 获取第一波敌人
+      var waveEnemies = this.getWaveEnemies(0);
+      super.startCombat(player, allies, waveEnemies);
+      this.currentWave = 1;
+
+      // 显示波次信息
+      if (this.isMultiWave) {
+        var waveMsg = '=== 第 1 波 / 共 ' + this.totalWaves + ' 波 ===';
+        this.combatLog.push(waveMsg);
+        this.dispatchUpdate(waveMsg);
+      }
+    }
+  }
+
+  // 获取指定波次的敌人数据
+  getWaveEnemies(waveIndex) {
+    var config = this.waveConfigs[waveIndex];
+    if (!config || !config.enemies) {
+      console.error('[多波Boss] 波次配置缺失:', waveIndex);
+      return [];
+    }
+    return config.enemies;
+  }
+
+  // 重写 endCombat：拦截胜利，检查是否还有下一波
+  endCombat(result) {
+    if (result === 'player_victory' && this.isMultiWave && this.currentWave < this.totalWaves) {
+      // 还有下一波：不结束战斗，启动下一波
+      console.log('[多波Boss] 第 ' + this.currentWave + ' 波击败，准备第 ' + (this.currentWave + 1) + ' 波');
+      this.startNextWave();
+      return;
+    }
+
+    // 最后一波胜利或失败/超时：正常结束
+    if (result === 'player_victory' && this.isMultiWave) {
+      // 合并所有波次的奖励
+      this.combatLog.push('=== 全部 ' + this.totalWaves + ' 波击败！ ===');
+    }
+
+    super.endCombat(result);
+  }
+
+  // 启动下一波
+  startNextWave() {
+    var self = this;
+    this.currentWave++;
+
+    // 波次间喘息：显示提示
+    var waveIntro = this.waveConfigs[this.currentWave - 1] && this.waveConfigs[this.currentWave - 1].intro;
+    if (waveIntro) {
+      this.combatLog.push(waveIntro);
+      this.dispatchUpdate(waveIntro);
+    }
+
+    var waveMsg = '=== 第 ' + this.currentWave + ' 波 / 共 ' + this.totalWaves + ' 波 ===';
+    this.combatLog.push(waveMsg);
+    this.dispatchUpdate(waveMsg);
+
+    // 延迟启动下一波（给玩家看到波次提示）
+    setTimeout(function() {
+      // 获取下一波敌人
+      var waveEnemies = self.getWaveEnemies(self.currentWave - 1);
+      if (waveEnemies.length === 0) {
+        console.error('[多波Boss] 下一波没有敌人，直接胜利');
+        self.endCombat('player_victory');
+        return;
+      }
+
+      // 重置战斗状态但保留HP/MP
+      self.enemyUnits = waveEnemies.map(function(e) { return self.normalizeUnit(e, 'enemy'); });
+      self.allUnits = [self.playerUnit].concat(self.allyUnits).concat(self.enemyUnits);
+      self.round = 1;
+      self.currentTurnIndex = 0;
+      self.defenseBoosts = {};
+      self.selectedTarget = null;
+      // 注意：不重置cooldowns，技能冷却在波次间继续
+
+      // 每波独立回合数限制
+      var waveConfig = self.waveConfigs[self.currentWave - 1];
+      if (waveConfig && waveConfig.perWaveRounds) {
+        self.maxRounds = waveConfig.perWaveRounds;
+      }
+
+      // 重新计算行动顺序
+      self.calculateTurnOrder();
+
+      // Boss阶段重置（如果每波有不同Boss）
+      var bossUnit = self.enemyUnits && self.enemyUnits.length > 0 ? self.enemyUnits[0] : null;
+      if (bossUnit && bossUnit.type === 'boss') {
+        self.phase = 1;
+        self.bossSkillCooldowns = {};
+      }
+
+      // 派发更新事件让UI刷新
+      var refreshEvent = new CustomEvent('combat-start', { detail: { combat: self } });
+      document.dispatchEvent(refreshEvent);
+
+      self.battleActive = true;
+      self.processTurn();
+    }, 1500);
+  }
+
+  // 重写 calculateRewards：合并所有波次奖励
+  calculateRewards() {
+    // 父类计算最后一波的奖励
+    var rewards = super.calculateRewards();
+
+    // 多波次额外经验加成
+    if (this.isMultiWave) {
+      var waveBonus = Math.floor((rewards.exp || 0) * (this.totalWaves - 1) * 0.5);
+      rewards.exp = (rewards.exp || 0) + waveBonus;
+      this.combatLog.push('多波次挑战加成经验 +' + waveBonus);
     }
 
     return rewards;

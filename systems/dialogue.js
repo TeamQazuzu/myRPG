@@ -387,6 +387,220 @@ var DialogueSystem = {
         },
       },
     },
+
+    // ----- 流浪商人阿莫斯（灰烬山脉） -----
+    'ash_merchant_amos': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '阿莫斯',
+          text: '嘿，新面孔！敢走到这地方来，胆子不小。我在这条路上走了二十年，什么样的怪都见过——包括那种会说话的石像鬼。',
+          choices: [
+            { text: '你在这里做什么？', next: 'purpose', action: null },
+            { text: '买点东西。', next: 'trade', action: 'shop:ash_mountain_shop' },
+            { text: '你知道守夜人吗？', next: 'nightwatcher', action: null },
+          ],
+        },
+        'purpose': {
+          id: 'purpose',
+          speaker: '阿莫斯',
+          text: '做生意呗。组织虽然不管商人，但也不太欢迎外来人。我算是为数不多能在灰烬山脉自由来去的。......别问我是怎么做到的。',
+          choices: [
+            { text: '买点东西。', next: 'trade', action: 'shop:ash_mountain_shop' },
+            { text: '告辞。', next: null, action: null },
+          ],
+        },
+        'nightwatcher': {
+          id: 'nightwatcher',
+          speaker: '阿莫斯',
+          text: '......你问那个名字干什么？守夜人不是你能招惹的人。他在灰烬山脉最深处，专门盯着那些......不安分的人。我劝你，别走太远。',
+          choices: [
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+        'trade': {
+          id: 'trade',
+          speaker: '阿莫斯',
+          text: '看看吧。我这儿的东西都是外面弄不到的好货。价格公道，童叟无欺......大概。',
+          choices: [],
+        },
+      },
+    },
+
+    // ----- 掘墓人幽魂（灰烬山脉·路边坟） -----
+    'ash_grave_digger': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '掘墓人幽魂',
+          text: '......你能看见我？......很久没有人能看见我了。',
+          choices: [
+            { text: '你是谁？', next: 'who', action: null },
+            { text: '这些坟里埋的是什么人？', next: 'graves', action: null },
+            { text: '离开。', next: null, action: null },
+          ],
+        },
+        'who': {
+          id: 'who',
+          speaker: '掘墓人幽魂',
+          text: '我叫......记不清了。我只记得自己负责在这里挖坑、埋人。一批又一批。他们是被组织送来"处理"的。有些人还活着就被......唉。我做了很久，直到我自己也变成了这样。',
+          choices: [
+            { text: '......', next: null, action: null },
+          ],
+        },
+        'graves': {
+          id: 'graves',
+          speaker: '掘墓人幽魂',
+          text: '都是些知道了不该知道的事情的人。组织的人说他们是"垃圾"。......但有些孩子也被送来了。你如果继续往深处走，说不定会在某个坑里看到你认识的人。',
+          choices: [
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+      },
+    },
+
+    // =============================================
+    // ===== 灰烬矿场 NPC =====
+    // =============================================
+
+    // ----- 机械师老铁 -----
+    'mine_mechanic_tie': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '老铁',
+          text: '......（抬起头，护目镜后面的眼睛打量着你）又来一个。你是来挖矿的，还是来送死的？',
+          choices: [
+            { text: '我来这里找些东西。', next: 'purpose', action: null },
+            { text: '这些机械零件是什么？', next: 'parts', action: null },
+            { text: '你在这里多久了？', next: 'howlong', action: null },
+            { text: '告辞。', next: null, action: null },
+          ],
+        },
+        'purpose': {
+          id: 'purpose',
+          speaker: '老铁',
+          text: '找东西？呵呵。每个来这里的人都这么说。最后他们要么成了矿工，要么成了归童坊里的......算了，不说了。你如果真想找什么，先别急着往深处走。那些机械守卫不是好惹的。',
+          choices: [
+            { text: '归童坊是什么地方？', next: 'childwork', action: null },
+            { text: '机械守卫有弱点吗？', next: 'weakness', action: null },
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+        'parts': {
+          id: 'parts',
+          speaker: '老铁',
+          text: '（拿起一个齿轮端详）这些都是从废弃的傀儡身上拆下来的。组织用傀儡干最危险的活——钻探、爆破、搬运。偶尔有傀儡报废了，我就捡回来拆零件。这东西比铁值钱多了。',
+          choices: [
+            { text: '你能用这些做什么？', next: 'craft', action: null },
+            { text: '谢谢，告辞。', next: null, action: null },
+          ],
+        },
+        'craft': {
+          id: 'craft',
+          speaker: '老铁',
+          text: '修补工具，偶尔也给矿工们做点小玩意儿。以前我在上面的时候......在灰烬镇，我是正式的机械师。后来得罪了人，就被扔到这里了。不过也无所谓，这里的零件比上面多。',
+          choices: [
+            { text: '灰烬镇是什么样的地方？', next: 'ashtown', action: null },
+            { text: '（点头）', next: null, action: null },
+          ],
+        },
+        'howlong': {
+          id: 'howlong',
+          speaker: '老铁',
+          text: '记不清了。大概......七八年？这里的灯光永远不变，时间没有意义。我只知道每隔一段时间，就会有新的人被送下来。有些人能适应，有些人......不行。',
+          choices: [
+            { text: '有没有人逃出去过？', next: 'escape', action: null },
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+        'childwork': {
+          id: 'childwork',
+          speaker: '老铁',
+          text: '（沉默了很久）......你不该问这个。那是组织最......不，我不想说。你去了自己看。但看完了别后悔。',
+          choices: [
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+        'weakness': {
+          id: 'weakness',
+          speaker: '老铁',
+          text: '弱点？它们是机器，机器没有弱点。但是......机械之守的核心和别的傀儡不一样。我拆过一些报废的傀儡，它们的能源核心都是矿石做的。但机械之守的核心......那是别的东西。你往殿堂走的时候注意看它的胸口。',
+          choices: [
+            { text: '胸口的？', next: 'heart', action: null },
+          ],
+        },
+        'heart': {
+          id: 'heart',
+          speaker: '老铁',
+          text: '我说多了。......总之，如果你真的要挑战它，带够药水。那种级别的机械，不是靠蛮力能打赢的。',
+          choices: [
+            { text: '（点头）', next: null, action: null },
+          ],
+        },
+        'ashtown': {
+          id: 'ashtown',
+          speaker: '老铁',
+          text: '灰烬镇啊......是个做初步加工的地方。矿石从矿场运上去，在那里分拣、冶炼。镇子不大，但比这里体面。至少能看见天。你在上面应该路过了才对。',
+          choices: [
+            { text: '（点头）', next: null, action: null },
+          ],
+        },
+        'escape': {
+          id: 'escape',
+          speaker: '老铁',
+          text: '（苦笑）你问的是那个问题啊。......有人试过。沿着矿道往外走，走到铁门那里。铁门后面就是上面。但铁门只有组织的钥匙才能开。除非你能打败守夜人——但我听说守夜人换了好几个了，每个都比上一个强。',
+          choices: [
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+      },
+    },
+
+    // ----- 游荡矿工 -----
+    'mine_wanderer': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '游荡矿工',
+          text: '......（空洞的眼神看着你，嘴唇微微动了一下）你是新来的？',
+          choices: [
+            { text: '是。这里是什么地方？', next: 'here', action: null },
+            { text: '你还好吗？', next: 'ok', action: null },
+            { text: '离开。', next: null, action: null },
+          ],
+        },
+        'here': {
+          id: 'here',
+          speaker: '游荡矿工',
+          text: '这里是矿场。我们在这里挖矿。挖......挖矿。每天都是挖矿。矿石运上去，我们继续挖。没有尽头。......你知道我以前是做什么的吗？',
+          choices: [
+            { text: '做什么的？', next: 'past', action: null },
+            { text: '告辞。', next: null, action: null },
+          ],
+        },
+        'ok': {
+          id: 'ok',
+          speaker: '游荡矿工',
+          text: '还好？......什么是好？能呼吸就是好。能吃饭就是好。不用想太多就是好。想太多的人......都去归童坊那边了。......不，我不该说。你去问老铁吧。他知道的比我多。',
+          choices: [
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+        'past': {
+          id: 'past',
+          speaker: '游荡矿工',
+          text: '我以前是个......教书的。在灰烟村南边那个小镇上。后来组织说需要劳动力，就把我们送下来了。说什么"为世界做贡献"。......在这里挖了三年矿，我连世界是什么样都忘了。',
+          choices: [
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+      },
+    },
   },
 
   // ========== 当前对话状态 ==========

@@ -29,6 +29,84 @@ const EquipmentSystem = {
     return { ok: true, msg: `卸下了 ${item.name}`, item };
   },
 
+  // ---------- 强化（+1/+2...不改变品质，提升基础属性）----------
+  // 强化规则：
+  //   每级 +5% 基础属性（攻击/防御）
+  //   强化等级上限 = 品质对应上限（白+3, 绿+5, 蓝+8, 紫+10, 橙+12, 红+15, 金+10）
+  //   强化不改变品质、词条、附魔
+  //   100% 成功率，消耗金币
+  // 强化等级显示在装备名后：武器名 +N
+  enhance(item, state) {
+    if (!item) return { ok: false, msg: '无效装备' };
+    // 传家宝不可强化
+    if (item.rarity === 'gold') return { ok: false, msg: '传家宝无法强化' };
+
+    var currentEnhance = item.enhanceLevel || 0;
+    // 获取品质对应强化上限
+    var maxEnhance = this.getMaxEnhance(item.rarity);
+    if (currentEnhance >= maxEnhance) {
+      return { ok: false, msg: '已达品质强化上限（+' + maxEnhance + '）' };
+    }
+
+    // 计算强化费用：基础费用 × (1 + 当前等级 × 0.5)
+    var baseCost = Math.floor(item.level * 5 + 10);
+    var cost = Math.floor(baseCost * (1 + currentEnhance * 0.5));
+
+    // 检查金币
+    if (state && !StateUtils.spendGold(state, cost)) {
+      return { ok: false, msg: '金币不足（需要 ' + cost + ' 金）' };
+    }
+
+    // 执行强化
+    item.enhanceLevel = currentEnhance + 1;
+    var bonus = 1 + 0.05 * item.enhanceLevel; // 累计+5%/级
+
+    // 应用到基础属性
+    if (item.baseStats) {
+      item.baseStats.physAtk = Math.floor((item.baseStats.physAtk || 0) * 1.05);
+      item.baseStats.magAtk = Math.floor((item.baseStats.magAtk || 0) * 1.05);
+      item.baseStats.physDef = Math.floor((item.baseStats.physDef || 0) * 1.05);
+      item.baseStats.magDef = Math.floor((item.baseStats.magDef || 0) * 1.05);
+    }
+
+    // 更新装备描述
+    this._updateItemDesc(item);
+
+    return { ok: true, msg: item.name + ' 强化至 +' + item.enhanceLevel + '！', cost: cost };
+  },
+
+  // 获取品质对应强化上限
+  getMaxEnhance(rarity) {
+    var limits = {
+      white: 3, green: 5, blue: 8, purple: 10,
+      orange: 12, red: 15, gold: 10,
+    };
+    return limits[rarity] || 3;
+  },
+
+  // 获取强化费用（预览用）
+  getEnhanceCost(item) {
+    if (!item) return 0;
+    var currentEnhance = item.enhanceLevel || 0;
+    var baseCost = Math.floor(item.level * 5 + 10);
+    return Math.floor(baseCost * (1 + currentEnhance * 0.5));
+  },
+
+  // 更新装备描述（含强化等级）
+  _updateItemDesc(item) {
+    var enhanceStr = item.enhanceLevel ? ' +' + item.enhanceLevel : '';
+    var qualityStr = Utils && Utils.getQualityName ? Utils.getQualityName(item.rarity) : (item.rarity || '');
+    var slotStr = (DATA && DATA.slots && DATA.slots[item.type]) || item.type || '';
+    item.desc = 'Lv.' + item.level + ' ' + qualityStr + slotStr + enhanceStr;
+    if (!item.name || item.name.indexOf('+') === -1) {
+      item.name = (item.baseName || item.name) + enhanceStr;
+    } else {
+      // 已有强化后缀，更新
+      var baseName = item.baseName || item.name.replace(/\+\d+$/, '').trim();
+      item.name = baseName + enhanceStr;
+    }
+  },
+
   // ---------- 锻造（升级品质） ----------
   forge(item) {
     const qo = ['white', 'green', 'blue', 'purple', 'orange', 'red'];

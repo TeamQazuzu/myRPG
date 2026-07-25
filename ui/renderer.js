@@ -114,6 +114,29 @@ class UIRenderer {
       html += '</div>';
     }
 
+    // 传送门（区域解锁）
+    if (scene.portal) {
+      var portal = scene.portal;
+      var canEnter = !portal.requirement;
+      if (portal.requirement && window.gameApp && window.gameApp.state) {
+        var gk = window.gameApp.state.world.gatekeepers[portal.requirement];
+        canEnter = gk && gk.defeated;
+      }
+      html += '<div class="scene-portal">';
+      if (canEnter) {
+        var portalTarget = portal.targetZone || portal.target;
+        // 找到目标区域的入口场景
+        var portalScene = portal.targetScene || (portalTarget === 'greyVillage' ? '灰烟村' : portalTarget + '_入口');
+        html += `<button class="portal-btn portal-unlocked" data-scene="${portalScene}">🌀 ${portal.exitName || '进入下一区域'}</button>`;
+      } else {
+        html += '<button class="portal-btn portal-locked" disabled>🔒 ' + (portal.exitName || '前往下一区域') + '</button>';
+        if (portal.blockedMsg) {
+          html += '<div class="portal-hint">' + portal.blockedMsg + '</div>';
+        }
+      }
+      html += '</div>';
+    }
+
     container.innerHTML = html;
 
     // 绑定行动按钮
@@ -126,6 +149,16 @@ class UIRenderer {
 
     // 绑定出口按钮
     container.querySelectorAll('.exit-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sceneName = btn.dataset.scene;
+        if (window.gameApp && window.gameApp.sceneManager) {
+          window.gameApp.sceneManager.enterScene(sceneName);
+        }
+      });
+    });
+
+    // 绑定传送门按钮
+    container.querySelectorAll('.portal-btn:not(.portal-locked)').forEach(btn => {
       btn.addEventListener('click', () => {
         const sceneName = btn.dataset.scene;
         if (window.gameApp && window.gameApp.sceneManager) {
@@ -167,6 +200,9 @@ class UIRenderer {
       case 'heal_partial':
         sm.healPartial();
         break;
+      case 'explore':
+        sm.exploreScene();
+        break;
       case 'boss_battle':
         if (sm.triggerBossBattle) {
           sm.triggerBossBattle(action.target);
@@ -185,6 +221,11 @@ class UIRenderer {
     if (!sm) {
       this.addGameLog('场景管理器不可用');
       return;
+    }
+
+    // 保存挂机状态（用于离线结算）
+    if (sm.saveIdleGatherState) {
+      sm.saveIdleGatherState(target);
     }
 
     // 执行挂机采集
@@ -247,6 +288,16 @@ class UIRenderer {
 
     var retreatHint = combat.isRetreatBlocked ? '<span class="no-retreat-hint">禁止撤退</span>' : '';
 
+    // 多波次Boss波次显示
+    var waveHtml = '';
+    if (combat.isMultiWave) {
+      var waveDots = '';
+      for (var w = 1; w <= combat.totalWaves; w++) {
+        waveDots += w <= combat.currentWave ? (w === combat.currentWave ? '【' + w + '】' : ' ' + w + ' ') : ' ○';
+      }
+      waveHtml = '<div class="wave-indicator"><span class="wave-label">波次:</span><span class="wave-dots">' + waveDots + '</span></div>';
+    }
+
     let html = `
       <div class="combat-header">
         <span class="combat-title">${combat.isBossCombat ? '👑 Boss战' : '⚔ 战斗'}</span>
@@ -254,6 +305,7 @@ class UIRenderer {
         ${retreatHint}
       </div>
       ${bossPhaseHtml}
+      ${waveHtml}
     `;
 
     // 敌方区域
@@ -684,7 +736,13 @@ class UIRenderer {
 
     if (rewards) {
       html += '<div class="result-rewards">';
-      html += `<span>经验 +${rewards.exp}</span>`;
+      // 经验显示：被锁时显示锁定提示
+      if (rewards.expResult && rewards.expResult.locked) {
+        html += '<span class="exp-locked">经验 +0（上限）</span>';
+        html += '<div class="exp-lock-hint">🔒 ' + (rewards.expResult.message || '你已至当前极限。') + '</div>';
+      } else {
+        html += `<span>经验 +${rewards.exp}</span>`;
+      }
       html += `<span>金币 +${rewards.gold}</span>`;
       if (rewards.drops && rewards.drops.length > 0) {
         html += `<span>掉落: ${rewards.drops.map(d => d.name).join(', ')}</span>`;
@@ -699,7 +757,7 @@ class UIRenderer {
     el.className = 'combat-result ' + result;
     el.style.display = 'block';
 
-    setTimeout(() => { el.style.display = 'none'; }, 2500);
+    setTimeout(() => { el.style.display = 'none'; }, 3000);
   }
 
   // ========== 视图切换 ==========
@@ -730,10 +788,23 @@ class UIRenderer {
     const hpPct = player.maxHp > 0 ? (player.hp / player.maxHp) * 100 : 0;
     const mpPct = player.maxMp > 0 ? (player.mp / player.maxMp) * 100 : 0;
 
+    // 计算等级上限信息
+    var capHtml = '';
+    if (window.gameApp && window.gameApp.state && StateUtils) {
+      var state = window.gameApp.state;
+      var cap = StateUtils.getLevelCap(state);
+      var isLocked = StateUtils.isExpLocked(state);
+      if (isLocked) {
+        capHtml = '<span class="level-cap-indicator" title="' + (StateUtils.getLockMessage(state) || '') + '">🔒Lv.' + cap + '</span>';
+      } else {
+        capHtml = '<span class="level-cap-indicator cap-normal">Lv.' + cap + '</span>';
+      }
+    }
+
     container.innerHTML = `
       <div class="player-bar">
         <span class="player-name">${player.name}</span>
-        <span class="player-level">Lv.${player.level || 1}</span>
+        <span class="player-level">Lv.${player.level || 1}${capHtml ? ' / ' + capHtml : ''}</span>
         <div class="player-resource">
           <span class="resource-label">HP</span>
           <div class="resource-bar"><div class="resource-fill hp" style="width:${hpPct}%"></div></div>
@@ -756,6 +827,7 @@ class UIRenderer {
     bar.innerHTML = `
       <button class="bottom-btn" id="btn-inventory">🎒 背包</button>
       <button class="bottom-btn" id="btn-equipment">⚔ 装备</button>
+      <button class="bottom-btn" id="btn-storage">📦 仓库</button>
       <button class="bottom-btn" id="btn-team">👥 队伍</button>
       <button class="bottom-btn" id="btn-save">💾 存档</button>
       <button class="bottom-btn" id="btn-settings">⚙ 设置</button>
@@ -763,6 +835,7 @@ class UIRenderer {
 
     document.getElementById('btn-inventory').addEventListener('click', () => this.showInventory());
     document.getElementById('btn-equipment').addEventListener('click', () => this.showEquipment());
+    document.getElementById('btn-storage').addEventListener('click', () => this.showStorage());
     document.getElementById('btn-team').addEventListener('click', () => this.showTeam());
     document.getElementById('btn-save').addEventListener('click', () => this.showSaveMenu());
     document.getElementById('btn-settings').addEventListener('click', () => this.showSettings());
@@ -908,7 +981,8 @@ class UIRenderer {
       if (item) {
         // 显示装备名称和简要属性
         eqHtml += '<div class="eq-slot-info">';
-        eqHtml += '<span class="item-name ' + (item.rarity || 'white') + '">' + item.name + '</span>';
+        var enhanceLabel = item.enhanceLevel ? ' <span class="enhance-badge">+' + item.enhanceLevel + '</span>' : '';
+        eqHtml += '<span class="item-name ' + (item.rarity || 'white') + '">' + item.name + enhanceLabel + '</span>';
         eqHtml += '<span class="eq-slot-level">Lv.' + (item.level || 1) + '</span>';
         // 基础属性摘要
         if (item.baseStats) {
@@ -1018,6 +1092,10 @@ class UIRenderer {
       // 已装备的物品 —— 卸下、锻造、附魔
       detailHtml += '<button class="item-action-btn btn-unequip" data-action="unequip" data-slot="' + slotKey + '">卸下</button>';
       detailHtml += '<button class="item-action-btn btn-forge" data-action="forge" data-slot="' + slotKey + '">锻造</button>';
+      var enhanceLevel = item.enhanceLevel || 0;
+      var maxEnhance = EquipmentSystem && EquipmentSystem.getMaxEnhance ? EquipmentSystem.getMaxEnhance(item.rarity) : 3;
+      var enhanceCost = EquipmentSystem && EquipmentSystem.getEnhanceCost ? EquipmentSystem.getEnhanceCost(item) : 0;
+      detailHtml += '<button class="item-action-btn btn-enhance" data-action="enhance" data-slot="' + slotKey + '">强化 +' + enhanceLevel + '/' + maxEnhance + '（' + enhanceCost + '金）</button>';
       detailHtml += '<button class="item-action-btn btn-enchant" data-action="enchant" data-slot="' + slotKey + '">附魔</button>';
     } else {
       // 背包中的物品 —— 判断类型
@@ -1157,6 +1235,19 @@ class UIRenderer {
           if (enchantItem && EquipmentSystem && EquipmentSystem.enchant) {
             var enchantResult = EquipmentSystem.enchant(enchantItem);
             self.addGameLog(enchantResult.msg || (enchantResult.ok ? '附魔成功' : '附魔失败'));
+          }
+          self.closePanel();
+          self.showEquipment();
+          self.refreshPlayerInfo();
+        }
+
+        else if (action === 'enhance') {
+          // 强化装备
+          var enhanceSlot = this.getAttribute('data-slot');
+          var enhanceItem = state && state.equipment[enhanceSlot];
+          if (enhanceItem && EquipmentSystem && EquipmentSystem.enhance) {
+            var enhanceResult = EquipmentSystem.enhance(enhanceItem, state);
+            self.addGameLog(enhanceResult.msg || (enhanceResult.ok ? '强化成功' : '强化失败'));
           }
           self.closePanel();
           self.showEquipment();

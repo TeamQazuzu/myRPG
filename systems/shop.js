@@ -8,6 +8,58 @@ var ShopSystem = {
   // ========== 商店数据库 ==========
   // 每个商店包含名称、店主和商品列表
   shops: {
+    ash_mountain_shop: {
+      id: 'ash_mountain_shop',
+      name: '灰烬山脉移动商铺',
+      owner: '阿莫斯',
+      desc: '阿莫斯的移动商铺，里面有外面弄不到的稀罕货。',
+      items: [
+        {
+          id: 'shop_potion_m_ash',
+          name: '中型生命药水',
+          type: 'consumable',
+          price: 70,
+          healHp: 100,
+          healMp: 0,
+          desc: '恢复100点生命（阿莫斯特价）',
+        },
+        {
+          id: 'shop_potion_l',
+          name: '大型生命药水',
+          type: 'consumable',
+          price: 200,
+          healHp: 300,
+          healMp: 0,
+          desc: '恢复300点生命',
+        },
+        {
+          id: 'shop_ether_m',
+          name: '中型法力药水',
+          type: 'consumable',
+          price: 120,
+          healHp: 0,
+          healMp: 80,
+          desc: '恢复80点法力',
+        },
+        {
+          id: 'shop_ash_ore',
+          name: '灰烬矿石x5',
+          type: 'material',
+          price: 150,
+          desc: '五块灰烬矿石，灰烬山脉特产',
+        },
+        {
+          id: 'shop_antidote',
+          name: '解毒剂',
+          type: 'consumable',
+          price: 60,
+          healHp: 30,
+          healMp: 0,
+          desc: '恢复30点生命并清除中毒状态',
+        },
+      ],
+    },
+
     greyVillage_general: {
       id: 'greyVillage_general',
       name: '灰烟村杂货店',
@@ -168,8 +220,18 @@ var ShopSystem = {
       return { ok: false, message: '物品不存在于背包中' };
     }
 
-    // 卖出价格为原价的50%，price为0的也卖0
-    var sellPrice = Math.floor((targetItem.price || 0) * 0.5);
+    // 卖出价格为原价的50%
+    var basePrice = targetItem.price || 0;
+    // 如果物品没有price字段（如掉落装备），根据等级和品质动态计算
+    if (basePrice === 0 && targetItem.level && targetItem.rarity) {
+      var rarityMulti = { white: 1, green: 2, blue: 5, purple: 15, orange: 40, red: 100, gold: 50 };
+      basePrice = Math.floor(targetItem.level * 3 * (rarityMulti[targetItem.rarity] || 1));
+    }
+    // 材料物品也按固定公式
+    if (basePrice === 0 && targetItem.type === 'material') {
+      basePrice = 5;
+    }
+    var sellPrice = Math.floor(basePrice * 0.5);
 
     // 从背包中移除
     state.inventory.items.splice(idx, 1);

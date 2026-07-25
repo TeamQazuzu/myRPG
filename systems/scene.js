@@ -19,7 +19,7 @@ class SceneManager {
         actions: [
           { label: '与艾琳对话', type: 'talk', target: 'ailin' },
         ],
-        exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_荒地', '灰烟村_矿脉', '灰烟村_药草园', '灰烟村_村长家', '灰烟村_鱼塘', '灰烟村_杂货铺', '灰烟村_练功场', '灰烟村_后山小径', '灰烟村_裁缝铺', '灰烟村_皮匠铺', '灰烟村_村医屋', '灰烟村_墓地'],
+        exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_荒地', '灰烟村_矿脉', '灰烟村_药草园', '灰烟村_村长家', '灰烟村_鱼塘', '灰烟村_杂货铺', '灰烟村_练功场', '灰烟村_后山小径', '灰烟村_裁缝铺', '灰烟村_皮匠铺', '灰烟村_村医屋', '灰烟村_墓地', '灰烟村_北山古道'],
       },
       // ===== 灰烟村·酒馆 =====
       '灰烟村_酒馆': {
@@ -52,6 +52,7 @@ class SceneManager {
         desc: '酒馆后面的荒地。杂草丛生，几块散落的石头露在地表。远处传来野狗低沉的咆哮声——一群野狗正在垃圾堆间游荡，数量不少。',
         actions: [
           { label: '迎战野狗群', type: 'battle', enemies: ['野狗','野狗','野狗','野狗','野狗','野狗'] },
+          { label: '探索荒地', type: 'explore' },
         ],
         exits: ['灰烟村'],
       },
@@ -64,6 +65,7 @@ class SceneManager {
         actions: [
           { label: '采集石头', type: 'gather', target: '石头', amount: 3 },
           { label: '挂机采集', type: 'idle_gather', target: '石头' },
+          { label: '深入矿脉', type: 'explore' },
         ],
         exits: ['灰烟村'],
       },
@@ -78,6 +80,7 @@ class SceneManager {
           { label: '采集草药', type: 'gather', target: '草药', amount: 2 },
           { label: '挂机采集', type: 'idle_gather', target: '草药' },
           { label: '驱赶毒蛇', type: 'battle', enemies: ['毒蛇', '毒蛇'] },
+          { label: '搜索篱笆角落', type: 'explore' },
         ],
         exits: ['灰烟村'],
       },
@@ -198,6 +201,238 @@ class SceneManager {
         ],
         exits: ['灰烟村'],
       },
+
+      // ===== 灰烟村·北山古道（区域传送门·需击败村长后解锁）=====
+      '灰烟村_北山古道': {
+        id: 'greyVillage_northTrail',
+        type: 'wild',
+        name: '北山古道',
+        desc: '通往灰烬山脉的古道。路面碎石嶙峋，两侧的山崖越来越陡峭。空气中弥漫着一股若有若无的焦糊味——灰烬山脉离此不远了。远处隐约可见一座废弃的哨塔。',
+        actions: [
+          { label: '搜索路边的破旧马车', type: 'explore' },
+        ],
+        exits: ['灰烟村'],
+        portal: {
+          target: 'ashMountains',
+          targetScene: '灰烬山脉_入口',
+          exitName: '前往灰烬山脉',
+          requirement: 'villageChief',
+          blockedMsg: '古道前方被浓雾封锁，你感到一股强大的力量在阻止你前进。也许应该先去找村长谈谈......',
+        },
+      },
+
+      // =============================================
+      // ===== 灰烬山脉区域（Lv.21-40）=====
+      // =============================================
+
+      // ===== 灰烬山脉·入口（区域安全枢纽）=====
+      '灰烬山脉_入口': {
+        id: 'ashMountains_entrance',
+        type: 'safe',
+        name: '灰烬山脉·入口',
+        zone: 'ashMountains',
+        desc: '你站在灰烬山脉的边缘。灰色的岩石和焦黑的树桩延伸到远方，地面上偶尔能看到被烧焦的骨头。一条蜿蜒的小路分出几条岔道。远处山腰上，一座废弃的哨塔在灰雾中若隐若现。',
+        actions: [
+          { label: '休息（恢复HP/MP）', type: 'rest' },
+          { label: '查看路标', type: 'inspect', target: 'ash_mountain_sign' },
+        ],
+        exits: ['灰烬山脉_山脚洞', '灰烬山脉_废弃仓库', '灰烬山脉_河岸洞穴', '灰烬山脉_路边坟', '灰烬山脉_旧矿道'],
+        // 返回灰烟村的传送门
+        portal: {
+          target: 'greyVillage',
+          targetScene: '灰烟村',
+          exitName: '返回灰烟村',
+          requirement: null,
+          blockedMsg: '',
+        },
+      },
+
+      // ===== 灰烬山脉·山脚洞（战斗帧）=====
+      '灰烬山脉_山脚洞': {
+        id: 'ashMountains_cave',
+        type: 'wild',
+        name: '山脚洞',
+        zone: 'ashMountains',
+        desc: '灰烬山脉脚下的一处天然洞穴。洞口被枯藤遮掩，里面传来低沉的嘶嘶声。地上散落着白色的骨渣——是某种动物的骨头。洞壁上刻着模糊的符号，像是某种警告。',
+        actions: [
+          { label: '清理洞穴中的生物', type: 'battle', enemies: ['山洞蝙蝠', '山洞蝙蝠', '山洞蝙蝠', '灰烬狼'] },
+          { label: '深入洞穴', type: 'explore' },
+          { label: '采集洞穴矿石', type: 'gather', target: '灰烬矿石', amount: 2 },
+          { label: '挂机采集', type: 'idle_gather', target: '灰烬矿石' },
+        ],
+        exits: ['灰烬山脉_入口'],
+      },
+
+      // ===== 灰烬山脉·废弃仓库（战斗/采集帧）=====
+      '灰烬山脉_废弃仓库': {
+        id: 'ashMountains_warehouse',
+        type: 'wild',
+        name: '废弃仓库',
+        zone: 'ashMountains',
+        desc: '一座半坍塌的巨大石砌建筑。残破的屋顶下堆满了锈蚀的铁箱和散落的木材。角落里有一口破旧的水缸，上面蒙着厚厚的灰尘。这里似乎曾经是某个组织的物资中转站。',
+        actions: [
+          { label: '与仓库守卫交战', type: 'battle', enemies: ['灰烬守卫', '灰烬守卫'] },
+          { label: '搜索仓库', type: 'explore' },
+          { label: '采集旧木材', type: 'gather', target: '旧木材', amount: 3 },
+          { label: '与流浪商人阿莫斯交谈', type: 'talk', target: 'ash_merchant_amos' },
+        ],
+        exits: ['灰烬山脉_入口'],
+      },
+
+      // ===== 灰烬山脉·河岸洞穴（战斗帧）=====
+      '灰烬山脉_河岸洞穴': {
+        id: 'ashMountains_riverCave',
+        type: 'wild',
+        name: '河岸洞穴',
+        zone: 'ashMountains',
+        desc: '一条浑浊的河流从灰烬山脉中流出，河岸上有一处被水侵蚀的洞穴。洞穴入口处布满青苔，洞内传来滴答的水声。水面上漂浮着奇怪的黑色油膜。',
+        actions: [
+          { label: '清剿河岸生物', type: 'battle', enemies: ['石像鬼', '石像鬼', '灰烬猎犬'] },
+          { label: '探索洞穴深处', type: 'explore' },
+          { label: '采集河岸水草', type: 'gather', target: '灰烬水草', amount: 2 },
+          { label: '挂机采集', type: 'idle_gather', target: '灰烬水草' },
+        ],
+        exits: ['灰烬山脉_入口'],
+      },
+
+      // ===== 灰烬山脉·路边坟（对话/战斗帧）=====
+      '灰烬山脉_路边坟': {
+        id: 'ashMountains_graves',
+        type: 'wild',
+        name: '路边坟',
+        zone: 'ashMountains',
+        desc: '古道旁的一片荒坟。几十座无名的土包排列得整整齐齐，每座坟前都插着一根烧焦的木桩。没有墓碑，没有名字——这些人是被匆忙掩埋的。最远处有一座稍大的石棺，上面刻着奇怪的花纹。',
+        actions: [
+          { label: '与掘墓人幽魂交谈', type: 'talk', target: 'ash_grave_digger' },
+          { label: '查看石棺', type: 'inspect', target: 'stone_sarcophagus' },
+          { label: '驱赶亡灵', type: 'battle', enemies: ['焦骨战士', '焦骨战士', '幽灵矿工'] },
+          { label: '探索荒坟', type: 'explore' },
+        ],
+        exits: ['灰烬山脉_入口'],
+      },
+
+      // ===== 灰烬山脉·旧矿道（战斗/采集帧）=====
+      '灰烬山脉_旧矿道': {
+        id: 'ashMountains_mine',
+        type: 'wild',
+        name: '旧矿道',
+        zone: 'ashMountains',
+        desc: '一条深入山体的旧矿道。轨道上停着锈蚀的矿车，墙壁上的油灯早已熄灭。深处传来金属碰撞的声响——不像是自然形成的。矿道分岔口立着一块木牌，上面写着"禁止通行"，但字迹已经模糊不清。矿道尽头似乎通向更深的地方......',
+        actions: [
+          { label: '清剿矿道中的生物', type: 'battle', enemies: ['矿道爬虫', '矿道爬虫', '矿道爬虫', '废弃傀儡'] },
+          { label: '探索矿道深处', type: 'explore' },
+          { label: '采集铁矿', type: 'gather', target: '铁矿', amount: 3 },
+          { label: '挂机采集', type: 'idle_gather', target: '铁矿' },
+        ],
+        exits: ['灰烬山脉_入口'],
+        portal: {
+          target: 'ashMines',
+          targetScene: '灰烬矿场_入口',
+          exitName: '深入矿道前往灰烬矿场',
+          requirement: 'nightWatcher',
+          blockedMsg: '矿道深处的铁门紧锁，上面刻着组织的徽记。你需要先击败守夜人才能通过。',
+        },
+      },
+
+      // =============================================
+      // ===== 灰烬矿场区域（Lv.41-60）=====
+      // =============================================
+
+      // ===== 灰烬矿场·入口（区域安全枢纽）=====
+      '灰烬矿场_入口': {
+        id: 'ashMines_entrance',
+        type: 'safe',
+        name: '灰烬矿场·入口',
+        zone: 'ashMines',
+        desc: '穿过厚重的铁门，你踏入了一个巨大的地下空间。高耸的石壁上嵌满了生锈的铁轨和管道，远处隐约可见矿车的灯光在黑暗中移动。空气潮湿而闷热，夹杂着金属摩擦的刺耳声响。一条主通道分出几条岔路，分别通向矿场的不同区域。',
+        actions: [
+          { label: '休息（恢复HP/MP）', type: 'rest' },
+          { label: '查看矿场公告板', type: 'inspect', target: 'mine_notice_board' },
+        ],
+        exits: ['灰烬矿场_无底洞矿场', '灰烬矿场_旧矿镇', '灰烬矿场_归童坊', '灰烬矿场_铁矿裂隙', '灰烬矿场_机械之守殿堂'],
+        portal: {
+          target: 'ashMountains',
+          targetScene: '灰烬山脉_入口',
+          exitName: '返回灰烬山脉',
+          requirement: null,
+          blockedMsg: '',
+        },
+      },
+
+      // ===== 灰烬矿场·无底洞矿场（战斗/采集帧·Lv.41-45）=====
+      '灰烬矿场_无底洞矿场': {
+        id: 'ashMines_abyssMine',
+        type: 'wild',
+        name: '无底洞矿场',
+        zone: 'ashMines',
+        desc: '一个直径数十米的巨大竖井向下延伸，看不到底。矿道沿着井壁螺旋而下，每隔一段就有一个开采平台。井壁上布满了密密麻麻的钻孔和炸痕。深处偶尔传来岩石崩落的回响，以及某种昆虫窸窸窣窣的爬行声。',
+        actions: [
+          { label: '清剿矿道虫群', type: 'battle', enemies: ['矿场虫群', '矿场虫群', '矿场矿工亡灵'] },
+          { label: '深入竖井', type: 'explore' },
+          { label: '采集精炼矿石', type: 'gather', target: '精炼矿石', amount: 2 },
+          { label: '挂机采集', type: 'idle_gather', target: '精炼矿石' },
+        ],
+        exits: ['灰烬矿场_入口'],
+      },
+
+      // ===== 灰烬矿场·旧矿镇（安全/对话帧·Lv.43-48）=====
+      '灰烬矿场_旧矿镇': {
+        id: 'ashMines_oldTown',
+        type: 'safe',
+        name: '旧矿镇',
+        zone: 'ashMines',
+        desc: '矿场中心的一片区域，曾经是矿工们的居住区。残破的石屋沿着矿道两侧排列，有些还亮着微弱的灯光。几个面容憔悴的矿工在巷道里游荡，眼神空洞。一个戴着护目镜的老人坐在一口破锅旁，旁边堆满了各种机械零件。',
+        actions: [
+          { label: '与机械师老铁交谈', type: 'talk', target: 'mine_mechanic_tie' },
+          { label: '与游荡矿工交谈', type: 'talk', target: 'mine_wanderer' },
+          { label: '休息（恢复HP/MP）', type: 'rest' },
+        ],
+        exits: ['灰烬矿场_入口'],
+      },
+
+      // ===== 灰烬矿场·归童坊（战斗/剧情帧·Lv.46-52）=====
+      '灰烬矿场_归童坊': {
+        id: 'ashMines_childWorkshop',
+        type: 'wild',
+        name: '归童坊',
+        zone: 'ashMines',
+        desc: '一个被铁栅栏围起来的封闭区域。里面摆满了小型的作业台和工具架——这些工具的尺寸明显是为儿童设计的。墙上钉着泛黄的规章制度，内容让你不寒而栗。几个机械哨兵在栅栏外巡逻，红色的光眼不断扫描着周围。',
+        actions: [
+          { label: '击毁巡逻哨兵', type: 'battle', enemies: ['机械哨兵', '机械哨兵', '铁链魔像'] },
+          { label: '查看规章制度', type: 'inspect', target: 'child_workshop_rules' },
+          { label: '搜索作业台', type: 'explore' },
+        ],
+        exits: ['灰烬矿场_入口'],
+      },
+
+      // ===== 灰烬矿场·铁矿裂隙（战斗/采集帧·Lv.48-55）=====
+      '灰烬矿场_铁矿裂隙': {
+        id: 'ashMines_ironRift',
+        type: 'wild',
+        name: '铁矿裂隙',
+        zone: 'ashMines',
+        desc: '一道巨大的裂缝横贯矿场深处，裂缝两侧暴露出丰富的铁矿脉。炽热的蒸汽从裂缝中不断涌出，温度高得令人窒息。裂缝深处传来金属撞击的声响——不是自然形成的。地面散落着破碎的机械零件和不知名的合金碎片。',
+        actions: [
+          { label: '与矿场守卫交战', type: 'battle', enemies: ['精炼傀儡', '精炼傀儡', '深渊矿蛛'] },
+          { label: '采集深渊铁矿', type: 'gather', target: '深渊铁矿', amount: 2 },
+          { label: '挂机采集', type: 'idle_gather', target: '深渊铁矿' },
+          { label: '探索裂缝深处', type: 'explore' },
+        ],
+        exits: ['灰烬矿场_入口'],
+      },
+
+      // ===== 灰烬矿场·机械之守殿堂（Boss帧）=====
+      '灰烬矿场_机械之守殿堂': {
+        id: 'ashMines_guardianHall',
+        type: 'boss',
+        name: '机械之守殿堂',
+        zone: 'ashMines',
+        desc: '矿场最深处的一座巨大殿堂。穹顶上悬挂着无数齿轮和管道，缓缓转动。殿堂中央矗立着一座三米高的机械巨人，浑身覆盖着厚重的装甲板，双眼散发着冰冷的蓝光。它的胸口嵌着一块脉动的核心——那是一颗被禁锢的心脏。',
+        actions: [
+          { label: '挑战机械之守', type: 'boss', gatekeeper: 'mechanicalGuard' },
+        ],
+        exits: ['灰烬矿场_入口'],
+      },
     };
   }
 
@@ -212,6 +447,25 @@ class SceneManager {
       '毒蛇': { name: '毒蛇', level: 2, hp: 22, maxHp: 22, attack: 8, defense: 2, speed: 13, exp: 25, gold: 5, drop: { name: '蛇皮', type: 'material', rarity: 'white' } },
       '练兵': { name: '村练兵', level: 3, hp: 50, maxHp: 50, attack: 9, defense: 6, speed: 8, exp: 40, gold: 12, drop: { name: '练功牌', type: 'material', rarity: 'green' } },
       '山贼': { name: '山贼', level: 3, hp: 45, maxHp: 45, attack: 11, defense: 4, speed: 9, exp: 45, gold: 18, drop: { name: '山贼令牌', type: 'material', rarity: 'green' } },
+      // ===== 灰烬山脉敌人（Lv.21-40）=====
+      '山洞蝙蝠': { name: '山洞蝙蝠', level: 21, hp: 180, maxHp: 180, attack: 35, defense: 15, speed: 18, exp: 80, gold: 25, drop: { name: '蝙蝠翼膜', type: 'material', rarity: 'white' } },
+      '灰烬狼': { name: '灰烬狼', level: 23, hp: 250, maxHp: 250, attack: 45, defense: 20, speed: 16, exp: 120, gold: 35, drop: { name: '灰烬狼皮', type: 'material', rarity: 'green' } },
+      '灰烬守卫': { name: '灰烬守卫', level: 25, hp: 350, maxHp: 350, attack: 55, defense: 35, speed: 12, exp: 180, gold: 50, drop: { name: '守卫腰牌', type: 'material', rarity: 'green' } },
+      '石像鬼': { name: '石像鬼', level: 27, hp: 400, maxHp: 400, attack: 60, defense: 50, speed: 8, exp: 220, gold: 60, drop: { name: '石像碎片', type: 'material', rarity: 'green' } },
+      '灰烬猎犬': { name: '灰烬猎犬', level: 24, hp: 220, maxHp: 220, attack: 50, defense: 18, speed: 22, exp: 150, gold: 40, drop: { name: '猎犬獠牙', type: 'material', rarity: 'white' } },
+      '焦骨战士': { name: '焦骨战士', level: 28, hp: 450, maxHp: 450, attack: 65, defense: 30, speed: 10, exp: 250, gold: 70, drop: { name: '焦骨碎片', type: 'material', rarity: 'blue' } },
+      '幽灵矿工': { name: '幽灵矿工', level: 30, hp: 380, maxHp: 380, attack: 70, defense: 25, speed: 14, exp: 280, gold: 80, drop: { name: '矿工灵魂碎片', type: 'material', rarity: 'blue' } },
+      '矿道爬虫': { name: '矿道爬虫', level: 22, hp: 200, maxHp: 200, attack: 40, defense: 25, speed: 15, exp: 100, gold: 30, drop: { name: '虫壳', type: 'material', rarity: 'white' } },
+      '废弃傀儡': { name: '废弃傀儡', level: 32, hp: 600, maxHp: 600, attack: 75, defense: 55, speed: 6, exp: 350, gold: 100, drop: { name: '傀儡零件', type: 'material', rarity: 'blue' } },
+      // ===== 灰烬矿场敌人（Lv.41-60）=====
+      '矿场虫群': { name: '矿场虫群', level: 41, hp: 1200, maxHp: 1200, attack: 130, defense: 55, speed: 20, exp: 500, gold: 150, drop: { name: '矿虫甲壳', type: 'material', rarity: 'green' } },
+      '矿场矿工亡灵': { name: '矿工亡灵', level: 43, hp: 1400, maxHp: 1400, attack: 150, defense: 60, speed: 12, exp: 600, gold: 180, drop: { name: '亡灵矿灯', type: 'material', rarity: 'green' } },
+      '机械哨兵': { name: '机械哨兵', level: 45, hp: 1800, maxHp: 1800, attack: 170, defense: 100, speed: 16, exp: 750, gold: 220, drop: { name: '哨兵零件', type: 'material', rarity: 'blue' } },
+      '铁链魔像': { name: '铁链魔像', level: 48, hp: 2200, maxHp: 2200, attack: 200, defense: 140, speed: 8, exp: 900, gold: 280, drop: { name: '魔像铁链', type: 'material', rarity: 'blue' } },
+      '精炼傀儡': { name: '精炼傀儡', level: 50, hp: 2800, maxHp: 2800, attack: 230, defense: 160, speed: 14, exp: 1100, gold: 350, drop: { name: '精炼核心', type: 'material', rarity: 'blue' } },
+      '深渊矿蛛': { name: '深渊矿蛛', level: 52, hp: 2500, maxHp: 2500, attack: 260, defense: 120, speed: 24, exp: 1200, gold: 400, drop: { name: '蛛丝合金', type: 'material', rarity: 'purple' } },
+      '机械巡逻兵': { name: '机械巡逻兵', level: 55, hp: 3200, maxHp: 3200, attack: 290, defense: 180, speed: 18, exp: 1400, gold: 450, drop: { name: '巡逻兵芯片', type: 'material', rarity: 'purple' } },
+      '暴走机甲': { name: '暴走机甲', level: 58, hp: 4000, maxHp: 4000, attack: 340, defense: 220, speed: 10, exp: 1700, gold: 550, drop: { name: '机甲残骸', type: 'material', rarity: 'purple' } },
     };
   }
 
@@ -230,8 +484,134 @@ class SceneManager {
       window.gameApp.state.player.location = scene.name;
     }
 
-    const event = new CustomEvent('scene-change', { detail: { scene: scene } });
+    // ===== 场景事件钩子 =====
+    var eventResult = this.checkSceneEvents(scene);
+    if (eventResult && eventResult.blocked) {
+      // 事件阻断了正常场景进入（如暗杀事件触发战斗）
+      return;
+    }
+
+    const evt = new CustomEvent('scene-change', { detail: { scene: scene } });
+    document.dispatchEvent(evt);
+  }
+
+  // ========== 场景事件系统 ==========
+  checkSceneEvents(scene) {
+    if (!window.gameApp || !window.gameApp.state) return null;
+    var state = window.gameApp.state;
+    var player = state.player;
+    if (!player || !player.canPlay || player.dead) return null;
+
+    // ===== 守夜人暗杀铺垫事件（37-38级，仅野外场景，守夜人未败）=====
+    var nightWatcherDefeated = state.world && state.world.gatekeepers && state.world.gatekeepers.nightWatcher && state.world.gatekeepers.nightWatcher.defeated;
+    if (!nightWatcherDefeated && scene.type === 'wild' && player.level >= 37 && player.level <= 38) {
+      // 检查是否已经触发过暗杀事件
+      var ambushTriggered = state.narrative && state.narrative.flags && state.narrative.flags.nightWatcher_ambush;
+      if (ambushTriggered) return null;
+
+      // 20%概率触发暗杀事件
+      if (Math.random() < 0.20) {
+        console.log('[场景事件] 守夜人暗杀事件触发！');
+
+        // 标记已触发（防止重复）
+        if (state.narrative && state.narrative.flags) {
+          state.narrative.flags.nightWatcher_ambush = true;
+        }
+
+        // 先渲染场景，再触发暗杀对话
+        var evt = new CustomEvent('scene-change', { detail: { scene: scene } });
+        document.dispatchEvent(evt);
+
+        // 延迟显示暗杀事件
+        var self = this;
+        setTimeout(function() {
+          self.showAmbushEvent();
+        }, 500);
+
+        return { blocked: true, reason: 'ambush' };
+      }
+    }
+
+    return null;
+  }
+
+  // ========== 守夜人暗杀事件 ==========
+  showAmbushEvent() {
+    var self = this;
+    var event = new CustomEvent('game-log', { detail: { message: '......' } });
     document.dispatchEvent(event);
+
+    setTimeout(function() {
+      var event2 = new CustomEvent('game-log', { detail: { message: '你感到一道冰冷的视线从背后投来。还没来得及回头——' } });
+      document.dispatchEvent(event2);
+    }, 800);
+
+    setTimeout(function() {
+      var event3 = new CustomEvent('game-log', { detail: { message: '一道黑影从暗处闪出，刀光一闪！' } });
+      document.dispatchEvent(event3);
+    }, 1600);
+
+    setTimeout(function() {
+      // 触发暗杀者战斗
+      var player = self.getPlayerData();
+      if (!player) return;
+      var allies = self.getAllyUnits();
+
+      // 构建暗杀者单位
+      var assassinLevel = window.gameApp.state.player.level;
+      var assassinHp = Math.floor(assassinLevel * 40 * 2.5);
+      var assassinAtk = Math.floor(assassinLevel * 10 * 2);
+      var assassinDef = Math.floor(assassinLevel * 3 * 1.5);
+      var assassinSpd = Math.floor(assassinLevel * 3 + 15);
+
+      var assassin = {
+        id: 'ambush_shadow_assassin',
+        name: '暗影刺客',
+        level: assassinLevel,
+        hp: assassinHp,
+        maxHp: assassinHp,
+        attack: assassinAtk,
+        defense: assassinDef,
+        speed: assassinSpd,
+        exp: Math.floor(assassinLevel * 30),
+        gold: Math.floor(assassinLevel * 10),
+        type: 'elite',
+        critRate: 35,
+        aiStrategy: 'aggressive',
+        drop: { name: '黑色匕首碎片', type: 'material', rarity: 'purple' },
+      };
+
+      var combat = new CombatEngine();
+      combat.maxRounds = 15; // 暗杀战短回合
+      window.currentCombat = combat;
+      self.currentCombat = combat;
+
+      // 开场日志
+      combat.combatLog.push('暗影刺客：「......走的太快了。」');
+
+      // 战斗结束后显示铺垫对话
+      var origEndCombat = combat.endCombat.bind(combat);
+      combat.endCombat = function(result) {
+        origEndCombat(result);
+        if (result === 'player_victory') {
+          setTimeout(function() {
+            self.showLog('暗影刺客留下的匕首上刻着一个微小的符号——像是某种组织的标记。');
+          }, 2800);
+          setTimeout(function() {
+            self.showLog('\"有些人不该知道太多。\"——那个符号让你想起了什么。灰烬山脉深处，有人在注视着你。');
+          }, 4000);
+          setTimeout(function() {
+            self.showLog('你需要变得更强。灰烬山脉的守夜人......也许他知道些什么。');
+          }, 5200);
+        } else if (result === 'player_defeat') {
+          setTimeout(function() {
+            self.showLog('你勉强逃过一劫。暗影刺客在你昏迷时消失了......下次他不会给你反应的时间。');
+          }, 2800);
+        }
+      };
+
+      combat.startCombat(player, allies, [assassin]);
+    }, 2000);
   }
 
   // ========== 触发战斗（手动）==========
@@ -350,6 +730,21 @@ class SceneManager {
       } else {
         this.showLog(result.reason || '背包已满');
       }
+    }
+  }
+
+  // ========== 保存挂机状态到存档（用于离线结算） ==========
+  saveIdleGatherState(target) {
+    if (window.gameApp && window.gameApp.state) {
+      window.gameApp.state.world.idleGather = {
+        target: target,
+        startTime: new Date().toISOString(),
+      };
+      // 立即保存存档
+      if (window.gameApp.saveGame) {
+        window.gameApp.saveGame();
+      }
+      console.log('[挂机采集] 已保存挂机状态:', target);
     }
   }
 
@@ -583,8 +978,15 @@ class SceneManager {
     }
     var allies = this.getAllyUnits();
 
-    // 创建Boss战斗引擎
-    var bossCombat = new BossCombatEngine(gkId);
+    // 创建Boss战斗引擎（支持多波次）
+    var gkWaves = gkData.waves || null;
+    var bossCombat;
+    if (gkWaves && gkWaves.length > 1) {
+      console.log('[Boss战] 多波次Boss战，波数:', gkWaves.length);
+      bossCombat = new MultiWaveBossCombatEngine(gkId, gkWaves);
+    } else {
+      bossCombat = new BossCombatEngine(gkId);
+    }
 
     // 设置击败回调
     bossCombat.setDefeatCallback(function(combat) {
@@ -623,6 +1025,100 @@ class SceneManager {
         bossCombat.combatLog.push(stanceMsg);
         bossCombat.dispatchUpdate(stanceMsg);
       }, 800);
+    }
+  }
+
+  // ========== 场景探索系统 ==========
+  // 在野外场景中，探索有概率发现隐藏物品、额外资源或触发敌人
+  exploreScene() {
+    if (!window.gameApp || !window.gameApp.state) return;
+    var state = window.gameApp.state;
+    var scene = this.currentScene;
+    if (!scene || scene.type !== 'wild') {
+      this.showLog('这里没什么可探索的。');
+      return;
+    }
+
+    var playerLevel = state.player.level || 1;
+    var roll = Math.random();
+    var self = this;
+
+    // 根据区域确定探索结果池
+    var zone = this.currentScene && this.currentScene.zone ? this.currentScene.zone : 'greyVillage';
+    var resources, rareResources, exploreEnemies;
+    if (zone === 'ashMines') {
+      resources = ['精炼矿石', '深渊铁矿', '矿虫甲壳', '机械零件', '合金碎片', '旧矿灯'];
+      rareResources = ['纯净矿晶', '机械齿轮', '禁锢之心碎片'];
+      exploreEnemies = ['矿场虫群', '矿场矿工亡灵', '机械哨兵'];
+    } else if (zone === 'ashMountains') {
+      resources = ['灰烬矿石', '铁矿', '蝙蝠翼膜', '焦骨碎片', '矿工灵魂碎片'];
+      rareResources = ['精炼灰烬矿', '古老符文石', '守卫铠甲片'];
+      exploreEnemies = ['山洞蝙蝠', '灰烬狼', '石像鬼'];
+    } else {
+      resources = ['草药', '石头', '水草', '野果', '矿石碎片', '兽皮'];
+      rareResources = ['精炼草药', '优质矿石', '坚硬兽皮', '古旧碎片'];
+      exploreEnemies = ['野狗', '毒蛇', '山贼'];
+    }
+
+    if (roll < 0.40) {
+      // 40%：发现额外资源
+      var found = resources[Math.floor(Math.random() * resources.length)];
+      var amount = 1 + Math.floor(Math.random() * 2);
+      var item = {
+        id: Utils.uuid(),
+        name: found,
+        type: 'material',
+        rarity: 'white',
+        level: 1,
+        stack: amount,
+      };
+      StateUtils.addToInventory(state, item);
+      this.showLog('你仔细搜索了周围，发现了 ' + found + ' x' + amount + '！');
+    }
+    else if (roll < 0.60) {
+      // 20%：发现少量金币
+      var gold = 3 + Math.floor(Math.random() * playerLevel * 2);
+      StateUtils.addGold(state, gold);
+      this.showLog('你在角落里找到了 ' + gold + ' 金币。');
+    }
+    else if (roll < 0.75) {
+      // 15%：发现绿色品质材料
+      var rareFound = rareResources[Math.floor(Math.random() * rareResources.length)];
+      var rareItem = {
+        id: Utils.uuid(),
+        name: rareFound,
+        type: 'material',
+        rarity: 'green',
+        level: 1,
+        stack: 1,
+      };
+      var addResult = StateUtils.addToInventory(state, rareItem);
+      if (addResult.ok) {
+        this.showLog('你发现了一些不寻常的东西——' + rareFound + '！');
+      } else {
+        this.showLog('你发现了什么，但背包满了...');
+      }
+    }
+    else if (roll < 0.90) {
+      // 15%：遭遇敌人
+      this.showLog('你仔细搜索时，遭到了伏击！');
+      var enemy = exploreEnemies[Math.floor(Math.random() * exploreEnemies.length)];
+      this.triggerBattle([enemy]);
+    }
+    else {
+      // 10%：什么也没找到（但消耗了一点体力）
+      var flavour = [
+        '你翻遍了每个角落，一无所获。',
+        '这里已经被搜索过很多次了。',
+        '你仔细查看了周围，没什么特别的。',
+        '风声呼啸，你的搜索毫无收获。',
+      ];
+      this.showLog(flavour[Math.floor(Math.random() * flavour.length)]);
+    }
+
+    // 更新玩家信息
+    if (window.gameApp && window.gameApp.updatePlayerInfo) {
+      window.gameApp.updatePlayerInfo();
     }
   }
 

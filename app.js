@@ -28,8 +28,156 @@ class GameApp {
     console.log('[应用] 开始游戏');
     this.syncPlayerToCombatData();
     this.uiRenderer.updatePlayerInfo(this.state.player);
+
+    // ===== 离线挂机采集结算 =====
+    this.processOfflineGather();
+
+    // ===== 离线经验结算 =====
+    this.processOfflineExp();
+
+    // 更新存档时间
+    this.state.world.lastSave = new Date().toISOString();
+
     this.sceneManager.enterScene('灰烟村');
     this.startAutoSave();
+  }
+
+  // ========== 离线挂机采集结算 ==========
+  processOfflineGather() {
+    var state = this.state;
+    if (!state || !state.world || !state.world.lastSave) return;
+    var lastSave = new Date(state.world.lastSave);
+    var now = new Date();
+    var offlineMs = now.getTime() - lastSave.getTime();
+
+    // 少于5分钟不结算
+    if (offlineMs < 5 * 60 * 1000) return;
+
+    // 最多计算24小时
+    var offlineHours = Math.min(24, offlineMs / (1000 * 60 * 60));
+    // 每小时2轮采集
+    var totalCycles = Math.floor(offlineHours * 2);
+    if (totalCycles < 1) return;
+
+    // 检查是否有挂机采集状态
+    var idleGather = state.world.idleGather;
+    if (!idleGather || !idleGather.target) return;
+
+    console.log('[离线结算] 离线' + offlineHours.toFixed(1) + '小时，采集' + totalCycles + '轮，目标：' + idleGather.target);
+
+    // 执行离线采集（简化版：不触发战斗）
+    var target = idleGather.target;
+    var results = {
+      target: target,
+      cycles: totalCycles,
+      itemsGathered: 0,
+      goldFound: 0,
+      rareFinds: [],
+      log: [],
+    };
+
+    for (var i = 1; i <= totalCycles; i++) {
+      var roll = Math.random();
+      if (roll < 0.75) {
+        // 75%：采集成功（离线效率略高）
+        var amount = 1 + Math.floor(Math.random() * 3);
+        var item = {
+          id: Utils.uuid(),
+          name: target,
+          type: 'material',
+          rarity: 'white',
+          level: 1,
+          stack: amount,
+        };
+        var addResult = StateUtils.addToInventory(state, item);
+        if (addResult.ok) {
+          results.itemsGathered += amount;
+        } else {
+          results.log.push('第' + i + '轮：背包已满，采集中断');
+          break;
+        }
+      } else if (roll < 0.88) {
+        // 13%：发现金币（离线不战斗，金币概率提高）
+        var gold = 2 + Math.floor(Math.random() * 8);
+        StateUtils.addGold(state, gold);
+        results.goldFound += gold;
+      } else {
+        // 12%：发现稀有物品
+        var rareItem = {
+          id: Utils.uuid(),
+          name: '精炼' + target,
+          type: 'material',
+          rarity: 'green',
+          level: 1,
+          stack: 1,
+        };
+        var rareResult = StateUtils.addToInventory(state, rareItem);
+        if (rareResult.ok) {
+          results.rareFinds.push(rareItem.name);
+        }
+      }
+    }
+
+    // 清除挂机状态
+    state.world.idleGather = null;
+
+    // 显示离线结算结果
+    if (results.itemsGathered > 0 || results.goldFound > 0 || results.rareFinds.length > 0) {
+      this.showOfflineGatherResults(results, offlineHours);
+    }
+  }
+
+  // ========== 离线采集结算UI ==========
+  showOfflineGatherResults(results, offlineHours) {
+    var html = '<div class="offline-gather-results">';
+    html += '<div class="offline-title">你离开了一段时间...</div>';
+    html += '<div class="offline-duration">离线约 ' + offlineHours.toFixed(1) + ' 小时</div>';
+    html += '<div class="offline-summary">';
+    html += '<div>挂机采集 ' + results.target + ' 完成 ' + results.cycles + ' 轮</div>';
+    if (results.itemsGathered > 0) {
+      html += '<div class="stat-success">材料 +' + results.itemsGathered + '</div>';
+    }
+    if (results.goldFound > 0) {
+      html += '<div class="stat-gold">金币 +' + results.goldFound + '</div>';
+    }
+    if (results.rareFinds.length > 0) {
+      html += '<div class="stat-rare">稀有发现：' + results.rareFinds.join('、') + '</div>';
+    }
+    html += '</div></div>';
+
+    this.uiRenderer.showPanel('离线结算', html);
+  }
+
+  // ========== 离线经验结算 ==========
+  processOfflineExp() {
+    var state = this.state;
+    if (!state || !state.world || !state.world.lastSave) return;
+
+    var lastSave = new Date(state.world.lastSave);
+    var now = new Date();
+    var offlineMs = now.getTime() - lastSave.getTime();
+
+    // 少于1小时不结算
+    if (offlineMs < 60 * 60 * 1000) return;
+
+    // 最多计算24小时，每小时给少量经验（相当于缓慢修炼）
+    var offlineHours = Math.min(24, offlineMs / (1000 * 60 * 60));
+    var playerLevel = state.player.level || 1;
+    var offlineExp = Math.floor(offlineHours * (5 + playerLevel * 2));
+
+    if (offlineExp > 0) {
+      var expResult = StateUtils.addExp(state, offlineExp);
+      if (expResult.gained > 0) {
+        var msg = '离线修炼获得经验 +' + expResult.gained;
+        if (expResult.leveled) {
+          msg += '（升级了！）';
+        }
+        if (expResult.locked) {
+          msg = '离线修炼经验 +' + 0 + '（已至当前等级上限）';
+        }
+        this.uiRenderer.addGameLog(msg);
+      }
+    }
   }
 
   // 将六维属性同步到战斗用的 attack/defense/speed

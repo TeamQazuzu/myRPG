@@ -125,16 +125,19 @@ const Utils = {
     const type = types[this.randInt(0, types.length - 1)];
     // 基础属性
     const baseStats = this.calcBaseStats(type, level);
+    var itemName = this.generateItemName(type, rarity);
     return {
       id: this.uuid(),
-      name: this.generateItemName(type, rarity),
+      name: itemName,
+      baseName: itemName,
       type,
       rarity,
       level,
       baseStats,
       affixes,
-      sockets: this.randInt(0, 3), // 0-3孔
+      sockets: [],
       enchant: null,
+      enhanceLevel: 0,
     };
   },
   // 计算装备基础属性
