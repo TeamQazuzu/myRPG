@@ -309,8 +309,8 @@ const DATA = {
       reward: "父母的遗物",
       onDefeat: "unlock_skyTower",
       waves: [
-        { enemies: [{ name: "幻影护卫", type: "elite", level: 75, hp: 4000, maxHp: 4000, attack: 600, defense: 200, speed: 30, exp: 1500, gold: 500 }], intro: "隐者：「先过我这一关。"', perWaveRounds: 20 },
-        { enemies: [{ name: "隐者", type: "boss", level: 80, hp: 12000, maxHp: 12000, attack: 800, defense: 300, speed: 28, exp: 8000, gold: 2000, critRate: 40, critMultiplier: 2.0, drop: { name: "父母的遗物", type: "quest", rarity: "orange" } }], intro: "隐者：「不错。但真正的考验......现在才开始。"', perWaveRounds: 30 },
+        { enemies: [{ name: "幻影护卫", type: "elite", level: 75, hp: 4000, maxHp: 4000, attack: 600, defense: 200, speed: 30, exp: 1500, gold: 500 }], intro: "隐者：「先过我这一关。", perWaveRounds: 20 },
+        { enemies: [{ name: "隐者", type: "boss", level: 80, hp: 12000, maxHp: 12000, attack: 800, defense: 300, speed: 28, exp: 8000, gold: 2000, critRate: 40, critMultiplier: 2.0, drop: { name: "父母的遗物", type: "quest", rarity: "orange" } }], intro: "隐者：「不错。但真正的考验......现在才开始。", perWaveRounds: 30 },
       ],
     },
     finalBoss: {
@@ -322,9 +322,9 @@ const DATA = {
       reward: "真相碎片",
       onDefeat: "game_clear",
       waves: [
-        { enemies: [{ name: "暗影分身", type: "elite", level: 90, hp: 6000, maxHp: 6000, attack: 1000, defense: 300, speed: 35, exp: 3000, gold: 800 }, { name: "暗影分身", type: "elite", level: 90, hp: 6000, maxHp: 6000, attack: 1000, defense: 300, speed: 35, exp: 3000, gold: 800 }], intro: "主人：「证明你配站在这里。」', perWaveRounds: 25 },
-        { enemies: [{ name: "守卫傀儡", type: "elite", level: 95, hp: 8000, maxHp: 8000, attack: 1200, defense: 400, speed: 25, exp: 5000, gold: 1000, drop: { name: "傀儡核心", type: "material", rarity: "red" } }], intro: "主人：「......有两下子。"', perWaveRounds: 25 },
-        { enemies: [{ name: "主人", type: "boss", level: 99, hp: 20000, maxHp: 20000, attack: 1500, defense: 500, speed: 30, exp: 20000, gold: 5000, critRate: 50, critMultiplier: 2.5, drop: { name: "真相碎片", type: "quest", rarity: "red" } }], intro: "主人：「你以为走到这里就算结束了吗？——来吧，让我看看你的全部。"', perWaveRounds: 40 },
+        { enemies: [{ name: "暗影分身", type: "elite", level: 90, hp: 6000, maxHp: 6000, attack: 1000, defense: 300, speed: 35, exp: 3000, gold: 800 }, { name: "暗影分身", type: "elite", level: 90, hp: 6000, maxHp: 6000, attack: 1000, defense: 300, speed: 35, exp: 3000, gold: 800 }], intro: "主人：「证明你配站在这里。」", perWaveRounds: 25 },
+        { enemies: [{ name: "守卫傀儡", type: "elite", level: 95, hp: 8000, maxHp: 8000, attack: 1200, defense: 400, speed: 25, exp: 5000, gold: 1000, drop: { name: "傀儡核心", type: "material", rarity: "red" } }], intro: "主人：「......有两下子。", perWaveRounds: 25 },
+        { enemies: [{ name: "主人", type: "boss", level: 99, hp: 20000, maxHp: 20000, attack: 1500, defense: 500, speed: 30, exp: 20000, gold: 5000, critRate: 50, critMultiplier: 2.5, drop: { name: "真相碎片", type: "quest", rarity: "red" } }], intro: "主人：「你以为走到这里就算结束了吗？——来吧，让我看看你的全部。", perWaveRounds: 40 },
       ],
     },
   },
