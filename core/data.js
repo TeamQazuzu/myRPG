@@ -465,7 +465,7 @@ const DATA = {
     bow: "weapon", crossbow: "weapon", dagger: "weapon",
     staff: "weapon", wand: "weapon",
     shield: "offhand",
-    helmet: "helmet", chest: "chest", legs: "legs",
+    armor: "chest", helmet: "helmet", chest: "chest", legs: "legs",
     boots: "boots", gloves: "gloves",
     necklace: "necklace", ring: "ring1",
   },
@@ -474,6 +474,7 @@ const DATA = {
   skills: {
     // ---------- 新手技能（3个）----------
     warrior_heavyhit: {
+      id: "warrior_heavyhit",
       name: "重击",
       desc: "蓄力一击，造成1.5倍物理伤害，附加流血效果",
       reqLevel: 1,
@@ -489,6 +490,7 @@ const DATA = {
       ],
     },
     ranger_quickshot: {
+      id: "ranger_quickshot",
       name: "快速射击",
       desc: "快速射出一箭，造成1.3倍物理伤害",
       reqLevel: 1,
@@ -502,6 +504,7 @@ const DATA = {
       effects: [],
     },
     mage_minorheal: {
+      id: "mage_minorheal",
       name: "小治疗",
       desc: "恢复目标20%最大生命值",
       reqLevel: 1,
@@ -517,6 +520,7 @@ const DATA = {
 
     // ---------- 原有技能（9个）----------
     shield_wall: {
+      id: "shield_wall",
       name: "盾墙",
       desc: "举起盾牌，本回合受到的伤害减少50%",
       reqLevel: 20,
@@ -532,6 +536,7 @@ const DATA = {
       ],
     },
     fierce_strike: {
+      id: "fierce_strike",
       name: "猛击",
       desc: "全力一击，造成1.8倍物理伤害",
       reqLevel: 20,
@@ -545,6 +550,7 @@ const DATA = {
       effects: [],
     },
     double_shot: {
+      id: "double_shot",
       name: "连射",
       desc: "连续射出两箭，对目标造成1.2倍物理伤害×2",
       reqLevel: 20,
@@ -560,6 +566,7 @@ const DATA = {
       ],
     },
     slow_arrow: {
+      id: "slow_arrow",
       name: "减速箭",
       desc: "射出冰冷的箭矢，造成伤害并减速目标",
       reqLevel: 20,
@@ -575,6 +582,7 @@ const DATA = {
       ],
     },
     fireball: {
+      id: "fireball",
       name: "火球",
       desc: "投掷火球，造成1.5倍火焰伤害，有概率灼烧目标",
       reqLevel: 20,
@@ -590,6 +598,7 @@ const DATA = {
       ],
     },
     ice_arrow: {
+      id: "ice_arrow",
       name: "冰箭",
       desc: "发射冰箭，造成1.3倍冰霜伤害，有概率减速目标",
       reqLevel: 20,
@@ -605,6 +614,7 @@ const DATA = {
       ],
     },
     lightning_bolt: {
+      id: "lightning_bolt",
       name: "雷击",
       desc: "召唤雷电，造成1.4倍雷电伤害，有概率使目标僵直",
       reqLevel: 20,
@@ -620,6 +630,7 @@ const DATA = {
       ],
     },
     heal: {
+      id: "heal",
       name: "治疗术",
       desc: "为友方目标恢复30%最大生命值",
       reqLevel: 20,
@@ -629,10 +640,11 @@ const DATA = {
       cooldown: 3,
       baseDamage: null,
       baseHeal: 0.3,
-      element: null,
+      element: "heal",
       effects: [],
     },
     war_cry: {
+      id: "war_cry",
       name: "战吼",
       desc: "发出战吼，鼓舞自身，攻击力提升30%，持续3回合",
       reqLevel: 40,

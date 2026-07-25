@@ -11,7 +11,7 @@
 - 纯前端文字RPG，HTML/CSS/Vanilla JS，无框架依赖
 - GitHub: https://github.com/TeamQazuzu/myRPG
 - 设计文档: `XQ.md`（根目录，GDD v11.1，已定稿可进入开发）
-- **开发状态**：v1.2 战斗核心系统，四系伤害/异常状态/随从AI/挂机采集已完成，处于可玩原型阶段
+- **开发状态**：v1.5 守门员Boss战系统
 
 ## 文件结构
 ```
@@ -94,8 +94,8 @@ CustomEvent 事件机制，UIRenderer 监听事件驱动渲染：
 - [x] 随从系统（艾琳开局入队，最多2个随从）
 - [x] 帧式场景管理（场景/出口/行动按钮）
 
-### 灰烟村内容（v1.1 扩展后）
-- [x] 灰烟村·村口（安全区枢纽，通往10个地点）
+}### 灰烟村内容（v1.1 扩展后 + v1.4 新增）
+- [x] 灰烟村·村口（安全区枢纽，通往14个地点）
 - [x] 灰烟村·酒馆（休息恢复HP/MP）
 - [x] 灰烟村·铁匠铺（NPC对话：老哈）
 - [x] 灰烟村·村边荒地（6只野狗战斗，测试3v6最大场面）
@@ -106,10 +106,14 @@ CustomEvent 事件机制，UIRenderer 监听事件驱动渲染：
 - [x] 灰烟村·杂货铺（NPC对话→商店：三婶）
 - [x] 灰烟村·练功场（单人/三人练兵战斗）
 - [x] 灰烟村·后山小径（山贼战斗 / 野果采集）
+- [x] 灰烟村·裁缝铺（NPC对话：玛莎+小柯）
+- [x] 灰烟村·皮匠铺（NPC对话：诺恩）
+- [x] 灰烟村·村医屋（NPC对话：蕾娜，部分恢复HP/MP）
+- [x] 灰烟村·墓地（NPC对话：守墓人老格）
 
 ### 新增系统（v1.1）
 - [x] 商店/交易系统（买/卖/杂货店商品列表）
-- [x] NPC对话系统（对话树/选项分支/动作执行/5个NPC）
+- [x] NPC对话系统（对话树/选项分支/动作执行/10个NPC）
 - [x] 技能系统框架（9个技能/MP消耗/冷却/选技能→点目标两阶段流程）
 - [x] 装备掉落（战斗后按怪物类型概率生成随机装备）
 - [x] 消耗品使用（背包中直接使用恢复HP/MP）
@@ -122,6 +126,23 @@ CustomEvent 事件机制，UIRenderer 监听事件驱动渲染：
 - [x] 元素技能自动触发状态（无显式apply_status的元素技能10%概率触发）
 - [x] 随从AI策略系统（攻击型/防御型/治疗型/平衡型四种策略）
 - [x] 挂机采集系统（8轮循环/70%采集/15%遇敌/10%金币/5%稀有/结算面板）
+
+### 装备词条战斗接入（v1.3 新增）
+- [x] 装备词条收集系统（collectAffixBonuses 在 normalizeUnit 时汇总所有装备词条）
+- [x] 暴击系统（基础5%暴击率/1.5x暴伤 + 词条叠加，上限75%暴击率）
+- [x] 四系攻击加成（physDmg/fireDmg/frostDmg/lightDmg 百分比乘算到攻击力）
+- [x] 穿透减防（pierce 百分比忽略目标防御）
+- [x] 元素抗性减伤（fireRes/frostRes/lightRes/allElemRes，上限75%）
+- [x] 条件增伤（frostBonusOnSlow/lightBonusOnStun/fireBonusOnBurn/physBonusOnBleed）
+- [x] 低血量增伤（lowHpDmg <30%/veryLowHpDmg <20%）
+- [x] 首回合增伤（firstTurnDmg 第一回合伤害加成）
+- [x] 词条命中触发（bleedOnCrit/burnOnHit/slowOnHit/stunOnHit 概率施加状态）
+- [x] 命中减益（reduceArmor/reduceSpeed/burnReduceAtk 降低目标属性）
+- [x] 生命/法力窃取（lifeSteal/manaSteal 按伤害百分比回复）
+- [x] 不可屈挠（cheatDeathChance 玩家方致死时概率存活1HP）
+- [x] 击杀爆炸 AOE（aoeOnKill 击杀敌人时概率对其他敌人造成火焰伤害）
+- [x] 技能暴击 + 词条联动（useSkill 同样走暴击/条件增伤/窃取/命中触发链路）
+- [x] 伤害日志增强（暴击/抗性减免/条件增伤/低血量/首回合 在日志中标注）
 
 ### UI与交互
 - [x] 双视图切换（冒险画面 ↔ 战斗画面）
@@ -143,9 +164,9 @@ CustomEvent 事件机制，UIRenderer 监听事件驱动渲染：
 ## 待开发功能
 
 ### 高优先级
-- [ ] 更多灰烟村场景帧（裁缝铺/皮匠铺/村医屋/墓地）
-- [ ] 装备词条状态效果接入（bleedOnCrit/burnOnHit/slowOnHit/stunOnHit等词条触发）
-- [ ] 守门员Boss战特殊机制
+- [ ] 守门员Boss特殊技能AI（村长嘲讽/治疗、守夜人暗袭、机械守卫蓄力等）
+- [ ] 守夜人暗杀铺垫事件（37/38级随机暗杀，掉落组织线索）
+- [ ] 多波次Boss战框架（GDD：2-4波，每波独立30回合，完全重置）
 
 ### 中优先级
 - [ ] 冒险地图帧探索（已知区域快速跳转/未知区域逐格探索）
@@ -155,7 +176,6 @@ CustomEvent 事件机制，UIRenderer 监听事件驱动渲染：
 
 ### 低优先级
 - [ ] 灰烬山脉区域（第二个大区域）
-- [ ] 守门员战斗（村长/守夜人等特殊Boss战）
 - [ ] 碎片收集系统（12碎片）
 - [ ] 金龙/银龙随机事件
 - [ ] 音乐/音效
@@ -165,9 +185,8 @@ CustomEvent 事件机制，UIRenderer 监听事件驱动渲染：
 ---
 
 ## 已知问题（需修复）
-1. **装备词条状态效果未接入**：词条池中定义了 bleedOnCrit/burnOnHit 等触发效果，但战斗引擎尚未读取装备词条来触发对应状态
-2. **面板交互边界**：背包/装备面板操作后偶现状态不同步，需测试
-3. **商店价格浮动未实现**：当前为固定价格，GDD 要求价格浮动
+1. **面板交互边界**：背包/装备面板操作后偶现状态不同步，需测试
+2. **商店价格浮动未实现**：当前为固定价格，GDD 要求价格浮动
 
 ---
 
@@ -226,6 +245,130 @@ state = {
 ---
 
 ## 变更日志
+
+### 2026-07-25 v1.5 守门员Boss战系统
+
+**BossCombatEngine 类（combat.js 新增）**
+- 继承 CombatEngine，新增 `bossId`/`gkData`/`phase`/`maxPhase`/`isRetreatBlocked` 等属性
+- 根据守门员 combat.style 自动配置阶段系统：
+  - `tank`（村长）：2阶段（100%-50%-0%），防御翻倍，每回合自愈3%最大HP
+  - `glassCannon`（守夜人）：3阶段（100%-60%-30%-0%），暴击率+20%，阶段2暴击率再+20%，阶段3攻击力+50%
+  - `meleeBoss`（机械守卫）：1阶段，每3回合技能间隔
+- `checkPhaseTransition()` 每回合检查HP百分比触发阶段转换
+- `onPhaseChange()` 阶段转换时强化Boss属性并日志提示
+- 重写 `processTurn()` 在回合开始前检查阶段转换和村长自愈
+- 重写 `endCombat()` 实现特殊失败处理（送回酒馆不消耗复活次数）、平局处理（HP=1,MP=0,损失5%金币）、击败回调触发
+- 重写 `calculateRewards()` 确保Boss 100%掉落装备 + 守门员额外经验 + 特殊任务奖励物品
+- `tickBossSkillCooldowns()` Boss技能冷却管理
+- `setDefeatCallback()` 设置自定义击败回调
+
+**Boss战通用机制（combat.js 修改）**
+- `CombatEngine.playerAction('retreat')` 检查 `isRetreatBlocked`，Boss战禁止撤退并提示
+- `CombatEngine.endCombat()` 检查 `_bossHandledDeath`，Boss战跳过正常死亡流程
+
+**场景系统接入（scene.js 新增）**
+- `buildGatekeeperUnit(gkId)` 从 DATA.gatekeepers 构建Boss单位数据（HP/ATK/DEF/暴击/掉落）
+- `triggerBossBattle(gkId)` 完整的Boss战触发流程：
+  - 检查守门员是否已被击败
+  - 检查经验锁（必须达到等级上限才能挑战）
+  - 创建 BossCombatEngine 并设置击败回调
+  - 击败回调：调用 `StateUtils.defeatGatekeeper()` 解锁区域 + 扩容背包 + 设置叙事标记
+  - 开场显示Boss台词（stance）
+
+**村长对话树扩展（dialogue.js 修改）**
+- 新增「我要离开这个村子」选项（条件：守门员未击败）→ 挑战分支 → `boss_battle:villageChief` 动作
+- 新增「村长，我打赢了」选项（条件：守门员已击败）→ 获得父亲的旧信
+- 新增 `boss_battle` 动作类型处理
+- 对话选项条件过滤系统：`condition` + `conditionArg` 字段支持 `gatekeeper_not_defeated`/`gatekeeper_defeated`/`exp_locked`
+
+**UI增强（renderer.js + style.css）**
+- Boss战标题显示「👑 Boss战」+「禁止撤退」标签
+- 阶段指示器（多阶段Boss显示 🔴/⚪ 阶段圆点 + Boss名字）
+- Boss战隐藏撤退按钮
+- 撤退按钮事件绑定改为安全检查（null guard）
+- 新增 `boss_battle` 场景行动类型处理
+- CSS：`.boss-phase-bar`/`.boss-name`/`.boss-phases`/`.no-retreat-hint` 样式
+
+**文件变更**
+- 修改文件：`systems/combat.js`、`systems/scene.js`、`systems/dialogue.js`、`ui/renderer.js`、`css/style.css`、`DEVLOG.md`
+
+### 202}6-07-25 v1.4 灰烟村场景扩展（裁缝铺/皮匠铺/村医屋/墓地）
+
+**新增 4 个场景帧**
+- 灰烟村·裁缝铺（安全区，NPC：玛莎+学徒小柯）
+- 灰烟村·皮匠铺（安全区，NPC：诺恩）
+- 灰烟村·村医屋（安全区，NPC：蕾娜，可部分恢复HP/MP）
+- 灰烟村·墓地（安全区，NPC：守墓人老格）
+
+**新增 5 个 NPC 对话树**
+- 裁缝玛莎（3条分支：斗篷往事/布料/告别）
+- 裁缝学徒小柯（3条分支：城里见闻/来由/告别）
+- 皮匠诺恩（4条分支：鉴定皮子/特殊皮/诡异刀痕/告别）
+- 村医蕾娜（3条分支：父母来访/伤口建议/告别）
+- 守墓人老格（4条分支：墓中人/守墓职责/铜盒线索/日常）
+
+**村医屋功能**
+- 新增 heal_partial 行动类型：恢复50% HP + 30% MP
+- renderer.js 新增 case 处理
+- scene.js 新增 healPartial() 方法
+
+**枢纽出口扩展**
+- 灰烟村枢纽出口从 10 个增至 14 个
+
+**叙事线索**
+- 玛莎：父母定制斗篷、留存布头碎片（裁缝的斗篷支线伏笔）
+- 小柯：灰烬镇大裁缝铺信息（世界扩展伏笔）
+- 诺恩：老穆的野猪上有非猎人刀痕（组织活动线索）
+- 蕾娜：父亲拿止痛药和金疮药、说"很远的路"
+- 老格：二十年前外来女人留下小铜盒、等孩子来取（核心线索）
+
+**文件变更**
+- 修改文件：`systems/scene.js`、`systems/dialogue.js`、`ui/renderer.js`、`DEVLOG.md`
+
+### 2026-07-25 v1.3 装备词条战斗接入
+
+**calculateDamage 重构**
+- 返回值从数字改为 `{ damage, resisted }` 对象
+- 新增：四系攻击加成（physDmg/fireDmg/frostDmg/lightDmg 百分比乘算到基础攻击力）
+- 新增：穿透减防（pierce 百分比忽略目标有效防御）
+- 新增：元素抗性减伤（fireRes/frostRes/lightRes/allElemRes，魔法伤害受抗性减免，上限75%）
+
+**executeAction 完整词条链路**
+- 重写：伤害计算流程改为 11 步管线（基础伤害→暴击→条件增伤→低血量增伤→首回合增伤→扣血→日志→命中触发→窃取→元素状态→死亡判定）
+- 新增：暴击判定（基础5%暴击率 + critRate词条，1.5x + critDmg词条，上限75%暴击率）
+- 新增：条件增伤（目标有对应状态时额外伤害：冰霜+减速/雷电+僵直/火焰+灼烧/物理+流血）
+- 新增：低血量增伤（HP<30% lowHpDmg / HP<20% veryLowHpDmg）
+- 新增：首回合增伤（第一回合 firstTurnDmg 额外伤害）
+- 新增：词条命中触发（bleedOnCrit暴击流血/burnOnHit命中灼烧/slowOnHit命中减速/stunOnHit命中僵直）
+- 新增：命中减益（reduceArmor物理命中减甲/reduceSpeed冰霜命中减速/burnReduceAtk灼烧减攻）
+- 新增：生命/法力窃取（lifeSteal/manaSteal 按最终伤害百分比回复）
+- 新增：不可屈挠（cheatDeathChance 玩家方致死时概率保留1HP）
+- 新增：击杀爆炸 AOE（aoeOnKill 击杀后概率对其他敌人造成50%攻击力火焰伤害）
+- 新增：技能击杀同样触发不可屈挠和击杀爆炸
+
+**技能系统联动**
+- 修改：`skills.js` useSkill() 适配 calculateDamage 新返回值
+- 新增：技能伤害同样走暴击判定、条件增伤、低血量增伤、首回合增伤
+- 新增：技能命中后触发词条命中效果和生命/法力窃取
+- 新增：技能暴击在日志中显示【暴击】标签
+
+**日志增强**
+- 伤害日志自动标注：暴击/抗性减免/条件增伤/低血量增伤/首回合增伤/吸血吸魔
+
+**文件变更**
+- 修改文件：`systems/combat.js`、`systems/skills.js`、`DEVLOG.md`
+
+### 2026-07-25 v1.2.1 Bug修复批次
+
+**修复 5 项**
+- 修复：`combat.js` 使用药水时引用未定义变量 `beforeHp2`/`beforeMp2`（→ 重命名为 `beforeHealHp`/`beforeHealMp`，修正引用）
+- 修复：`combat.js` applyStatusEffect() 中 `dmgTypeInfo` 死代码（`DATA && DATA.damageTypes ? null : null` 永远为 null，已删除）
+- 修复：`data.js` 治疗术技能 `element: null` 导致 renderer 无法识别为治疗技能、无法点击友方目标（→ 改为 `element: "heal"`）
+- 修复：`data.js` typeToSlot 缺少 `armor` 映射，generateEquipment 生成的防具无法装备（→ 补充 `armor: "chest"`）
+- 修复：`equipment.js` socket/unsocket 将数字数组当对象使用（`item.sockets` 为 `[0,1,2]`，却访问 `[idx].gem`）→ 新增 `_ensureSocketObjects()` 自动转换
+
+**文件变更**
+- 修改文件：`systems/combat.js`、`core/data.js`、`systems/equipment.js`
 
 ### 2026-07-25 v1.2 战斗核心系统批次
 

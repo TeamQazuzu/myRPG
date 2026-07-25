@@ -164,6 +164,16 @@ class UIRenderer {
       case 'idle_gather':
         this.startIdleGather(action.target);
         break;
+      case 'heal_partial':
+        sm.healPartial();
+        break;
+      case 'boss_battle':
+        if (sm.triggerBossBattle) {
+          sm.triggerBossBattle(action.target);
+        } else {
+          this.addGameLog('Boss战斗系统不可用');
+        }
+        break;
       default:
         console.warn('[UI] 未知行动类型:', action.type);
     }
@@ -221,11 +231,29 @@ class UIRenderer {
     if (!container) return;
     container.style.display = 'flex';
 
+    // Boss战阶段指示器
+    var bossPhaseHtml = '';
+    if (combat.isBossCombat && combat.maxPhase > 1) {
+      var phaseName = combat.gkData && combat.gkData.name ? combat.gkData.name : 'Boss';
+      var phaseDots = '';
+      for (var p = 1; p <= combat.maxPhase; p++) {
+        phaseDots += p === combat.phase ? '🔴' : '⚪';
+      }
+      bossPhaseHtml = '<div class="boss-phase-bar"><span class="boss-name">' + phaseName + '</span><span class="boss-phases">' + phaseDots + '</span></div>';
+    } else if (combat.isBossCombat) {
+      var phaseName2 = combat.gkData && combat.gkData.name ? combat.gkData.name : 'Boss';
+      bossPhaseHtml = '<div class="boss-phase-bar"><span class="boss-name">' + phaseName2 + '</span></div>';
+    }
+
+    var retreatHint = combat.isRetreatBlocked ? '<span class="no-retreat-hint">禁止撤退</span>' : '';
+
     let html = `
       <div class="combat-header">
-        <span class="combat-title">⚔ 战斗</span>
+        <span class="combat-title">${combat.isBossCombat ? '👑 Boss战' : '⚔ 战斗'}</span>
         <span class="combat-round">回合 ${combat.round}/${combat.maxRounds}</span>
+        ${retreatHint}
       </div>
+      ${bossPhaseHtml}
     `;
 
     // 敌方区域
@@ -386,7 +414,7 @@ class UIRenderer {
       <button class="action-btn combat-btn" id="btn-skill">✨ 技能</button>
       <button class="action-btn combat-btn" id="btn-defend">🛡 防御</button>
       <button class="action-btn combat-btn" id="btn-item">🎒 道具</button>
-      <button class="action-btn combat-btn retreat-btn" id="btn-retreat">🏃 撤退</button>
+      ${combat.isRetreatBlocked ? '' : '<button class="action-btn combat-btn retreat-btn" id="btn-retreat">🏃 撤退</button>'}
     `;
 
     document.getElementById('btn-attack').addEventListener('click', () => {
@@ -430,12 +458,15 @@ class UIRenderer {
       combat.playerAction('item', null);
     });
 
-    document.getElementById('btn-retreat').addEventListener('click', () => {
-      if (!combat.isPlayerTurn) return;
-      if (confirm('确定要撤退吗？')) {
-        combat.playerAction('retreat', null);
-      }
-    });
+    var retreatBtn = document.getElementById('btn-retreat');
+    if (retreatBtn) {
+      retreatBtn.addEventListener('click', () => {
+        if (!combat.isPlayerTurn) return;
+        if (confirm('确定要撤退吗？')) {
+          combat.playerAction('retreat', null);
+        }
+      });
+    }
 
     this.enableButtons(combat.isPlayerTurn);
   }

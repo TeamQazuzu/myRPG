@@ -54,7 +54,7 @@ class CombatEngine {
   // ========== 标准化单位数据（修复HP undefined）==========
   normalizeUnit(unit, side) {
     const maxHp = unit.maxHp || unit.hp || 100;
-    return {
+    var result = {
       id: unit.id || ('unit_' + Math.random().toString(36).substr(2, 6)),
       name: unit.name || '未知',
       side: side,
@@ -74,9 +74,17 @@ class CombatEngine {
       drop: unit.drop || null,
       alive: true,
       aiStrategy: unit.aiStrategy || 'balanced',
-      // 异常状态系统：{ bleed: {duration, value}, burn: {duration, stacks, value}, slow: {duration}, stun: {duration} }
       statusEffects: {},
     };
+    // 收集装备词条加成
+    var equipment = null;
+    if (side === 'player') {
+      equipment = (window.gameApp && window.gameApp.state && window.gameApp.state.equipment) ? window.gameApp.state.equipment : null;
+    } else if (side === 'ally' && unit.equipment) {
+      equipment = unit.equipment;
+    }
+    result.affixBonuses = this.collectAffixBonuses(equipment);
+    return result;
   }
 
   // ========== 计算行动顺序（按有效速度排序，考虑减速/僵直）==========
@@ -214,6 +222,30 @@ class CombatEngine {
               }
             }
           }
+          // 处理主目标死亡（不可屈挠 + 击杀爆炸）
+          if (target && !target.alive && target.hp <= 0) {
+            // 不可屈挠（仅玩家方单位被击杀时）
+            if (target.side === 'player' || target.side === 'ally') {
+              if (this.tryCheatDeath(target)) {
+                var cheatMsg = target.name + ' 发动了不可屈挠！';
+                this.combatLog.push(cheatMsg);
+                this.dispatchUpdate(cheatMsg);
+              }
+            }
+            if (!target.alive) {
+              // 击杀爆炸 AOE
+              this.tryAoeOnKill(unit, target);
+            }
+          }
+          // 处理AOE追加目标的死亡（击杀爆炸）
+          if (skillResult.aoeTargets && skillResult.aoeTargets.length > 0) {
+            for (var ai = 0; ai < skillResult.aoeTargets.length; ai++) {
+              var aoeT = skillResult.aoeTargets[ai].target;
+              if (aoeT && !aoeT.alive && aoeT.hp <= 0) {
+                this.tryAoeOnKill(unit, aoeT);
+              }
+            }
+          }
           // 清除已选择的技能
           this.selectedSkill = null;
           if (this.checkBattleEnd()) return;
@@ -265,16 +297,16 @@ class CombatEngine {
         // 使用药水效果
         var healHp = potion.healHp || 0;
         var healMp = potion.healMp || 0;
-        var beforeHp2 = unit.hp;
-        var beforeMp = unit.mp;
+        var beforeHealHp = unit.hp;
+        var beforeHealMp = unit.mp;
         if (healHp > 0) {
           unit.hp = Math.min(unit.maxHp, unit.hp + healHp);
         }
         if (healMp > 0) {
           unit.mp = Math.min(unit.maxMp, unit.mp + healMp);
         }
-        var actualHealHp = unit.hp - beforeHp2;
-        var actualHealMp = unit.mp - beforeMp2;
+        var actualHealHp = unit.hp - beforeHealHp;
+        var actualHealMp = unit.mp - beforeHealMp;
         var healMsg = unit.name + ' 使用了' + potion.name;
         if (actualHealHp > 0) healMsg += '，回复 ' + actualHealHp + ' HP';
         if (actualHealMp > 0) healMsg += '，回复 ' + actualHealMp + ' MP';
@@ -290,6 +322,14 @@ class CombatEngine {
         break;
 
       case 'retreat':
+        if (this.isRetreatBlocked) {
+          var retreatBlockMsg = 'Boss战中无法撤退！';
+          this.combatLog.push(retreatBlockMsg);
+          this.dispatchUpdate(retreatBlockMsg);
+          // 不结束回合，让玩家重新选择行动
+          this.waitForPlayerAction(unit);
+          return;
+        }
         this.endCombat('retreat');
         break;
 
@@ -435,7 +475,7 @@ class CombatEngine {
     this.executeAction(unit, 'attack', target);
   }
 
-  // ========== 执行行动（支持四系伤害类型和异常状态触发）==========
+  // ========== 执行行动（完整词条链路）==========
   // damageType: 'physical' | 'fire' | 'frost' | 'lightning'
   executeAction(attacker, action, target, damageType) {
     if (!target || !target.alive || target.hp <= 0) {
@@ -444,34 +484,91 @@ class CombatEngine {
     }
 
     var dmgType = damageType || 'physical';
-    let damage = 0;
-    let logMessage = '';
+    var logMessage = '';
+    var isCrit = false;
+    var finalDamage = 0;
 
-    switch (action) {
-      case 'attack':
-        damage = this.calculateDamage(attacker, target, dmgType);
-        target.hp = Math.max(0, target.hp - damage);
-        logMessage = attacker.name + ' 攻击 ' + target.name + '，造成 ' + damage + ' 点' + this.getDamageTypeName(dmgType) + '伤害';
-        // 普通攻击有概率触发异常状态
-        this.tryApplyStatusFromDamageType(target, dmgType, attacker);
-        break;
+    // ---- 1. 计算基础伤害（含词条攻击加成/穿透/元素抗性）----
+    var dmgResult = this.calculateDamage(attacker, target, dmgType);
+    finalDamage = dmgResult.damage;
 
-      case 'skill':
-        damage = Math.floor(this.calculateDamage(attacker, target, dmgType) * 1.5);
-        target.hp = Math.max(0, target.hp - damage);
-        logMessage = attacker.name + ' 使用技能攻击 ' + target.name + '，造成 ' + damage + ' 点' + this.getDamageTypeName(dmgType) + '伤害';
-        break;
-
-      default:
-        damage = this.calculateDamage(attacker, target, dmgType);
-        target.hp = Math.max(0, target.hp - damage);
-        logMessage = attacker.name + ' 攻击 ' + target.name + '，造成 ' + damage + ' 点伤害';
+    // ---- 2. 暴击判定 ----
+    var critResult = this.rollCrit(attacker);
+    isCrit = critResult.isCrit;
+    if (isCrit) {
+      finalDamage = Math.floor(finalDamage * critResult.multiplier);
     }
 
-    // 检查目标是否死亡
+    // ---- 3. 条件增伤 ----
+    var condBonus = this.getConditionalBonus(attacker, target, dmgType);
+    if (condBonus > 0) {
+      finalDamage = Math.floor(finalDamage * (1 + condBonus));
+    }
+
+    // ---- 4. 低血量增伤 ----
+    var lowHpBonus = this.getLowHpBonus(attacker);
+    if (lowHpBonus > 0) {
+      finalDamage = Math.floor(finalDamage * (1 + lowHpBonus));
+    }
+
+    // ---- 5. 首回合增伤 ----
+    var firstTurnBonus = this.getFirstTurnBonus(attacker);
+    if (firstTurnBonus > 0) {
+      finalDamage = Math.floor(finalDamage * (1 + firstTurnBonus));
+    }
+
+    finalDamage = Math.max(1, finalDamage);
+
+    // ---- 6. 扣血 ----
+    target.hp = Math.max(0, target.hp - finalDamage);
+
+    // ---- 7. 构建日志 ----
+    var dmgTypeName = this.getDamageTypeName(dmgType);
+    logMessage = attacker.name + ' 攻击 ' + target.name + '，造成 ' + finalDamage + ' 点' + dmgTypeName + '伤害';
+    if (isCrit) logMessage += '【暴击】';
+    if (dmgResult.resisted > 0) logMessage += '（抗性减免' + Math.floor(dmgResult.resisted * 100) + '%）';
+    if (condBonus > 0) logMessage += '（条件增伤+' + Math.floor(condBonus * 100) + '%）';
+    if (lowHpBonus > 0) logMessage += '（低血量增伤+' + Math.floor(lowHpBonus * 100) + '%）';
+    if (firstTurnBonus > 0) logMessage += '（首回合增伤+' + Math.floor(firstTurnBonus * 100) + '%）';
+
+    // ---- 8. 词条命中触发效果（流血/灼烧/减速/僵直/减甲/减攻）----
+    var hitLogs = this.applyAffixOnHitEffects(attacker, target, dmgType, isCrit);
+    for (var hi = 0; hi < hitLogs.length; hi++) {
+      this.combatLog.push(hitLogs[hi]);
+      this.dispatchUpdate(hitLogs[hi]);
+    }
+
+    // ---- 9. 生命/法力窃取 ----
+    var stealLogs = this.applyLifeManaSteal(attacker, finalDamage);
+    for (var si = 0; si < stealLogs.length; si++) {
+      logMessage += '，' + stealLogs[si];
+    }
+
+    // ---- 10. 普通攻击概率触发异常状态（元素基础概率）----
+    if (action === 'attack') {
+      this.tryApplyStatusFromDamageType(target, dmgType, attacker);
+    }
+
+    // ---- 11. 死亡判定 + 不可屈挠 + 击杀爆炸 ----
     if (target.hp <= 0) {
+      // 不可屈挠（仅玩家方）
+      if (target.side === 'player' || target.side === 'ally') {
+        if (this.tryCheatDeath(target)) {
+          logMessage += '（' + target.name + ' 发动了不可屈挠！）';
+          this.combatLog.push(logMessage);
+          this.dispatchUpdate(logMessage);
+          if (this.checkBattleEnd()) return;
+          this.nextTurn();
+          return;
+        }
+      }
       target.alive = false;
       logMessage += '（' + target.name + ' 倒下了）';
+      // 击杀爆炸 AOE
+      this.tryAoeOnKill(attacker, target);
+      // 检查AOE后是否有人死亡
+      var aoeKilled = this.enemyUnits.filter(function(e) { return !e.alive && e.hp <= 0; });
+      // 不在主日志中显示AOE击杀，tryAoeOnKill已经自行dispatch
     }
 
     this.combatLog.push(logMessage);
@@ -491,32 +588,52 @@ class CombatEngine {
     return '';
   }
 
-  // ========== 计算伤害（支持四系伤害类型）==========
+  // ========== 计算伤害（支持四系伤害类型 + 词条加成）==========
   // damageType: 'physical' | 'fire' | 'frost' | 'lightning' | null（默认物理）
+  // 返回 { damage: number, resisted: number }  resisted 为元素抗性减免的百分比描述
   calculateDamage(attacker, defender, damageType) {
-    const baseAttack = attacker.attack || 5;
-    let baseDefense = defender.defense || 2;
+    var ab = attacker.affixBonuses || {};
+    var baseAttack = attacker.attack || 5;
+    var baseDefense = defender.defense || 2;
 
-    // 应用防御加成
+    // 应用防御加成（防御姿态/Buff）
     if (this.defenseBoosts[defender.id]) {
       baseDefense += this.defenseBoosts[defender.id];
     }
 
     var dmgType = damageType || 'physical';
-    var damage = 0;
 
+    // 穿透词条：按百分比忽略防御
+    var pierce = ab.pierce || 0;
+    var effectiveDef = baseDefense * (1 - pierce);
+
+    // 词条攻击加成（百分比乘算）
+    var elemBonus = 0;
+    if (dmgType === 'physical') elemBonus = ab.physDmg || 0;
+    else if (dmgType === 'fire') elemBonus = ab.fireDmg || 0;
+    else if (dmgType === 'frost') elemBonus = ab.frostDmg || 0;
+    else if (dmgType === 'lightning') elemBonus = ab.lightDmg || 0;
+    baseAttack = baseAttack * (1 + elemBonus);
+
+    var damage = 0;
     if (dmgType === 'physical') {
-      // 物理伤害：受防御力影响较大
-      damage = Math.max(1, baseAttack - baseDefense * 0.5);
+      damage = Math.max(1, baseAttack - effectiveDef * 0.5);
     } else {
-      // 魔法伤害（火焰/冰霜/雷电）：受防御力影响较小（仅30%）
-      damage = Math.max(1, baseAttack - baseDefense * 0.3);
+      damage = Math.max(1, baseAttack - effectiveDef * 0.3);
+    }
+
+    // 元素抗性减伤（仅魔法伤害）
+    var resisted = 0;
+    if (dmgType !== 'physical') {
+      resisted = this.getElementResist(defender, dmgType);
+      damage = damage * (1 - resisted);
     }
 
     // 随机浮动 0.8 ~ 1.2
-    const variance = 0.8 + Math.random() * 0.4;
+    var variance = 0.8 + Math.random() * 0.4;
     damage = Math.floor(damage * variance);
-    return Math.max(1, damage);
+    damage = Math.max(1, damage);
+    return { damage: damage, resisted: resisted };
   }
 
   // ========== 异常状态系统 ==========
@@ -534,7 +651,6 @@ class CombatEngine {
     if (!target || !target.alive || target.hp <= 0) return false;
     if (!target.statusEffects) target.statusEffects = {};
 
-    var dmgTypeInfo = DATA && DATA.damageTypes ? null : null;
     // 从 DATA.damageTypes 获取状态信息
     var statusInfo = null;
     if (DATA && DATA.damageTypes) {
@@ -688,9 +804,250 @@ class CombatEngine {
     if (!unit) return 0;
     var speed = unit.speed || 10;
     if (this.isSlowed(unit)) {
-      speed = speed * 0.7;  // 减速：速度-30%
+      speed = speed * 0.7;
     }
     return speed;
+  }
+
+  // ========== 装备词条收集 ==========
+  // 从装备字典中汇总所有词条效果为扁平对象，供战斗快速查询
+  collectAffixBonuses(equipment) {
+    var b = {
+      critRate: 0, critDmg: 0, pierce: 0, antiMagic: 0,
+      lifeSteal: 0, manaSteal: 0,
+      firstTurnDmg: 0, lowHpDmg: 0, veryLowHpDmg: 0,
+      bleedOnCrit: 0, burnOnHit: 0, slowOnHit: 0, stunOnHit: 0,
+      frostBonusOnSlow: 0, lightBonusOnStun: 0, fireBonusOnBurn: 0, physBonusOnBleed: 0,
+      burnMaxStacks: 0, burnReduceAtk: 0, bleedNoHeal: false,
+      fireRes: 0, frostRes: 0, lightRes: 0, allElemRes: 0,
+      cheatDeathChance: 0, aoeOnKill: 0, protectChance: 0, companionDmg: 0,
+      chainTarget: 0, freezeAllChance: 0,
+      dragonDmg: 0, dragonImmune: 0, dragonFire: 0,
+      divineImmune: false, divineCrit: false, extraTurn: false,
+      skyThunder: 0, iceAge: 0,
+    };
+    if (!equipment || !DATA || !DATA.affixPool) return b;
+    for (var slot in equipment) {
+      var item = equipment[slot];
+      if (!item || !item.affixes) continue;
+      for (var i = 0; i < item.affixes.length; i++) {
+        var affix = item.affixes[i];
+        var def = DATA.affixPool[affix.id];
+        if (!def) continue;
+        var v = def.value;
+        var e = def.effect;
+        // 攻击加成（百分比乘算，累积到attack用）
+        if (e === 'physDmg' || e === 'fireDmg' || e === 'frostDmg' || e === 'lightDmg') {
+          b[e] = (b[e] || 0) + v;
+          continue;
+        }
+        // 数值型直接加
+        if (e === 'critRate') { b.critRate += v; continue; }
+        if (e === 'critDmg') { b.critDmg += v; continue; }
+        if (e === 'pierce') { b.pierce += v; continue; }
+        if (e === 'antiMagic') { b.antiMagic += v; continue; }
+        if (e === 'speed') { /* speed handled in normalizeUnit via app.js */ continue; }
+        if (e === 'maxHp') { /* maxHp handled in normalizeUnit via app.js */ continue; }
+        if (e === 'physDef') { /* def handled in normalizeUnit */ continue; }
+        if (e === 'lifeSteal') { b.lifeSteal += v; continue; }
+        if (e === 'manaSteal') { b.manaSteal += v; continue; }
+        if (e === 'firstTurnDmg') { b.firstTurnDmg += v; continue; }
+        if (e === 'lowHpDmg' || e === 'desperate') { b.lowHpDmg += v; continue; }
+        if (e === 'veryLowHpDmg' || e === 'desperate2') { b.veryLowHpDmg += v; continue; }
+        if (e === 'bleedOnCrit') { b.bleedOnCrit += v; continue; }
+        if (e === 'burnOnHit') { b.burnOnHit += v; continue; }
+        if (e === 'slowOnHit') { b.slowOnHit += v; continue; }
+        if (e === 'stunOnHit') { b.stunOnHit += v; continue; }
+        if (e === 'frostBonusOnSlow') { b.frostBonusOnSlow += v; continue; }
+        if (e === 'lightBonusOnStun') { b.lightBonusOnStun += v; continue; }
+        if (e === 'fireBonusOnBurn') { b.fireBonusOnBurn += v; continue; }
+        if (e === 'physBonusOnBleed') { b.physBonusOnBleed += v; continue; }
+        if (e === 'burnMaxStacks') { b.burnMaxStacks = Math.max(b.burnMaxStacks, v); continue; }
+        if (e === 'burnReduceAtk') { b.burnReduceAtk += v; continue; }
+        if (e === 'bleedNoHeal') { b.bleedNoHeal = true; continue; }
+        if (e === 'fireRes') { b.fireRes += v; continue; }
+        if (e === 'frostRes') { b.frostRes += v; continue; }
+        if (e === 'lightRes') { b.lightRes += v; continue; }
+        if (e === 'allElemRes') { b.allElemRes += v; continue; }
+        if (e === 'cheatDeathChance') { b.cheatDeathChance += v; continue; }
+        if (e === 'aoeOnKill') { b.aoeOnKill += v; continue; }
+        if (e === 'protectChance') { b.protectChance += v; continue; }
+        if (e === 'companionDmg') { b.companionDmg += v; continue; }
+        if (e === 'chainTarget') { b.chainTarget += v; continue; }
+        if (e === 'freezeAllChance') { b.freezeAllChance += v; continue; }
+        if (e === 'debuffCleanse') { /* 净化在受到debuff时触发 */ continue; }
+        if (e === 'reduceArmor') { b._reduceArmor = (b._reduceArmor || 0) + v; continue; }
+        if (e === 'reduceSpeed') { b._reduceSpeed = (b._reduceSpeed || 0) + v; continue; }
+        if (e === 'reduceHit') { b._reduceHit = (b._reduceHit || 0) + v; continue; }
+        if (e === 'dodgeSpeed') { /* 闪避速度 */ continue; }
+        // 稀有词条（暂不实现完整逻辑，记录数值）
+        if (e === 'dragonDmg') { b.dragonDmg = Math.max(b.dragonDmg, v); continue; }
+        if (e === 'dragonImmune') { b.dragonImmune += v; continue; }
+        if (e === 'dragonFire') { b.dragonFire = Math.max(b.dragonFire, v); continue; }
+        if (e === 'divineImmune') { b.divineImmune = true; continue; }
+        if (e === 'divineCrit') { b.divineCrit = true; continue; }
+        if (e === 'extraTurn') { b.extraTurn = true; continue; }
+        if (e === 'skyThunder') { b.skyThunder = Math.max(b.skyThunder, v); continue; }
+        if (e === 'iceAge') { b.iceAge = Math.max(b.iceAge, v); continue; }
+      }
+    }
+    return b;
+  }
+
+  // ========== 暴击判定 ==========
+  rollCrit(attacker) {
+    var ab = attacker.affixBonuses || {};
+    var critRate = 0.05 + (ab.critRate || 0); // 基础5% + 词条
+    critRate = Math.min(critRate, 0.75); // 上限75%
+    var critDmg = 1.5 + (ab.critDmg || 0); // 基础1.5x + 词条
+    var isCrit = Math.random() < critRate;
+    return { isCrit: isCrit, multiplier: isCrit ? critDmg : 1.0 };
+  }
+
+  // ========== 元素抗性减伤 ==========
+  getElementResist(defender, damageType) {
+    var db = defender.affixBonuses || {};
+    var res = db.allElemRes || 0;
+    if (damageType === 'fire') res += db.fireRes || 0;
+    else if (damageType === 'frost') res += db.frostRes || 0;
+    else if (damageType === 'lightning') res += db.lightRes || 0;
+    return Math.min(res, 0.75); // 上限75%减伤
+  }
+
+  // ========== 条件增伤判定 ==========
+  getConditionalBonus(attacker, target, damageType) {
+    var ab = attacker.affixBonuses || {};
+    var bonus = 0;
+    // 目标有状态时增伤
+    var se = target.statusEffects || {};
+    if (damageType === 'physical' && se.bleed && se.bleed.duration > 0) {
+      bonus += ab.physBonusOnBleed || 0;
+    }
+    if (damageType === 'fire' && se.burn && se.burn.duration > 0) {
+      bonus += ab.fireBonusOnBurn || 0;
+    }
+    if (damageType === 'frost' && se.slow && se.slow.duration > 0) {
+      bonus += ab.frostBonusOnSlow || 0;
+    }
+    if (damageType === 'lightning' && se.stun && se.stun.duration > 0) {
+      bonus += ab.lightBonusOnStun || 0;
+    }
+    return bonus;
+  }
+
+  // ========== 低血量增伤 ==========
+  getLowHpBonus(attacker) {
+    var ab = attacker.affixBonuses || {};
+    var hpPct = attacker.maxHp > 0 ? attacker.hp / attacker.maxHp : 1;
+    if (hpPct < 0.2 && ab.veryLowHpDmg > 0) return ab.veryLowHpDmg;
+    if (hpPct < 0.3 && ab.lowHpDmg > 0) return ab.lowHpDmg;
+    return 0;
+  }
+
+  // ========== 首回合增伤 ==========
+  getFirstTurnBonus(attacker) {
+    if (this.round === 1 && attacker.affixBonuses && attacker.affixBonuses.firstTurnDmg > 0) {
+      return attacker.affixBonuses.firstTurnDmg;
+    }
+    return 0;
+  }
+
+  // ========== 词条命中触发效果 ==========
+  applyAffixOnHitEffects(attacker, target, damageType, isCrit) {
+    var ab = attacker.affixBonuses || {};
+    var logs = [];
+    // 暴击流血
+    if (isCrit && ab.bleedOnCrit > 0 && Math.random() < ab.bleedOnCrit) {
+      var bld = Math.max(1, Math.floor((attacker.attack || 5) * 0.5));
+      target.hp = Math.max(0, target.hp - bld);
+      logs.push('暴击附加流血 +' + bld + ' 伤害');
+      this.applyStatusEffect(target, 'bleed', attacker);
+    }
+    // 命中灼烧
+    if (damageType === 'fire' && ab.burnOnHit > 0 && Math.random() < ab.burnOnHit) {
+      this.applyStatusEffect(target, 'burn', attacker);
+      logs.push('命中附加灼烧');
+    }
+    // 命中减速
+    if (damageType === 'frost' && ab.slowOnHit > 0 && Math.random() < ab.slowOnHit) {
+      this.applyStatusEffect(target, 'slow', attacker);
+      logs.push('命中附加减速');
+    }
+    // 命中僵直
+    if (damageType === 'lightning' && ab.stunOnHit > 0 && Math.random() < ab.stunOnHit) {
+      this.applyStatusEffect(target, 'stun', attacker);
+      logs.push('命中附加僵直');
+    }
+    // 减甲效果（物理命中）
+    if (damageType === 'physical' && ab._reduceArmor && ab._reduceArmor > 0) {
+      target.defense = Math.max(0, target.defense - Math.floor(target.defense * ab._reduceArmor));
+      logs.push('护甲降低' + Math.floor(ab._reduceArmor * 100) + '%');
+    }
+    // 减速效果（冰霜命中）
+    if (damageType === 'frost' && ab._reduceSpeed && ab._reduceSpeed > 0) {
+      target.speed = Math.max(1, target.speed - Math.floor(target.speed * ab._reduceSpeed));
+      logs.push('速度降低' + Math.floor(ab._reduceSpeed * 100) + '%');
+    }
+    // 灼烧减攻（目标有灼烧时，攻击者灼烧词条让目标攻击降低）
+    if (target.statusEffects && target.statusEffects.burn && ab.burnReduceAtk > 0) {
+      target.attack = Math.max(1, target.attack - Math.floor(target.attack * ab.burnReduceAtk));
+      logs.push(target.name + ' 攻击力因灼烧降低' + Math.floor(ab.burnReduceAtk * 100) + '%');
+    }
+    return logs;
+  }
+
+  // ========== 生命窃取 / 法力窃取 ==========
+  applyLifeManaSteal(attacker, damage) {
+    var ab = attacker.affixBonuses || {};
+    var logs = [];
+    if (ab.lifeSteal > 0) {
+      var heal = Math.max(1, Math.floor(damage * ab.lifeSteal));
+      attacker.hp = Math.min(attacker.maxHp, attacker.hp + heal);
+      logs.push('吸血 ' + heal);
+    }
+    if (ab.manaSteal > 0) {
+      var mp = Math.max(1, Math.floor(damage * ab.manaSteal));
+      attacker.mp = Math.min(attacker.maxMp, attacker.mp + mp);
+      logs.push('吸魔 ' + mp);
+    }
+    return logs;
+  }
+
+  // ========== 不可屈挠 ==========
+  tryCheatDeath(unit) {
+    var ab = unit.affixBonuses || {};
+    if (ab.cheatDeathChance > 0 && Math.random() < ab.cheatDeathChance) {
+      unit.hp = 1;
+      unit.alive = true;
+      var msg = unit.name + ' 发动不可屈挠，以1点生命存活！';
+      this.combatLog.push(msg);
+      this.dispatchUpdate(msg);
+      return true;
+    }
+    return false;
+  }
+
+  // ========== 击杀爆炸 AOE ==========
+  tryAoeOnKill(attacker, killedTarget) {
+    var ab = attacker.affixBonuses || {};
+    if (ab.aoeOnKill <= 0) return;
+    if (Math.random() >= ab.aoeOnKill) return;
+    // 对其他敌方单位造成50%攻击力的火焰伤害
+    var aoeDmg = Math.floor((attacker.attack || 10) * 0.5);
+    var hitCount = 0;
+    var enemies = this.getAliveEnemies();
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.id === killedTarget.id) continue;
+      e.hp = Math.max(0, e.hp - aoeDmg);
+      if (e.hp <= 0) { e.alive = false; }
+      hitCount++;
+    }
+    if (hitCount > 0) {
+      var msg = '火焰爆炸对 ' + hitCount + ' 个敌人造成 ' + aoeDmg + ' 点火焰伤害';
+      this.combatLog.push(msg);
+      this.dispatchUpdate(msg);
+    }
   }
 
   // 尝试施加伤害类型对应的异常状态
@@ -834,8 +1191,8 @@ class CombatEngine {
       }
     }
 
-    // 死亡流程处理
-    if (result === 'player_defeat' && window.gameApp && window.gameApp.state) {
+    // 死亡流程处理（Boss战已自行处理则跳过）
+    if (result === 'player_defeat' && !this._bossHandledDeath && window.gameApp && window.gameApp.state) {
       var deathState = window.gameApp.state;
       var currentZone = deathState.world && deathState.world.currentZone ? deathState.world.currentZone : 'greyVillage';
       var deathResult = StateUtils.handleDeath(deathState, currentZone);
@@ -934,5 +1291,264 @@ class CombatEngine {
   // ========== 设置选中目标 ==========
   setSelectedTarget(unit) {
     this.selectedTarget = unit;
+  }
+}
+
+// ========== 守门员Boss战斗引擎 ==========
+class BossCombatEngine extends CombatEngine {
+  // 构造函数：接收守门员ID，初始化Boss战相关属性
+  constructor(bossId) {
+    super();
+    var gkData = DATA && DATA.gatekeepers && DATA.gatekeepers[bossId] ? DATA.gatekeepers[bossId] : null;
+    if (!gkData) {
+      console.warn('[Boss战斗] 未找到守门员配置:', bossId);
+      gkData = {};
+    }
+    this.bossId = bossId;
+    this.gkData = gkData;
+    this.isBossCombat = true;
+    this.phase = 1;
+    this.bossSkillCooldowns = {};
+    this.isRetreatBlocked = true;
+    this.defeatCallback = null;
+
+    // 根据战斗风格计算最大阶段数
+    var style = gkData.combat && gkData.combat.style ? gkData.combat.style : 'meleeBoss';
+    if (style === 'tank') {
+      this.maxPhase = 2;
+      this.phaseThresholds = [100, 50, 0];
+    } else if (style === 'glassCannon') {
+      this.maxPhase = 3;
+      this.phaseThresholds = [100, 60, 30, 0];
+    } else {
+      this.maxPhase = 1;
+      this.phaseThresholds = [100, 0];
+    }
+  }
+
+  // 重写 startCombat 方法：启动Boss战并设置特殊属性
+  startCombat(player, allies, enemies) {
+    // 调用父类启动战斗
+    super.startCombat(player, allies, enemies);
+
+    // Boss战禁止撤退
+    this.isRetreatBlocked = true;
+
+    // 初始化阶段系统
+    this.phase = 1;
+    this.bossSkillCooldowns = {};
+    console.log('[Boss战斗] Boss战开始！阶段上限:', this.maxPhase);
+
+    // 获取Boss战斗风格
+    var style = this.gkData.combat && this.gkData.combat.style ? this.gkData.combat.style : 'meleeBoss';
+
+    // 获取Boss单位引用（敌人阵营的第一个单位）
+    var bossUnit = this.enemyUnits && this.enemyUnits.length > 0 ? this.enemyUnits[0] : null;
+
+    if (style === 'tank') {
+      // 村长风格：高防御、每回合自愈、2阶段
+      console.log('[Boss战斗] 风格: tank（村长）');
+      if (bossUnit) {
+        bossUnit.defense = (bossUnit.defense || 5) * 2;
+        bossUnit.bossRegen = true;
+      }
+    } else if (style === 'glassCannon') {
+      // 守夜人风格：高暴击、3阶段、阶段转换强化
+      console.log('[Boss战斗] 风格: glassCannon（守夜人）');
+      if (bossUnit) {
+        bossUnit.critRate = (bossUnit.critRate || 10) + 20;
+        bossUnit.critMultiplier = (bossUnit.critMultiplier || 2) * 1.5;
+      }
+    } else if (style === 'meleeBoss') {
+      // 机械守卫风格：近战Boss、每3回合使用技能
+      console.log('[Boss战斗] 风格: meleeBoss（机械守卫）');
+      if (bossUnit) {
+        bossUnit.bossSkillInterval = 3;
+        bossUnit.bossSkillTurnCount = 0;
+      }
+    }
+  }
+
+  // 检查Boss当前阶段是否需要转换
+  checkPhaseTransition(bossUnit) {
+    if (!bossUnit || !bossUnit.maxHp || bossUnit.maxHp <= 0) return false;
+    var hpPercent = Math.floor((bossUnit.hp / bossUnit.maxHp) * 100);
+
+    // 检查是否降到了下一阶段的阈值以下
+    if (this.phase < this.maxPhase) {
+      var nextThreshold = this.phaseThresholds[this.phase];
+      if (hpPercent <= nextThreshold) {
+        this.phase = this.phase + 1;
+        this.onPhaseChange(this.phase, bossUnit);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // 阶段转换时的处理
+  onPhaseChange(newPhase, bossUnit) {
+    var style = this.gkData.combat && this.gkData.combat.style ? this.gkData.combat.style : 'meleeBoss';
+    var msg = bossUnit.name + ' 进入阶段 ' + newPhase + '！';
+    console.log('[Boss战斗]', msg);
+    this.combatLog.push(msg);
+    this.dispatchUpdate(msg);
+
+    // 守夜人特殊阶段强化
+    if (style === 'glassCannon') {
+      if (newPhase === 2) {
+        // 阶段2：暴击率+20%
+        bossUnit.critRate = (bossUnit.critRate || 10) + 20;
+        var critMsg = bossUnit.name + ' 的暴击率提升了！';
+        this.combatLog.push(critMsg);
+        this.dispatchUpdate(critMsg);
+      } else if (newPhase === 3) {
+        // 阶段3：攻击力+50%
+        bossUnit.attack = Math.floor((bossUnit.attack || 10) * 1.5);
+        var atkMsg = bossUnit.name + ' 的攻击力大幅提升！';
+        this.combatLog.push(atkMsg);
+        this.dispatchUpdate(atkMsg);
+      }
+    }
+  }
+
+  // 重写 processTurn：在处理回合时检查Boss阶段转换和自愈
+  processTurn() {
+    if (!this.battleActive) return;
+
+    // 在每个回合开始前检查Boss阶段转换
+    var bossUnit = this.enemyUnits && this.enemyUnits.length > 0 ? this.enemyUnits[0] : null;
+    if (bossUnit && bossUnit.alive && bossUnit.hp > 0) {
+      this.checkPhaseTransition(bossUnit);
+
+      // 村长风格：每回合自愈
+      var style = this.gkData.combat && this.gkData.combat.style ? this.gkData.combat.style : 'meleeBoss';
+      if (style === 'tank' && bossUnit.bossRegen) {
+        var regenAmount = Math.max(1, Math.floor(bossUnit.maxHp * 0.03));
+        var beforeHp = bossUnit.hp;
+        bossUnit.hp = Math.min(bossUnit.hp + regenAmount, bossUnit.maxHp);
+        var actualRegen = bossUnit.hp - beforeHp;
+        if (actualRegen > 0) {
+          var regenMsg = bossUnit.name + ' 自愈恢复了 ' + actualRegen + ' 点HP！';
+          this.combatLog.push(regenMsg);
+          this.dispatchUpdate(regenMsg);
+        }
+      }
+    }
+
+    // 调用父类的回合处理
+    super.processTurn();
+  }
+
+  // Boss特殊技能冷却检查
+  canUseBossSkill(skillId) {
+    var cd = this.bossSkillCooldowns && this.bossSkillCooldowns[skillId] ? this.bossSkillCooldowns[skillId] : 0;
+    return cd <= 0;
+  }
+
+  // 设置Boss技能冷却
+  setBossSkillCooldown(skillId, turns) {
+    this.bossSkillCooldowns[skillId] = turns;
+  }
+
+  // 减少Boss技能冷却
+  tickBossSkillCooldowns() {
+    for (var skillId in this.bossSkillCooldowns) {
+      if (this.bossSkillCooldowns[skillId] > 0) {
+        this.bossSkillCooldowns[skillId] = this.bossSkillCooldowns[skillId] - 1;
+      }
+    }
+  }
+
+  // 重写 nextTurn：额外处理Boss技能冷却递减
+  nextTurn() {
+    this.tickBossSkillCooldowns();
+    super.nextTurn();
+  }
+
+  // 设置击败回调函数
+  setDefeatCallback(callback) {
+    this.defeatCallback = callback;
+  }
+
+  // 重写 endCombat：处理守门员击败逻辑
+  endCombat(result) {
+    // 增加挑战次数
+    var state = window.gameApp && window.gameApp.state ? window.gameApp.state : null;
+    if (state && state.world && state.world.gatekeepers && state.world.gatekeepers[this.bossId]) {
+      state.world.gatekeepers[this.bossId].attempts++;
+    }
+
+    // Boss战失败特殊处理：送回酒馆（不消耗复活次数）
+    if (result === 'player_defeat' && state) {
+      state.player.hp = 1;
+      state.player.mp = 0;
+      state.player.location = '灰烟村·酒馆';
+      var bossDefeatMsg = this.gkData && this.gkData.name ? this.gkData.name + ' 将你击倒，送回了酒馆。' : '你被Boss击败，送回了酒馆。';
+      this.combatLog.push(bossDefeatMsg);
+    }
+
+    // Boss战平局特殊处理（GDD：退回安全帧，HP=1，MP=0，损失金币）
+    if (result === 'timeout' && state) {
+      state.player.hp = 1;
+      state.player.mp = 0;
+      var goldLoss = Math.floor(state.player.gold * 0.05);
+      state.player.gold = Math.max(0, state.player.gold - goldLoss);
+      var timeoutMsg = 'Boss战超时！你精疲力竭，被送回安全区域。损失 ' + goldLoss + ' 金币。';
+      this.combatLog.push(timeoutMsg);
+    }
+
+    // Boss战胜利：调用击败回调，解锁区域，发放特殊奖励
+    if (result === 'player_victory') {
+      if (this.defeatCallback) {
+        this.defeatCallback(this);
+      }
+    }
+
+    // 标记跳过父类的handleDeath（Boss战已自行处理死亡逻辑）
+    this._bossHandledDeath = (result === 'player_defeat' || result === 'timeout');
+
+    // 调用父类的结束战斗逻辑（同步HP/MP、派发事件）
+    super.endCombat(result);
+  }
+
+  // 重写 calculateRewards：Boss掉落100%装备 + 守门员经验
+  calculateRewards() {
+    // 调用父类计算基础奖励
+    var rewards = super.calculateRewards ? super.calculateRewards() : { exp: 0, gold: 0, drops: [], equipmentDrops: [] };
+
+    // Boss战额外经验加成
+    var bossLevel = this.gkData && this.gkData.level ? this.gkData.level : 20;
+    var bonusExp = Math.floor(bossLevel * 50);
+    rewards.exp = (rewards.exp || 0) + bonusExp;
+
+    // 确保Boss 100%掉落装备（如果父类没有处理）
+    if (rewards.equipmentDrops && rewards.equipmentDrops.length === 0 && window.gameApp && window.gameApp.state) {
+      var bossEquip = Utils && Utils.generateEquipment ? Utils.generateEquipment(bossLevel) : null;
+      if (bossEquip) {
+        StateUtils.addToInventory(window.gameApp.state, bossEquip);
+        rewards.equipmentDrops.push(bossEquip);
+      }
+    }
+
+    // 守门员特殊奖励物品
+    var rewardName = this.gkData && this.gkData.reward ? this.gkData.reward : null;
+    if (rewardName && window.gameApp && window.gameApp.state) {
+      var rewardItem = {
+        id: Utils && Utils.uuid ? Utils.uuid() : ('reward_' + Date.now()),
+        name: rewardName,
+        type: 'quest',
+        rarity: 'orange',
+        level: bossLevel,
+        stack: 1,
+      };
+      StateUtils.addToInventory(window.gameApp.state, rewardItem);
+      rewards.gatekeeperReward = rewardItem;
+      var rewardMsg = '获得守门员奖励：' + rewardName;
+      this.combatLog.push(rewardMsg);
+      console.log('[Boss战斗]', rewardMsg);
+    }
+
+    return rewards;
   }
 }

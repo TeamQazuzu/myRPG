@@ -106,6 +106,8 @@ var DialogueSystem = {
           choices: [
             { text: '村长，你知道我爹去了哪里吗？', next: 'about_father', action: null },
             { text: '我想看看村子的家谱。', next: 'genealogy', action: null },
+            { text: '我要离开这个村子。', next: 'challenge', action: null, condition: 'gatekeeper_not_defeated', conditionArg: 'villageChief' },
+            { text: '村长，我打赢了。', next: 'after_defeat', action: null, condition: 'gatekeeper_defeated', conditionArg: 'villageChief' },
             { text: '告辞。', next: null, action: null },
           ],
         },
@@ -123,6 +125,31 @@ var DialogueSystem = {
           text: '家谱？哼，这村子的家谱只记了几十年。你爹和你娘的名字在上面，别的……没什么好说的。',
           choices: [
             { text: '（点头离开）', next: null, action: null },
+          ],
+        },
+        'challenge': {
+          id: 'challenge',
+          speaker: '村长',
+          text: '离开？你爹走的时候也是这么说的。我答应过他——不让你在不准备好之前离开。你要走，先过我这一关。',
+          choices: [
+            { text: '那就来吧。', next: null, action: 'boss_battle:villageChief' },
+            { text: '我还没准备好。', next: 'not_ready', action: null },
+          ],
+        },
+        'not_ready': {
+          id: 'not_ready',
+          speaker: '村长',
+          text: '不急。去外面多历练历练，等你觉得可以了再来找我。',
+          choices: [
+            { text: '（点头）', next: null, action: null },
+          ],
+        },
+        'after_defeat': {
+          id: 'after_defeat',
+          speaker: '村长',
+          text: '......你确实比你爹年轻时候强。他当年打赢我也花了很大力气。拿着这个，这是他走之前留给你的。',
+          choices: [
+            { text: '（接过旧信）谢谢。', next: null, action: 'give_item:父亲的旧信' },
           ],
         },
       },
@@ -148,6 +175,214 @@ var DialogueSystem = {
           text: '新鲜事？后山最近不太平，有人说看见山贼了。老穆的羊也被叼走了一只。你出门小心点。',
           choices: [
             { text: '知道了，谢了。', next: null, action: null },
+          ],
+        },
+      },
+    },
+
+    // ----- 裁缝玛莎 -----
+    'tailor_masha': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '玛莎',
+          text: '哦，是你啊。你长这么大了，站在这儿我都快认不出了。',
+          choices: [
+            { text: '听说你以前给我父母做过斗篷？', next: 'cloak', action: null },
+            { text: '你这里有什么布料？', next: 'fabric', action: null },
+            { text: '告辞。', next: null, action: null },
+          ],
+        },
+        'cloak': {
+          id: 'cloak',
+          speaker: '玛莎',
+          text: '那件斗篷...他们走之前特意来定的，说是要翻山越岭。我用了最好的棉布，里子是兔绒。你爹接过斗篷的时候手在发抖。',
+          choices: [
+            { text: '那件斗篷还在吗？', next: 'cloak_gone', action: null },
+            { text: '（沉默）', next: null, action: null },
+          ],
+        },
+        'cloak_gone': {
+          id: 'cloak_gone',
+          speaker: '玛莎',
+          text: '他们带走了。不过...我留了一小块布头，上面有我绣的花纹。你要是想要，改天来拿。',
+          choices: [
+            { text: '谢谢玛莎婶。', next: null, action: null },
+          ],
+        },
+        'fabric': {
+          id: 'fabric',
+          speaker: '玛莎',
+          text: '亚麻、棉布、粗呢，都是些普通料子。要是能弄到好一点的丝线和染料，我就能做出像样的东西来。',
+          choices: [
+            { text: '以后我给你带。', next: null, action: null },
+          ],
+        },
+      },
+    },
+
+    // ----- 裁缝学徒小柯 -----
+    'tailor_ke': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '小柯',
+          text: '嘿！你就是村里那个要出去闯的人？我从城里来这儿学手艺，外面的世界可大得很。',
+          choices: [
+            { text: '城里是什么样的？', next: 'city', action: null },
+            { text: '你怎么跑到这小村子来了？', next: 'why_here', action: null },
+            { text: '好好学吧。', next: null, action: null },
+          ],
+        },
+        'city': {
+          id: 'city',
+          speaker: '小柯',
+          text: '城里的人穿的衣服可花哨了，丝绸、锦缎，还有人穿带金属扣的皮甲——不是咱们这种猎户皮，是专门做的。听说灰烬镇有个大裁缝铺，做出来的东西能卖好几块金。',
+          choices: [
+            { text: '灰烬镇...我记住了。', next: null, action: null },
+          ],
+        },
+        'why_here': {
+          id: 'why_here',
+          speaker: '小柯',
+          text: '玛莎婶的手艺其实在城里都算好的，就是太偏了。我来偷师学艺。而且这地方安静，适合做活儿。',
+          choices: [
+            { text: '确实挺安静的。', next: null, action: null },
+          ],
+        },
+      },
+    },
+
+    // ----- 皮匠诺恩 -----
+    'leather_nuen': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '诺恩',
+          text: '......',
+          choices: [
+            { text: '（递过一块兽皮）能帮我看看这皮子怎么样？', next: 'inspect_leather', action: null },
+            { text: '诺恩大叔，你见过什么特别的皮吗？', next: 'special_leather', action: null },
+            { text: '打扰了。', next: null, action: null },
+          ],
+        },
+        'inspect_leather': {
+          id: 'inspect_leather',
+          speaker: '诺恩',
+          text: '......狗皮，硝得还行。你这皮子太薄，做不了什么像样的东西。给我弄张野猪皮来，我给你做双好靴子。',
+          choices: [
+            { text: '好的。', next: null, action: null },
+          ],
+        },
+        'special_leather': {
+          id: 'special_leather',
+          speaker: '诺恩',
+          text: '......有一回，老穆拖了头野猪来。那野猪皮上有道口子，不是野兽咬的——是刀。很锋利的刀，切面光滑得不正常。那不是猎人的刀。',
+          choices: [
+            { text: '那是什么刀？', next: 'strange_blade', action: null },
+            { text: '（点头离开）', next: null, action: null },
+          ],
+        },
+        'strange_blade': {
+          id: 'strange_blade',
+          speaker: '诺恩',
+          text: '......不知道。但那种切口，我只在城里的军械匠那儿见过。不是咱村里任何人能做到的。',
+          choices: [
+            { text: '（若有所思）', next: null, action: null },
+          ],
+        },
+      },
+    },
+
+    // ----- 村医蕾娜 -----
+    'doctor_leina': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '蕾娜',
+          text: '别乱碰架子上的东西，有些药弄混了会出事。说吧，什么事？',
+          choices: [
+            { text: '听说我父母走之前来找过你？', next: 'parents_visit', action: null },
+            { text: '能给我看看这伤口吗？', next: 'heal_advice', action: null },
+            { text: '没什么，告辞。', next: null, action: null },
+          ],
+        },
+        'parents_visit': {
+          id: 'parents_visit',
+          speaker: '蕾娜',
+          text: '......你爹来拿了一瓶止痛药和两瓶金疮药。他说是给路上备用。我问他要去哪儿，他只说"很远的路"。',
+          choices: [
+            { text: '......', next: null, action: null },
+          ],
+        },
+        'heal_advice': {
+          id: 'heal_advice',
+          speaker: '蕾娜',
+          text: '这种小伤不碍事，抹点金疮药就行。要是受了重伤，来找我就是了。不过药草有限，别拿去浪费。',
+          choices: [
+            { text: '谢了。', next: null, action: null },
+          ],
+        },
+      },
+    },
+
+    // ----- 守墓人老格 -----
+    'gravekeeper_ge': {
+      startNodeId: 'start',
+      nodes: {
+        'start': {
+          id: 'start',
+          speaker: '老格',
+          text: '......你又来了。',
+          choices: [
+            { text: '老格爷爷，这些墓里埋的是谁？', next: 'who_buried', action: null },
+            { text: '你每天都在这里吗？', next: 'daily_life', action: null },
+            { text: '我到处走走。', next: null, action: null },
+          ],
+        },
+        'who_buried': {
+          id: 'who_buried',
+          speaker: '老格',
+          text: '村里人。有老死的，有病死的。你爹娘的坟不在这里——他们没有死，至少...没有人看到过他们的尸体。',
+          choices: [
+            { text: '那你在这里守的是谁的墓？', next: 'my_duty', action: null },
+            { text: '......我知道了。', next: null, action: null },
+          ],
+        },
+        'my_duty': {
+          id: 'my_duty',
+          speaker: '老格',
+          text: '这村里每一座坟我都认识。最远的那座，是二十年前一个外来女人的。她来的时候带着两个孩子，后来不知去了哪里。她走的时候留了一样东西给我保管。',
+          choices: [
+            { text: '什么东西？', next: 'the_item', action: null },
+          ],
+        },
+        'the_item': {
+          id: 'the_item',
+          speaker: '老格',
+          text: '一个小铜盒。她说等她的孩子长大了来找我拿。......你长得挺像她的。',
+          choices: [
+            { text: '......那个铜盒能给我看看吗？', next: 'wait_longer', action: null },
+          ],
+        },
+        'wait_longer': {
+          id: 'wait_longer',
+          speaker: '老格',
+          text: '她说了，等你够强了再来。现在还不是时候。......多去打几只野狗吧，孩子。',
+          choices: [
+            { text: '（沉默点头）', next: null, action: null },
+          ],
+        },
+        'daily_life': {
+          id: 'daily_life',
+          speaker: '老格',
+          text: '总得有人守着。不然野狗把坟刨了，死者不安。',
+          choices: [
+            { text: '辛苦了。', next: null, action: null },
           ],
         },
       },
@@ -196,16 +431,36 @@ var DialogueSystem = {
     overlay.id = 'dialogue-overlay';
     overlay.className = 'dialogue-overlay';
 
-    // 构建选项按钮HTML
+    // 构建选项按钮HTML（支持条件过滤）
     var choicesHtml = '';
+    var visibleChoices = [];
     if (node.choices && node.choices.length > 0) {
       choicesHtml = '<div class="dialogue-choices">';
+      var visibleIdx = 0;
       for (var i = 0; i < node.choices.length; i++) {
-        var num = i + 1;
-        choicesHtml += '<button class="dialogue-choice-btn" data-choice-idx="' + i + '">'
-          + '<span class="choice-number">' + num + '.</span>'
-          + node.choices[i].text
-          + '</button>';
+        var choice = node.choices[i];
+        var visible = true;
+        // 条件判断：condition 字段
+        if (choice.condition === 'gatekeeper_not_defeated') {
+          var condGkId = choice.conditionArg || 'villageChief';
+          var gkState = window.gameApp && window.gameApp.state && window.gameApp.state.world && window.gameApp.state.world.gatekeepers && window.gameApp.state.world.gatekeepers[condGkId] ? window.gameApp.state.world.gatekeepers[condGkId] : null;
+          visible = !gkState || !gkState.defeated;
+        } else if (choice.condition === 'gatekeeper_defeated') {
+          var condGkId2 = choice.conditionArg || 'villageChief';
+          var gkState2 = window.gameApp && window.gameApp.state && window.gameApp.state.world && window.gameApp.state.world.gatekeepers && window.gameApp.state.world.gatekeepers[condGkId2] ? window.gameApp.state.world.gatekeepers[condGkId2] : null;
+          visible = gkState2 && gkState2.defeated;
+        } else if (choice.condition === 'exp_locked') {
+          visible = window.gameApp && window.gameApp.state && StateUtils && StateUtils.isExpLocked && StateUtils.isExpLocked(window.gameApp.state);
+        }
+        if (visible) {
+          var num = visibleIdx + 1;
+          choicesHtml += '<button class="dialogue-choice-btn" data-choice-idx="' + i + '">'
+            + '<span class="choice-number">' + num + '.</span>'
+            + choice.text
+            + '</button>';
+          visibleChoices.push(i);
+          visibleIdx++;
+        }
       }
       choicesHtml += '</div>';
     }
@@ -322,6 +577,14 @@ var DialogueSystem = {
         if (window.gameApp && window.gameApp.state && window.gameApp.state.narrative) {
           window.gameApp.state.narrative.flags[actionValue] = true;
           console.log('[对话] 设置flag:', actionValue);
+        }
+        break;
+
+      case 'boss_battle':
+        // 触发守门员Boss战
+        this.closeDialogue();
+        if (window.gameApp && window.gameApp.sceneManager && window.gameApp.sceneManager.triggerBossBattle) {
+          window.gameApp.sceneManager.triggerBossBattle(actionValue);
         }
         break;
 

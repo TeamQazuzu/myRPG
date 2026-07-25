@@ -126,17 +126,17 @@ var SkillSystem = {
       combat.cooldowns[skillId] = skill.cooldown;
     }
 
-    // —— 计算伤害（使用战斗引擎的四系伤害计算）——
+    // —— 计算伤害（使用战斗引擎的四系伤害计算 + 词条机制）——
     if (skill.baseDamage !== null && skill.baseDamage !== undefined) {
       var baseAtk = attacker.attack || 10;
-      // 使用 combat.calculateDamage 计算基础伤害（含防御减伤）
       var dmgType = skill.element || 'physical';
       var baseDamage = 0;
+      var resisted = 0;
       if (combat && combat.calculateDamage) {
-        // 使用战斗引擎计算（含防御减伤和伤害类型）
-        baseDamage = combat.calculateDamage(attacker, target, dmgType);
+        var dmgResult = combat.calculateDamage(attacker, target, dmgType);
+        baseDamage = dmgResult.damage;
+        resisted = dmgResult.resisted;
       } else {
-        // 降级：简单计算
         var rawDmg = baseAtk - (target.defense || 0) * 0.4;
         baseDamage = Math.max(1, rawDmg);
       }
@@ -146,6 +146,43 @@ var SkillSystem = {
       var variance = 0.85 + Math.random() * 0.3;
       result.damage = Math.floor(rawDamage * variance);
       result.damage = Math.max(1, result.damage);
+
+      // —— 技能暴击 ——
+      var isCrit = false;
+      if (combat && combat.rollCrit) {
+        var critResult = combat.rollCrit(attacker);
+        isCrit = critResult.isCrit;
+        if (isCrit) {
+          result.damage = Math.floor(result.damage * critResult.multiplier);
+        }
+      }
+
+      // —— 条件增伤 ——
+      if (combat && combat.getConditionalBonus) {
+        var condBonus = combat.getConditionalBonus(attacker, target, dmgType);
+        if (condBonus > 0) {
+          result.damage = Math.floor(result.damage * (1 + condBonus));
+        }
+      }
+
+      // —— 低血量增伤 ——
+      if (combat && combat.getLowHpBonus) {
+        var lowHp = combat.getLowHpBonus(attacker);
+        if (lowHp > 0) {
+          result.damage = Math.floor(result.damage * (1 + lowHp));
+        }
+      }
+
+      // —— 首回合增伤 ——
+      if (combat && combat.getFirstTurnBonus) {
+        var ftBonus = combat.getFirstTurnBonus(attacker);
+        if (ftBonus > 0) {
+          result.damage = Math.floor(result.damage * (1 + ftBonus));
+        }
+      }
+
+      result.damage = Math.max(1, result.damage);
+      result.isCrit = isCrit;
 
       // 扣减目标HP
       if (target && target.alive) {
@@ -160,6 +197,24 @@ var SkillSystem = {
         dmgTypeName = combat.getDamageTypeName(dmgType);
       }
       result.log = attacker.name + " 使用 " + skill.name + "，对 " + (target ? target.name : "目标") + " 造成 " + result.damage + " 点" + dmgTypeName + "伤害";
+      if (isCrit) result.log += '【暴击】';
+      if (resisted > 0) result.log += '（抗性减免' + Math.floor(resisted * 100) + '%）';
+
+      // —— 词条命中触发效果 ——
+      if (combat && combat.applyAffixOnHitEffects) {
+        var hitLogs = combat.applyAffixOnHitEffects(attacker, target, dmgType, isCrit);
+        if (hitLogs.length > 0) {
+          result.log += '，' + hitLogs.join('，');
+        }
+      }
+
+      // —— 生命/法力窃取 ——
+      if (combat && combat.applyLifeManaSteal) {
+        var stealLogs = combat.applyLifeManaSteal(attacker, result.damage);
+        if (stealLogs.length > 0) {
+          result.log += '，' + stealLogs.join('，');
+        }
+      }
 
       // 元素伤害自动触发状态效果（即使技能没有显式 apply_status）
       // 火焰→灼烧、冰霜→减速、雷电→僵直，概率较低

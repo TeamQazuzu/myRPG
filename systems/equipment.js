@@ -120,10 +120,17 @@ const EquipmentSystem = {
   },
 
   // ---------- 镶嵌 ----------
+  _ensureSocketObjects(item) {
+    // sockets 生成时是数字数组 [0,1,2]，需转为对象数组 [{gem:null},...]
+    if (item.sockets && item.sockets.length > 0 && typeof item.sockets[0] === 'number') {
+      item.sockets = item.sockets.map(function() { return { gem: null }; });
+    }
+  },
   socket(item, idx, gem) {
     if (!item.sockets || idx >= item.sockets.length) {
       return { ok: false, msg: '无效的孔位' };
     }
+    this._ensureSocketObjects(item);
     const old = item.sockets[idx].gem;
     item.sockets[idx].gem = {
       name: gem.name,
@@ -137,6 +144,7 @@ const EquipmentSystem = {
     if (!item.sockets || idx >= item.sockets.length) {
       return { ok: false, msg: '无效的孔位' };
     }
+    this._ensureSocketObjects(item);
     const g = item.sockets[idx].gem;
     if (!g) return { ok: false, msg: '空孔' };
     item.sockets[idx].gem = null;

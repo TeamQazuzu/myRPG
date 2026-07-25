@@ -19,7 +19,7 @@ class SceneManager {
         actions: [
           { label: '与艾琳对话', type: 'talk', target: 'ailin' },
         ],
-        exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_荒地', '灰烟村_矿脉', '灰烟村_药草园', '灰烟村_村长家', '灰烟村_鱼塘', '灰烟村_杂货铺', '灰烟村_练功场', '灰烟村_后山小径'],
+        exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_荒地', '灰烟村_矿脉', '灰烟村_药草园', '灰烟村_村长家', '灰烟村_鱼塘', '灰烟村_杂货铺', '灰烟村_练功场', '灰烟村_后山小径', '灰烟村_裁缝铺', '灰烟村_皮匠铺', '灰烟村_村医屋', '灰烟村_墓地'],
       },
       // ===== 灰烟村·酒馆 =====
       '灰烟村_酒馆': {
@@ -144,6 +144,57 @@ class SceneManager {
           { label: '清剿山贼', type: 'battle', enemies: ['山贼', '山贼'] },
           { label: '查看丢弃的包袱', type: 'inspect', target: 'abandoned_bag' },
           { label: '采集灌木果子', type: 'gather', target: '野果', amount: 1 },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·裁缝铺（对话帧）=====
+      '灰烟村_裁缝铺': {
+        id: 'greyVillage_tailor',
+        type: 'safe',
+        name: '裁缝铺',
+        desc: '一间充满布料味道的小屋。各色布匹整齐地堆在木架上，缝纫机旁散落着线头和碎布。裁缝玛莎正低头缝着一件斗篷，身旁的学徒小柯在整理线轴。',
+        actions: [
+          { label: '与裁缝玛莎交谈', type: 'talk', target: 'tailor_masha' },
+          { label: '与学徒小柯交谈', type: 'talk', target: 'tailor_ke' },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·皮匠铺（对话帧）=====
+      '灰烟村_皮匠铺': {
+        id: 'greyVillage_leather',
+        type: 'safe',
+        name: '皮匠铺',
+        desc: '浓重的皮革气息扑面而来。墙上挂着几张硝好的兽皮，工作台上摆着各种皮匠工具。皮匠诺恩正在给一双皮靴收边，抬头看了你一眼。',
+        actions: [
+          { label: '与皮匠诺恩交谈', type: 'talk', target: 'leather_nuen' },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·村医屋（对话帧·可恢复）=====
+      '灰烟村_村医屋': {
+        id: 'greyVillage_doctor',
+        type: 'safe',
+        name: '村医屋',
+        desc: '草药味浓重的小屋。木架上整整齐齐地排列着各种药瓶和草药包，空气中弥漫着苦涩的药香。村医蕾娜正在研钵里研磨着什么，见你进来，头也不抬。',
+        actions: [
+          { label: '与村医蕾娜交谈', type: 'talk', target: 'doctor_leina' },
+          { label: '请蕾娜治疗（恢复50% HP）', type: 'heal_partial' },
+        ],
+        exits: ['灰烟村'],
+      },
+
+      // ===== 灰烟村·墓地（对话帧）=====
+      '灰烟村_墓地': {
+        id: 'greyVillage_graveyard',
+        type: 'safe',
+        name: '墓地',
+        desc: '村西一片安静的墓地。几座旧坟上长满了青草，石碑上的字迹已被风雨侵蚀得模糊不清。一个佝偻的身影蹲在最远处的一座坟前——那是守墓人老格。',
+        actions: [
+          { label: '与守墓人老格交谈', type: 'talk', target: 'gravekeeper_ge' },
+          { label: '查看墓碑', type: 'inspect', target: 'old_tombstones' },
         ],
         exits: ['灰烟村'],
       },
@@ -432,6 +483,146 @@ class SceneManager {
       p.mp = p.maxMp;
       this.showLog('你好好休息了一觉，HP和MP已完全恢复。');
       window.gameApp.updatePlayerInfo();
+    }
+  }
+
+  // ========== 村医部分恢复 ==========
+  healPartial() {
+    if (window.gameApp && window.gameApp.state) {
+      const p = window.gameApp.state.player;
+      var beforeHp = p.hp;
+      var beforeMp = p.mp;
+      p.hp = Math.min(p.maxHp, p.hp + Math.floor(p.maxHp * 0.5));
+      p.mp = Math.min(p.maxMp, p.mp + Math.floor(p.maxMp * 0.3));
+      var healHp = p.hp - beforeHp;
+      var healMp = p.mp - beforeMp;
+      var msg = '蕾娜给你敷了草药，';
+      if (healHp > 0) msg += '恢复 ' + healHp + ' HP';
+      if (healMp > 0) msg += (healHp > 0 ? '，' : '') + '恢复 ' + healMp + ' MP';
+      if (healHp === 0 && healMp === 0) msg += '但你已经满血了。';
+      this.showLog(msg);
+      window.gameApp.updatePlayerInfo();
+    }
+  }
+
+  // ========== 构建守门员Boss单位数据 ==========
+  buildGatekeeperUnit(gkId) {
+    var gkData = DATA && DATA.gatekeepers && DATA.gatekeepers[gkId] ? DATA.gatekeepers[gkId] : null;
+    if (!gkData) {
+      console.error('[场景] 未找到守门员数据:', gkId);
+      return null;
+    }
+    var combat = gkData.combat || {};
+    var level = gkData.level || 20;
+    // 基础属性按等级缩放（与普通怪一致的公式但使用Boss配置）
+    var hp = combat.hp || Math.floor(level * 50 * 5);
+    var atk = combat.atk || Math.floor(level * 8 * 2);
+    var def = combat.armor || Math.floor(level * 4);
+    var spd = Math.floor(level * 2 + 5);
+    var critRate = (combat.crit || 0.1) * 100; // 转为百分比
+    var unit = {
+      id: 'boss_' + gkId,
+      name: gkData.name || '守门员',
+      level: level,
+      hp: hp,
+      maxHp: hp,
+      attack: atk,
+      defense: def,
+      speed: spd,
+      exp: Math.floor(level * 20 * 10), // Boss经验倍率10x
+      gold: Math.floor(level * 5 * 5),
+      type: 'boss',
+      critRate: critRate,
+      critMultiplier: 2.0,
+      drop: { name: gkData.reward || '守门员令牌', type: 'quest', rarity: 'orange' },
+      aiStrategy: 'aggressive',
+      bossRegen: false,
+      bossSkillInterval: 0,
+      bossSkillTurnCount: 0,
+    };
+    console.log('[场景] 构建守门员单位:', unit.name, 'Lv', level, 'HP:', hp, 'ATK:', atk, 'DEF:', def);
+    return unit;
+  }
+
+  // ========== 触发守门员Boss战 ==========
+  triggerBossBattle(gkId) {
+    console.log('[Boss战] 触发守门员Boss战:', gkId);
+
+    var state = window.gameApp && window.gameApp.state ? window.gameApp.state : null;
+    if (!state) {
+      console.error('[Boss战] 无法获取state');
+      return;
+    }
+
+    // 检查守门员是否已被击败
+    var gkState = state.world && state.world.gatekeepers && state.world.gatekeepers[gkId] ? state.world.gatekeepers[gkId] : null;
+    if (gkState && gkState.defeated) {
+      this.showLog('这位守门员已经被你击败了。');
+      return;
+    }
+
+    // 检查经验锁：只有在等级上限时才能挑战（已满级）
+    if (!StateUtils || !StateUtils.isExpLocked || !StateUtils.isExpLocked(state)) {
+      var cap = StateUtils && StateUtils.getLevelCap ? StateUtils.getLevelCap(state) : 20;
+      this.showLog('你还不够强。达到 ' + cap + ' 级后才能挑战这位守门员。（当前等级：' + state.player.level + '）');
+      return;
+    }
+
+    // 构建Boss单位
+    var bossUnit = this.buildGatekeeperUnit(gkId);
+    if (!bossUnit) {
+      this.showLog('出错了，无法生成守门员。');
+      return;
+    }
+
+    // 构建玩家和随从数据
+    var player = this.getPlayerData();
+    if (!player) {
+      console.error('[Boss战] 无法获取玩家数据');
+      return;
+    }
+    var allies = this.getAllyUnits();
+
+    // 创建Boss战斗引擎
+    var bossCombat = new BossCombatEngine(gkId);
+
+    // 设置击败回调
+    bossCombat.setDefeatCallback(function(combat) {
+      console.log('[Boss战] 守门员被击败！:', gkId);
+      // 标记守门员为已击败
+      if (StateUtils && StateUtils.defeatGatekeeper) {
+        StateUtils.defeatGatekeeper(state, gkId);
+      }
+      // 设置叙事标记
+      if (state.narrative && state.narrative.flags) {
+        state.narrative.flags['gatekeeper_' + gkId] = true;
+      }
+      // 任务事件标记
+      if (state.quests && state.quests.events) {
+        state.quests.events['gatekeeper_' + gkId] = true;
+      }
+      // 日志
+      var gkName = combat.gkData && combat.gkData.name ? combat.gkData.name : '守门员';
+      var unlockMsg = gkName + ' 被击败！你感到一股力量在体内涌动——等级上限已经提升！';
+      combat.combatLog.push(unlockMsg);
+      console.log('[Boss战]', unlockMsg);
+    });
+
+    // 存储引用
+    window.currentCombat = bossCombat;
+    this.currentCombat = bossCombat;
+
+    // 启动Boss战
+    bossCombat.startCombat(player, allies, [bossUnit]);
+
+    // 显示Boss战开场日志
+    var gkStance = bossCombat.gkData && bossCombat.gkData.stance ? bossCombat.gkData.stance : '';
+    if (gkStance) {
+      setTimeout(function() {
+        var stanceMsg = bossUnit.name + '：「' + gkStance + '」';
+        bossCombat.combatLog.push(stanceMsg);
+        bossCombat.dispatchUpdate(stanceMsg);
+      }, 800);
     }
   }
 
