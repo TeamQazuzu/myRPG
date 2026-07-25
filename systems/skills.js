@@ -26,6 +26,11 @@ var SkillSystem = {
       if (!DATA.skills.hasOwnProperty(skillId)) continue;
       var skill = DATA.skills[skillId];
 
+      // 确保技能有id字段（data.js中可能缺失）
+      if (!skill.id) {
+        skill.id = skillId;
+      }
+
       // 检查职业：匹配玩家 classPath[0]
       var playerClass = (player.classPath && player.classPath.length > 0) ? player.classPath[0] : null;
       if (skill.reqClass !== playerClass) continue;
