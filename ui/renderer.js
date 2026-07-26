@@ -52,7 +52,13 @@ class UIRenderer {
           if (scene) this.renderScene(scene);
         }
         // 更新玩家信息
-        if (window.gameApp) window.gameApp.updatePlayerInfo();
+        if (window.gameApp) {
+          window.gameApp.updatePlayerInfo();
+          // 战斗后检查经验锁引导（玩家可能在战斗中升级到上限）
+          if (window.gameApp.checkExpLockGuidance) {
+            window.gameApp.checkExpLockGuidance();
+          }
+        }
       }, 2500);
     });
 
@@ -840,14 +846,30 @@ class UIRenderer {
 
     // 计算等级上限信息
     var capHtml = '';
+    var expBarHtml = '';
+    var lockBannerHtml = '';
     if (window.gameApp && window.gameApp.state && StateUtils) {
       var state = window.gameApp.state;
       var cap = StateUtils.getLevelCap(state);
       var isLocked = StateUtils.isExpLocked(state);
       if (isLocked) {
         capHtml = '<span class="level-cap-indicator" title="' + (StateUtils.getLockMessage(state) || '') + '">🔒Lv.' + cap + '</span>';
+        // 锁定状态下的经验条
+        expBarHtml = '<div class="player-resource"><span class="resource-label">EXP</span>' +
+                     '<div class="resource-bar"><div class="resource-fill exp exp-locked-fill" style="width:100%"></div></div>' +
+                     '<span class="resource-text exp-locked-text">已封顶</span></div>';
+        // 锁定引导横幅
+        var lockMsg = StateUtils.getLockMessage(state) || '你已至当前极限。';
+        lockBannerHtml = '<div class="exp-lock-banner">🔒 ' + lockMsg + '</div>';
       } else {
         capHtml = '<span class="level-cap-indicator cap-normal">Lv.' + cap + '</span>';
+        // 正常经验条
+        var expPct = player.expToNext > 0 ? (player.exp / player.expToNext) * 100 : 0;
+        if (expPct > 100) expPct = 100;
+        if (expPct < 0) expPct = 0;
+        expBarHtml = '<div class="player-resource"><span class="resource-label">EXP</span>' +
+                     '<div class="resource-bar"><div class="resource-fill exp" style="width:' + expPct + '%"></div></div>' +
+                     '<span class="resource-text">' + Math.floor(player.exp || 0) + '/' + Math.floor(player.expToNext || 0) + '</span></div>';
       }
     }
 
@@ -865,8 +887,10 @@ class UIRenderer {
           <div class="resource-bar"><div class="resource-fill mp" style="width:${mpPct}%"></div></div>
           <span class="resource-text">${player.mp}/${player.maxMp}</span>
         </div>
+        ${expBarHtml}
         <span class="player-gold">💰${player.gold || 0}</span>
       </div>
+      ${lockBannerHtml}
     `;
   }
 

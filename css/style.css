@@ -548,6 +548,49 @@ html, body {
   font-weight: normal;
 }
 
+/* EXP 经验条 */
+.resource-fill.exp {
+  background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+  transition: width 0.3s ease;
+}
+
+.resource-fill.exp-locked-fill {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(212, 160, 64, 0.3),
+    rgba(212, 160, 64, 0.3) 6px,
+    rgba(212, 160, 64, 0.15) 6px,
+    rgba(212, 160, 64, 0.15) 12px
+  );
+  width: 100% !important;
+}
+
+.resource-text.exp-locked-text {
+  color: var(--warning);
+  font-weight: bold;
+  font-size: 11px;
+}
+
+/* 经验锁引导横幅 */
+.exp-lock-banner {
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--warning);
+  background: rgba(212, 160, 64, 0.12);
+  border: 1px solid rgba(212, 160, 64, 0.35);
+  border-radius: 4px;
+  line-height: 1.5;
+  text-align: center;
+  animation: lockBannerPulse 2s ease-in-out infinite;
+}
+
+@keyframes lockBannerPulse {
+  0%, 100% { background: rgba(212, 160, 64, 0.12); }
+  50% { background: rgba(212, 160, 64, 0.22); }
+}
+
 /* ============================================
    底部管理栏
    ============================================ */

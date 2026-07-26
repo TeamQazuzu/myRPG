@@ -245,10 +245,10 @@ const StateUtils = {
   getLevelCap(state) {
     const gk = state.world.gatekeepers;
     if (gk.finalBoss.defeated) return 99;
-    if (gk.hermit.defeated) return 80;
-    if (gk.mechanicalGuard.defeated) return 60;
-    if (gk.nightWatcher.defeated) return 40;
-    if (gk.villageChief.defeated) return 20;
+    if (gk.hermit.defeated) return 99;
+    if (gk.mechanicalGuard.defeated) return 80;
+    if (gk.nightWatcher.defeated) return 60;
+    if (gk.villageChief.defeated) return 40;
     return 20;
   },
   isExpLocked(state) {

@@ -35,11 +35,47 @@ class GameApp {
     // ===== 离线经验结算 =====
     this.processOfflineExp();
 
+    // ===== 经验锁引导检查 =====
+    this.checkExpLockGuidance();
+
     // 更新存档时间
     this.state.world.lastSave = new Date().toISOString();
 
     this.sceneManager.enterScene('灰烟村');
     this.startAutoSave();
+  }
+
+  // ========== 经验锁升级引导 ==========
+  // 当玩家首次达到等级上限时，显示引导提示
+  checkExpLockGuidance() {
+    var state = this.state;
+    if (!state || !StateUtils) return;
+
+    var isLocked = StateUtils.isExpLocked(state);
+    if (!isLocked) return;
+
+    var cap = StateUtils.getLevelCap(state);
+    var flagKey = 'exp_lock_guided_' + cap;
+
+    // 初始化 flags
+    if (!state.world.flags) state.world.flags = {};
+
+    // 如果已经提示过这个上限，不再重复
+    if (state.world.flags[flagKey]) return;
+
+    // 标记已提示
+    state.world.flags[flagKey] = true;
+
+    // 获取引导消息
+    var lockMsg = StateUtils.getLockMessage(state) || '你已至当前极限。';
+
+    // 添加到游戏日志（单条合并消息，因为日志显示会覆盖前一条）
+    if (this.uiRenderer && this.uiRenderer.addGameLog) {
+      this.uiRenderer.addGameLog('🔒 等级已达上限 Lv.' + cap + ' — ' + lockMsg);
+    }
+
+    // 保存状态
+    this.saveGame();
   }
 
   // ========== 离线挂机采集结算 ==========
@@ -167,13 +203,13 @@ class GameApp {
 
     if (offlineExp > 0) {
       var expResult = StateUtils.addExp(state, offlineExp);
-      if (expResult.gained > 0) {
+      if (expResult.locked) {
+        // 经验被锁定，显示锁定提示
+        this.uiRenderer.addGameLog('离线修炼：经验已达当前等级上限，无法继续提升');
+      } else if (expResult.gained > 0) {
         var msg = '离线修炼获得经验 +' + expResult.gained;
         if (expResult.leveled) {
           msg += '（升级了！）';
-        }
-        if (expResult.locked) {
-          msg = '离线修炼经验 +' + 0 + '（已至当前等级上限）';
         }
         this.uiRenderer.addGameLog(msg);
       }
