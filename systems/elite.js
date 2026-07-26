@@ -146,6 +146,13 @@ var EliteSystem = {
     // 精英经验（不带金币）
     if (eliteUnit.exp > 0) {
       StateUtils.addExp(state, eliteUnit.exp);
+      // 队友共享精英经验
+      if (state.companions && state.companions.length > 0 && typeof CompanionSystem !== 'undefined' && CompanionSystem) {
+        state.companions.forEach(function(c) {
+          if (!c) return;
+          CompanionSystem.addExp(c, eliteUnit.exp, state);
+        });
+      }
     }
 
     return { drops: drops, exp: eliteUnit.exp };

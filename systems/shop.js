@@ -201,6 +201,21 @@ var ShopSystem = {
     return { ok: true, message: '购买了 ' + shopItem.name + '，花费 ' + price + ' 金', item: boughtItem };
   },
 
+  // ========== 估价（卖出价 = 基础价 × 50%） ==========
+  getSellPrice: function(item) {
+    if (!item) return 0;
+    var basePrice = item.price || 0;
+    // 没有price字段（理论上掉落装备已带price，这里兜底）按等级×品质计算
+    if (basePrice === 0 && item.level && item.rarity) {
+      var rarityMulti = { white: 1, green: 2, blue: 5, purple: 15, orange: 40, red: 100, gold: 50 };
+      basePrice = Math.floor(item.level * 3 * (rarityMulti[item.rarity] || 1));
+    }
+    if (basePrice === 0 && item.type === 'material') {
+      basePrice = 5;
+    }
+    return Math.floor(basePrice * 0.5);
+  },
+
   // ========== 卖出物品 ==========
   sell: function(state, itemId) {
     if (!state || !state.inventory) {
@@ -220,18 +235,8 @@ var ShopSystem = {
       return { ok: false, message: '物品不存在于背包中' };
     }
 
-    // 卖出价格为原价的50%
-    var basePrice = targetItem.price || 0;
-    // 如果物品没有price字段（如掉落装备），根据等级和品质动态计算
-    if (basePrice === 0 && targetItem.level && targetItem.rarity) {
-      var rarityMulti = { white: 1, green: 2, blue: 5, purple: 15, orange: 40, red: 100, gold: 50 };
-      basePrice = Math.floor(targetItem.level * 3 * (rarityMulti[targetItem.rarity] || 1));
-    }
-    // 材料物品也按固定公式
-    if (basePrice === 0 && targetItem.type === 'material') {
-      basePrice = 5;
-    }
-    var sellPrice = Math.floor(basePrice * 0.5);
+    // 卖出价格（统一走 getSellPrice 估价，与商店显示一致）
+    var sellPrice = this.getSellPrice(targetItem);
 
     // 从背包中移除
     state.inventory.items.splice(idx, 1);

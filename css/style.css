@@ -1426,6 +1426,61 @@ html, body {
   color: var(--bg-primary);
 }
 
+/* 商店购买/卖出切换 tab */
+.shop-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shop-tab {
+  padding: 8px 22px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.shop-tab:hover { color: var(--text-primary); }
+
+.shop-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: bold;
+}
+
+.shop-sell-btn {
+  margin-left: auto;
+  padding: 5px 14px;
+  border: 1px solid var(--warning);
+  background: transparent;
+  color: var(--warning);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.shop-sell-btn:hover {
+  background: var(--warning);
+  color: var(--bg-primary);
+}
+
+.shop-empty {
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 24px 0;
+  font-size: 14px;
+}
+
+.shop-sell-list .shop-item-name { flex: 1; }
+
 /* ============================================
    Boss战阶段指示器
    ============================================ */

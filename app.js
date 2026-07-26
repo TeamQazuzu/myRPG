@@ -203,15 +203,33 @@ class GameApp {
 
     if (offlineExp > 0) {
       var expResult = StateUtils.addExp(state, offlineExp);
+      // 队友共享离线经验（队友可能未封顶，独立结算）
+      var compOfflineUps = [];
+      if (state.companions && state.companions.length > 0 && typeof CompanionSystem !== 'undefined' && CompanionSystem) {
+        state.companions.forEach(function(c) {
+          if (!c) return;
+          var cr = CompanionSystem.addExp(c, offlineExp, state);
+          if (cr && cr.leveledUp) compOfflineUps.push(c.name + ' 升到 ' + cr.newLevel + ' 级');
+        });
+      }
       if (expResult.locked) {
         // 经验被锁定，显示锁定提示
-        this.uiRenderer.addGameLog('离线修炼：经验已达当前等级上限，无法继续提升');
+        if (compOfflineUps.length > 0) {
+          this.uiRenderer.addGameLog('离线修炼：你已封顶，但 ' + compOfflineUps.join('、'));
+        } else {
+          this.uiRenderer.addGameLog('离线修炼：经验已达当前等级上限，无法继续提升');
+        }
       } else if (expResult.gained > 0) {
         var msg = '离线修炼获得经验 +' + expResult.gained;
         if (expResult.leveled) {
           msg += '（升级了！）';
         }
+        if (compOfflineUps.length > 0) {
+          msg += '；' + compOfflineUps.join('、');
+        }
         this.uiRenderer.addGameLog(msg);
+      } else if (compOfflineUps.length > 0) {
+        this.uiRenderer.addGameLog('离线修炼：' + compOfflineUps.join('、'));
       }
     }
   }

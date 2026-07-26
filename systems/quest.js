@@ -158,6 +158,13 @@ var QuestSystem = {
     if (r.exp) {
       StateUtils.addExp(state, r.exp);
       console.log('  +经验:', r.exp);
+      // 队友共享任务经验
+      if (state.companions && state.companions.length > 0 && typeof CompanionSystem !== 'undefined' && CompanionSystem) {
+        state.companions.forEach(function(c) {
+          if (!c) return;
+          CompanionSystem.addExp(c, r.exp, state);
+        });
+      }
     }
     // 金币
     if (r.gold) {

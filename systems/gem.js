@@ -178,19 +178,22 @@ var GemSystem = {
 
   // ========== 生成随机宝石掉落 ==========
   // 根据敌人等级生成宝石
-  generateGemDrop(enemyLevel) {
-    // 掉落概率：普通5%，精英25%，Boss 60%
-    // quality根据等级范围决定
+  generateGemDrop(enemyLevel, enemyType) {
+    // 掉落概率按敌人类型分档：普通 8%，精英 25%，Boss 50%
+    var dropChance = 0.08;
+    if (enemyType === 'elite') dropChance = 0.25;
+    else if (enemyType === 'boss') dropChance = 0.50;
+    if (Math.random() >= dropChance) return null;
+
+    // 品质根据敌人等级决定
     var roll = Math.random();
     var quality;
-    if (enemyLevel >= 45 && roll < 0.05) {
-      quality = 3; // 5%紫
-    } else if (enemyLevel >= 25 && roll < 0.20) {
-      quality = 2; // 15%蓝
-    } else if (roll < 0.50) {
-      quality = 1; // 30%白/绿
+    if (enemyLevel >= 45 && roll < 0.20) {
+      quality = 3; // 紫
+    } else if (enemyLevel >= 25 && roll < 0.45) {
+      quality = 2; // 蓝
     } else {
-      return null; // 50%不掉落
+      quality = 1; // 白/绿
     }
 
     // 根据quality筛选可用宝石

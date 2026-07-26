@@ -126,6 +126,9 @@ const Utils = {
     // 基础属性
     const baseStats = this.calcBaseStats(type, level);
     var itemName = this.generateItemName(type, rarity);
+    // 预算买价（供商店卖出估价与背包显示使用）
+    var priceRarityMulti = { white: 1, green: 2, blue: 5, purple: 15, orange: 40, red: 100, gold: 50 };
+    var itemPrice = Math.floor(level * 3 * (priceRarityMulti[rarity] || 1));
     return {
       id: this.uuid(),
       name: itemName,
@@ -138,6 +141,7 @@ const Utils = {
       sockets: [],
       enchant: null,
       enhanceLevel: 0,
+      price: itemPrice,
     };
   },
   // 计算装备基础属性

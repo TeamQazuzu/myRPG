@@ -231,7 +231,7 @@ const DATA = {
         name: "灰烟村",
         levelRange: [1, 20],
         gatekeeper: "villageChief",
-        locations: ["酒馆", "铁匠铺", "裁缝铺", "皮匠铺", "村医屋", "墓地"],
+        locations: ["酒馆", "铁匠铺", "裁缝铺", "皮匠铺", "村医屋", "墓地", "地下城入口", "地下城深处", "地下城底层"],
         desc: "牧场起点，资源产出。你长大的地方。",
       },
       ashMountains: {

@@ -169,25 +169,41 @@ var CompanionSystem = {
   _expToNext(level) { return Math.floor(50 * Math.pow(level, 1.5)); },
 
   // ========== 随从获得经验 ==========
-  addExp(companion, exp) {
+  // state 可选：传入后随从等级上限跟随玩家守门员进度（getLevelCap），避免随从越过当前经验锁
+  addExp(companion, exp, state) {
     if (!companion) return { leveledUp: false };
+    // 兜底初始化（兼容老存档字段缺失，如默认艾琳/StateUtils.recruitCompanion 创建的实例）
+    if (typeof companion.exp !== 'number' || isNaN(companion.exp)) companion.exp = 0;
+    if (typeof companion.expToNext !== 'number' || !companion.expToNext) companion.expToNext = this._expToNext(companion.level || 1);
+    if (!companion.maxLevel) companion.maxLevel = 99;
+    if (!companion.isCompanion) companion.isCompanion = true;
+    // 等级上限：优先用玩家守门员进度，回退到随从自身 maxLevel
+    var cap = companion.maxLevel;
+    if (state && typeof StateUtils !== 'undefined' && StateUtils && StateUtils.getLevelCap) {
+      cap = StateUtils.getLevelCap(state);
+    }
+    var locked = companion.level >= cap;
+    if (locked) {
+      // 已封顶，不再累加经验（与玩家经验锁行为一致）
+      return { leveledUp: false, newLevel: companion.level, levelsGained: 0, locked: true };
+    }
     companion.exp += exp;
     var up = false, gained = 0;
-    while (companion.exp >= companion.expToNext && companion.level < companion.maxLevel) {
+    while (companion.exp >= companion.expToNext && companion.level < cap) {
       companion.exp -= companion.expToNext;
       companion.level++; gained++; up = true;
       var tpl = this.companions[companion.id];
       if (tpl) {
         var ns = this._calcStats(tpl, companion.level);
         companion.maxHp = ns.maxHp; companion.maxMp = ns.maxMp;
-        companion.hp = Math.min(companion.maxHp, companion.hp + (ns.maxHp - companion.maxHp));
-        companion.mp = Math.min(companion.maxMp, companion.mp + (ns.maxMp - companion.maxMp));
         companion.hp = ns.maxHp; companion.mp = ns.maxMp; // 满血升级
         companion.attack = ns.attack; companion.defense = ns.defense; companion.speed = ns.speed;
       }
       companion.expToNext = this._expToNext(companion.level);
     }
-    return { leveledUp: up, newLevel: companion.level, levelsGained: gained };
+    // 到达上限时清零经验条，避免显示溢出
+    if (companion.level >= cap) { companion.exp = 0; locked = true; }
+    return { leveledUp: up, newLevel: companion.level, levelsGained: gained, locked: locked };
   },
 
   // ========== 移除随从 ==========

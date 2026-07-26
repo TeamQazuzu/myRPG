@@ -19,7 +19,7 @@ class SceneManager {
         actions: [
           { label: '与艾琳对话', type: 'talk', target: 'ailin' },
         ],
-        exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_荒地', '灰烟村_矿脉', '灰烟村_药草园', '灰烟村_村长家', '灰烟村_鱼塘', '灰烟村_杂货铺', '灰烟村_练功场', '灰烟村_后山小径', '灰烟村_裁缝铺', '灰烟村_皮匠铺', '灰烟村_村医屋', '灰烟村_墓地', '灰烟村_北山古道'],
+        exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_荒地', '灰烟村_矿脉', '灰烟村_药草园', '灰烟村_村长家', '灰烟村_鱼塘', '灰烟村_杂货铺', '灰烟村_练功场', '灰烟村_后山小径', '灰烟村_裁缝铺', '灰烟村_皮匠铺', '灰烟村_村医屋', '灰烟村_墓地', '灰烟村_北山古道', '灰烟村_地下城入口'],
       },
       // ===== 灰烟村·酒馆 =====
       '灰烟村_酒馆': {
@@ -219,6 +219,46 @@ class SceneManager {
           requirement: 'villageChief',
           blockedMsg: '古道前方被浓雾封锁，你感到一股强大的力量在阻止你前进。也许应该先去找村长谈谈......',
         },
+      },
+
+      // ===== 灰烟村·地下城入口（副本第1层 Lv.4-6）=====
+      '灰烟村_地下城入口': {
+        id: 'greyVillage_dungeon_1',
+        type: 'wild',
+        zone: 'greyVillage_dungeon',
+        name: '地下城入口',
+        desc: '村外废弃地窖的入口，阴冷的气息从下方涌出。破旧的木门半掩着，里面传来骨头碰撞的咔嗒声。比打野狗体面得多——至少有宝可拿。',
+        actions: [
+          { label: '清剿前厅骷髅', type: 'battle', enemies: ['骷髅兵','骷髅兵','骷髅兵'] },
+          { label: '搜索前厅', type: 'explore' },
+        ],
+        exits: ['灰烟村', '灰烟村_地下城深处'],
+      },
+      // ===== 灰烟村·地下城深处（副本第2层 Lv.7-9）=====
+      '灰烟村_地下城深处': {
+        id: 'greyVillage_dungeon_2',
+        type: 'wild',
+        zone: 'greyVillage_dungeon',
+        name: '地下城深处',
+        desc: '幽暗的甬道，墙壁爬满蛛网。远处有幽绿色的光点在闪烁——那不是友好的东西。',
+        actions: [
+          { label: '迎战深处生物', type: 'battle', enemies: ['地牢蜘蛛','骷髅弓手','地牢蜘蛛'] },
+          { label: '探索甬道', type: 'explore' },
+        ],
+        exits: ['灰烟村_地下城入口', '灰烟村_地下城底层'],
+      },
+      // ===== 灰烟村·地下城底层（副本第3层 Lv.10-12）=====
+      '灰烟村_地下城底层': {
+        id: 'greyVillage_dungeon_3',
+        type: 'wild',
+        zone: 'greyVillage_dungeon',
+        name: '地下城底层',
+        desc: '地牢的最深处，空气浑浊得令人窒息。一个高大的身影在阴影中伫立，似乎在守护着什么。击败这里能让你离挑战村长更近一步。',
+        actions: [
+          { label: '挑战底层守卫', type: 'battle', enemies: ['地牢守卫','骷髅法师','地牢食尸鬼'] },
+          { label: '搜查底层', type: 'explore' },
+        ],
+        exits: ['灰烟村_地下城深处'],
       },
 
       // =============================================
@@ -447,6 +487,13 @@ class SceneManager {
       '毒蛇': { name: '毒蛇', level: 2, hp: 22, maxHp: 22, attack: 8, defense: 2, speed: 13, exp: 25, gold: 5, drop: { name: '蛇皮', type: 'material', rarity: 'white' } },
       '练兵': { name: '村练兵', level: 3, hp: 50, maxHp: 50, attack: 9, defense: 6, speed: 8, exp: 40, gold: 12, drop: { name: '练功牌', type: 'material', rarity: 'green' } },
       '山贼': { name: '山贼', level: 3, hp: 45, maxHp: 45, attack: 11, defense: 4, speed: 9, exp: 45, gold: 18, drop: { name: '山贼令牌', type: 'material', rarity: 'green' } },
+      // ===== 灰烟村地下城敌人（Lv.4-12，填补打野狗到村长Lv20的经验缺口）=====
+      '骷髅兵': { name: '骷髅兵', level: 4, hp: 60, maxHp: 60, attack: 12, defense: 5, speed: 7, exp: 55, gold: 10, drop: { name: '骷髅碎片', type: 'material', rarity: 'white' } },
+      '骷髅弓手': { name: '骷髅弓手', level: 6, hp: 70, maxHp: 70, attack: 16, defense: 6, speed: 11, exp: 80, gold: 15, drop: { name: '断裂的箭矢', type: 'material', rarity: 'white' } },
+      '地牢蜘蛛': { name: '地牢蜘蛛', level: 7, hp: 85, maxHp: 85, attack: 18, defense: 8, speed: 14, exp: 95, gold: 18, drop: { name: '蛛丝', type: 'material', rarity: 'green' } },
+      '骷髅法师': { name: '骷髅法师', level: 9, hp: 100, maxHp: 100, attack: 24, defense: 8, speed: 10, exp: 130, gold: 25, drop: { name: '法力残渣', type: 'material', rarity: 'green' } },
+      '地牢守卫': { name: '地牢守卫', level: 11, hp: 150, maxHp: 150, attack: 30, defense: 18, speed: 8, exp: 180, gold: 40, drop: { name: '守卫铁牌', type: 'material', rarity: 'blue' } },
+      '地牢食尸鬼': { name: '地牢食尸鬼', level: 12, hp: 170, maxHp: 170, attack: 34, defense: 14, speed: 12, exp: 210, gold: 50, drop: { name: '腐肉', type: 'material', rarity: 'green' } },
       // ===== 灰烬山脉敌人（Lv.21-40）=====
       '山洞蝙蝠': { name: '山洞蝙蝠', level: 21, hp: 180, maxHp: 180, attack: 35, defense: 15, speed: 18, exp: 80, gold: 25, drop: { name: '蝙蝠翼膜', type: 'material', rarity: 'white' } },
       '灰烬狼': { name: '灰烬狼', level: 23, hp: 250, maxHp: 250, attack: 45, defense: 20, speed: 16, exp: 120, gold: 35, drop: { name: '灰烬狼皮', type: 'material', rarity: 'green' } },
@@ -975,11 +1022,14 @@ class SceneManager {
       return;
     }
 
-    // 检查经验锁：只有在等级上限时才能挑战（已满级）
-    if (!StateUtils || !StateUtils.isExpLocked || !StateUtils.isExpLocked(state)) {
-      var cap = StateUtils && StateUtils.getLevelCap ? StateUtils.getLevelCap(state) : 20;
-      this.showLog('你还不够强。达到 ' + cap + ' 级后才能挑战这位守门员。（当前等级：' + state.player.level + '）');
-      return;
+    // 等级锁：村长随时可挑战（挑战失败回酒馆 + 北山古道传送门锁定 = “出不了村”）；
+    // 其他守门员仍需达到当前等级上限才能挑战。
+    if (gkId !== 'villageChief') {
+      if (!StateUtils || !StateUtils.isExpLocked || !StateUtils.isExpLocked(state)) {
+        var cap = StateUtils && StateUtils.getLevelCap ? StateUtils.getLevelCap(state) : 20;
+        this.showLog('你还不够强。达到 ' + cap + ' 级后才能挑战这位守门员。（当前等级：' + state.player.level + '）');
+        return;
+      }
     }
 
     // 构建Boss单位
@@ -1080,6 +1130,10 @@ class SceneManager {
       resources = ['灰烬矿石', '铁矿', '蝙蝠翼膜', '焦骨碎片', '矿工灵魂碎片'];
       rareResources = ['精炼灰烬矿', '古老符文石', '守卫铠甲片'];
       exploreEnemies = ['山洞蝙蝠', '灰烬狼', '石像鬼'];
+    } else if (zone === 'greyVillage_dungeon') {
+      resources = ['骷髅碎片', '断裂的箭矢', '蛛丝', '法力残渣', '古旧铜币', '锈蚀铁件'];
+      rareResources = ['守卫铁牌', '幽绿宝石', '古老钥匙碎片'];
+      exploreEnemies = ['骷髅兵', '骷髅弓手', '地牢蜘蛛', '骷髅法师'];
     } else {
       resources = ['草药', '石头', '水草', '野果', '矿石碎片', '兽皮'];
       rareResources = ['精炼草药', '优质矿石', '坚硬兽皮', '古旧碎片'];

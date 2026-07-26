@@ -1507,7 +1507,22 @@ class CombatEngine {
       var expResult = StateUtils.addExp(state, totalExp);
       StateUtils.addGold(state, totalGold);
 
+      // 队友共享经验（与玩家等量，受玩家等级上限约束）
+      var companionLevelUps = [];
+      if (state.companions && state.companions.length > 0 && typeof CompanionSystem !== 'undefined' && CompanionSystem) {
+        var self = this;
+        state.companions.forEach(function(c) {
+          if (!c) return;
+          var r = CompanionSystem.addExp(c, totalExp, state);
+          if (r && r.leveledUp) {
+            companionLevelUps.push({ name: c.name, newLevel: r.newLevel, levelsGained: r.levelsGained });
+            self.combatLog.push(c.name + ' 升到 ' + r.newLevel + ' 级！');
+          }
+        });
+      }
+
       // 添加掉落物到背包
+      var bagFullMsgs = [];
       drops.forEach(function(drop) {
         var item = {
           id: Utils.uuid(),
@@ -1517,15 +1532,18 @@ class CombatEngine {
           level: 1,
           stack: 1,
         };
-        StateUtils.addToInventory(state, item);
+        var addR = StateUtils.addToInventory(state, item);
+        if (!addR || !addR.ok) {
+          bagFullMsgs.push(item.name);
+        }
       });
 
-      // 装备掉落逻辑
+      // 装备掉落逻辑（概率已下调，避免背包快速爆满）
       this.enemyUnits.forEach(function(enemy) {
         // 根据敌人类型决定掉落概率
-        var dropChance = 0.15; // 普通怪15%
+        var dropChance = 0.08; // 普通怪 8%
         if (enemy.type === 'elite') {
-          dropChance = 0.50; // 精英怪50%
+          dropChance = 0.25; // 精英怪 25%
         } else if (enemy.type === 'boss') {
           dropChance = 1.0;  // Boss 100%
         }
@@ -1534,12 +1552,14 @@ class CombatEngine {
           var enemyLevel = enemy.level || 1;
           // 使用 Utils.generateEquipment 生成装备
           var equip = Utils.generateEquipment(enemyLevel);
-          // 添加到背包
-          StateUtils.addToInventory(state, equip);
-          equipmentDrops.push(equip);
-          // 记录掉落信息到战斗日志
-          var dropMsg = '获得装备：' + equip.name + '（' + Utils.getQualityName(equip.rarity) + '）';
-          console.log('[战斗]', dropMsg);
+          var addR = StateUtils.addToInventory(state, equip);
+          if (addR && addR.ok) {
+            equipmentDrops.push(equip);
+            var dropMsg = '获得装备：' + equip.name + '（' + Utils.getQualityName(equip.rarity) + '）';
+            console.log('[战斗]', dropMsg);
+          } else {
+            bagFullMsgs.push(equip.name);
+          }
         }
       }.bind(this));
 
@@ -1550,19 +1570,29 @@ class CombatEngine {
         this.combatLog.push(equipSummaryMsg);
       }
 
-      // 宝石掉落判定
+      // 宝石掉落判定（概率按敌人类型分档）
       if (GemSystem) {
         for (var gi = 0; gi < this.enemyUnits.length; gi++) {
           var eUnit = this.enemyUnits[gi];
-          var gemDrop = GemSystem.generateGemDrop(eUnit.level || 1);
+          var gemDrop = GemSystem.generateGemDrop(eUnit.level || 1, eUnit.type);
           if (gemDrop) {
-            StateUtils.addToInventory(state, gemDrop);
-            drops.push({ name: gemDrop.name, type: 'gem', rarity: gemDrop.rarity });
+            var addR = StateUtils.addToInventory(state, gemDrop);
+            if (addR && addR.ok) {
+              drops.push({ name: gemDrop.name, type: 'gem', rarity: gemDrop.rarity });
+            } else {
+              bagFullMsgs.push(gemDrop.name);
+            }
           }
         }
       }
 
-      return { exp: totalExp, gold: totalGold, drops: drops, equipmentDrops: equipmentDrops, expResult: expResult };
+      // 背包已满提示（避免静默丢失物品）
+      if (bagFullMsgs.length > 0) {
+        var fullMsg = '背包已满，未拾取：' + bagFullMsgs.join('、');
+        this.combatLog.push(fullMsg);
+      }
+
+      return { exp: totalExp, gold: totalGold, drops: drops, equipmentDrops: equipmentDrops, expResult: expResult, companionLevelUps: companionLevelUps };
     }
     return { exp: totalExp, gold: totalGold, drops: drops, equipmentDrops: equipmentDrops };
   }
@@ -2139,19 +2169,20 @@ class BossCombatEngine extends CombatEngine {
     // 调用父类计算基础奖励
     var rewards = super.calculateRewards ? super.calculateRewards() : { exp: 0, gold: 0, drops: [], equipmentDrops: [] };
 
-    // Boss战额外经验加成
+    // Boss战额外经验加成（实际发放给玩家与队友）
     var bossLevel = this.gkData && this.gkData.level ? this.gkData.level : 20;
     var bonusExp = Math.floor(bossLevel * 50);
-    rewards.exp = (rewards.exp || 0) + bonusExp;
-
-    // 确保Boss 100%掉落装备（如果父类没有处理）
-    if (rewards.equipmentDrops && rewards.equipmentDrops.length === 0 && window.gameApp && window.gameApp.state) {
-      var bossEquip = Utils && Utils.generateEquipment ? Utils.generateEquipment(bossLevel) : null;
-      if (bossEquip) {
-        StateUtils.addToInventory(window.gameApp.state, bossEquip);
-        rewards.equipmentDrops.push(bossEquip);
+    if (bonusExp > 0 && window.gameApp && window.gameApp.state) {
+      var bstate = window.gameApp.state;
+      StateUtils.addExp(bstate, bonusExp);
+      if (bstate.companions && bstate.companions.length > 0 && typeof CompanionSystem !== 'undefined' && CompanionSystem) {
+        bstate.companions.forEach(function(c) {
+          if (!c) return;
+          CompanionSystem.addExp(c, bonusExp, bstate);
+        });
       }
     }
+    rewards.exp = (rewards.exp || 0) + bonusExp;
 
     // 守门员特殊奖励物品
     var rewardName = this.gkData && this.gkData.reward ? this.gkData.reward : null;

@@ -1343,16 +1343,40 @@ class UIRenderer {
     if (!window.gameApp || !window.gameApp.state) return;
     const state = window.gameApp.state;
     const members = [state.player, ...state.companions];
+    var cap = (StateUtils && StateUtils.getLevelCap) ? StateUtils.getLevelCap(state) : 99;
     this.showPanel('队伍', `
       <div class="team-list">
-        ${members.map(m => `
-          <div class="team-member">
-            <span class="member-name">${m.name}</span>
-            <span class="member-class">${m.class || ''}</span>
-            <span class="member-level">Lv.${m.level}</span>
-            <span class="member-hp">HP ${m.hp}/${m.maxHp}</span>
-          </div>
-        `).join('')}
+        ${members.map(function(m) {
+          var hpPct = m.maxHp > 0 ? Math.max(0, Math.min(100, (m.hp / m.maxHp) * 100)) : 0;
+          var mpPct = m.maxMp > 0 ? Math.max(0, Math.min(100, (m.mp / m.maxMp) * 100)) : 0;
+          var isPlayer = (m === state.player);
+          var memberLocked = (m.level || 1) >= cap;
+          var expHtml = '';
+          if (memberLocked) {
+            expHtml = '<div class="player-resource"><span class="resource-label">EXP</span>' +
+              '<div class="resource-bar"><div class="resource-fill exp exp-locked-fill" style="width:100%"></div></div>' +
+              '<span class="resource-text exp-locked-text">已封顶</span></div>';
+          } else {
+            var eExp = typeof m.exp === 'number' ? m.exp : 0;
+            var eNext = (typeof m.expToNext === 'number' && m.expToNext > 0) ? m.expToNext : 50;
+            var ePct = eNext > 0 ? Math.max(0, Math.min(100, (eExp / eNext) * 100)) : 0;
+            expHtml = '<div class="player-resource"><span class="resource-label">EXP</span>' +
+              '<div class="resource-bar"><div class="resource-fill exp" style="width:' + ePct + '%"></div></div>' +
+              '<span class="resource-text">' + Math.floor(eExp) + '/' + Math.floor(eNext) + '</span></div>';
+          }
+          return '<div class="team-member">' +
+            '<span class="member-name">' + (m.name || '') + (isPlayer ? '（你）' : '') + '</span>' +
+            '<span class="member-class">' + (m.class || m.profession || '') + '</span>' +
+            '<span class="member-level">Lv.' + (m.level || 1) + (memberLocked ? ' 🔒' : '') + '</span>' +
+            '<div class="player-resource"><span class="resource-label">HP</span>' +
+            '<div class="resource-bar"><div class="resource-fill hp" style="width:' + hpPct + '%"></div></div>' +
+            '<span class="resource-text">' + (m.hp || 0) + '/' + (m.maxHp || 0) + '</span></div>' +
+            '<div class="player-resource"><span class="resource-label">MP</span>' +
+            '<div class="resource-bar"><div class="resource-fill mp" style="width:' + mpPct + '%"></div></div>' +
+            '<span class="resource-text">' + (m.mp || 0) + '/' + (m.maxMp || 0) + '</span></div>' +
+            expHtml +
+            '</div>';
+        }).join('')}
       </div>
     `);
   }

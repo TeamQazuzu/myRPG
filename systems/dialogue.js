@@ -814,48 +814,113 @@ var DialogueSystem = {
       console.warn('[对话] 商店不存在:', shopId);
       return;
     }
-
-    var items = ShopSystem.getShopItems(shopId);
     if (!window.gameApp || !window.gameApp.uiRenderer) return;
+    this._currentShopId = shopId;
+    this._shopTab = 'buy'; // 每次打开商店默认购买页
+    this._renderShop();
+  },
 
-    // 构建商店HTML
+  // ========== 渲染商店（购买/卖出两个 tab） ==========
+  _renderShop: function() {
+    var shopId = this._currentShopId;
+    var shop = ShopSystem.getShopInfo(shopId);
+    if (!shop || !window.gameApp || !window.gameApp.uiRenderer) return;
+    var self = this;
+    var state = window.gameApp.state;
+    var tab = this._shopTab || 'buy';
+
     var html = '<div class="shop-owner">' + shop.owner + '的' + shop.name + '</div>';
-    html += '<div class="shop-desc">' + (shop.desc || '') + '</div>';
-    html += '<div class="shop-items">';
-
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
-      html += '<div class="shop-item" data-item-idx="' + i + '">'
-        + '<div class="shop-item-name">' + item.name + '</div>'
-        + '<div class="shop-item-desc">' + (item.desc || '') + '</div>'
-        + '<div class="shop-item-price">' + (item.price || 0) + ' 金</div>'
-        + '<button class="shop-buy-btn" data-buy-idx="' + i + '">购买</button>'
-        + '</div>';
-    }
-
+    html += '<div class="shop-tabs">';
+    html += '<button class="shop-tab' + (tab === 'buy' ? ' active' : '') + '" data-shop-tab="buy">购买</button>';
+    html += '<button class="shop-tab' + (tab === 'sell' ? ' active' : '') + '" data-shop-tab="sell">卖出</button>';
     html += '</div>';
+
+    if (tab === 'buy') {
+      var items = ShopSystem.getShopItems(shopId);
+      html += '<div class="shop-desc">' + (shop.desc || '') + '</div>';
+      html += '<div class="shop-items">';
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        html += '<div class="shop-item" data-item-idx="' + i + '">'
+          + '<div class="shop-item-name">' + item.name + '</div>'
+          + '<div class="shop-item-desc">' + (item.desc || '') + '</div>'
+          + '<div class="shop-item-price">' + (item.price || 0) + ' 金</div>'
+          + '<button class="shop-buy-btn" data-buy-idx="' + i + '">购买</button>'
+          + '</div>';
+      }
+      html += '</div>';
+    } else {
+      // 卖出 tab：列出背包物品
+      var invItems = (state && state.inventory && state.inventory.items) ? state.inventory.items : [];
+      html += '<div class="shop-desc">点击卖出物品（售价为买价的50%）。背包 ' + invItems.length + '/' + (state.inventory.capacity || 20) + '</div>';
+      if (invItems.length === 0) {
+        html += '<div class="shop-empty">背包是空的</div>';
+      } else {
+        html += '<div class="shop-items shop-sell-list">';
+        for (var k = 0; k < invItems.length; k++) {
+          var it = invItems[k];
+          var sellPrice = ShopSystem.getSellPrice(it);
+          var rarityClass = it.rarity ? ('rarity-' + it.rarity) : '';
+          var typeName = it.type ? ('[' + it.type + '] ') : '';
+          var lvText = it.level ? (' Lv.' + it.level) : '';
+          html += '<div class="shop-item ' + rarityClass + '">'
+            + '<div class="shop-item-name">' + typeName + (it.name || '未命名') + lvText + '</div>'
+            + '<div class="shop-item-price">售价 ' + sellPrice + ' 金</div>'
+            + '<button class="shop-sell-btn" data-sell-idx="' + k + '">卖出</button>'
+            + '</div>';
+        }
+        html += '</div>';
+      }
+    }
 
     window.gameApp.uiRenderer.showPanel(shop.name, html);
 
+    // 绑定 tab 切换
+    var tabBtns = document.querySelectorAll('.shop-tab');
+    for (var t = 0; t < tabBtns.length; t++) {
+      (function(btn) {
+        btn.addEventListener('click', function() {
+          self._shopTab = btn.getAttribute('data-shop-tab');
+          self._renderShop();
+        });
+      })(tabBtns[t]);
+    }
+
     // 绑定购买按钮
     var buyBtns = document.querySelectorAll('.shop-buy-btn');
-    var self = this;
     for (var j = 0; j < buyBtns.length; j++) {
       (function(btn, idx) {
         btn.addEventListener('click', function() {
           if (!window.gameApp || !window.gameApp.state) return;
           var result = ShopSystem.buy(window.gameApp.state, shopId, idx);
+          window.gameApp.uiRenderer.addGameLog(result.message);
           if (result.ok) {
-            window.gameApp.uiRenderer.addGameLog(result.message);
             window.gameApp.uiRenderer.updatePlayerInfo(window.gameApp.state.player);
-            // 关闭面板并重新打开以刷新
             window.gameApp.uiRenderer.closePanel();
-            self._openShop(shopId);
-          } else {
-            window.gameApp.uiRenderer.addGameLog(result.message);
+            self._renderShop();
           }
         });
       })(buyBtns[j], j);
+    }
+
+    // 绑定卖出按钮
+    var sellBtns = document.querySelectorAll('.shop-sell-btn');
+    for (var s = 0; s < sellBtns.length; s++) {
+      (function(btn, idx) {
+        btn.addEventListener('click', function() {
+          if (!window.gameApp || !window.gameApp.state) return;
+          var inv = window.gameApp.state.inventory.items || [];
+          if (idx >= inv.length) { self._renderShop(); return; }
+          var target = inv[idx];
+          var result = ShopSystem.sell(window.gameApp.state, target.id);
+          window.gameApp.uiRenderer.addGameLog(result.message);
+          if (result.ok) {
+            window.gameApp.uiRenderer.updatePlayerInfo(window.gameApp.state.player);
+            window.gameApp.uiRenderer.closePanel();
+            self._renderShop();
+          }
+        });
+      })(sellBtns[s], s);
     }
   },
 
