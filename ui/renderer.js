@@ -290,18 +290,32 @@ class UIRenderer {
 
     // 多波次Boss波次显示
     var waveHtml = '';
+    // 波次叙事intro文本
+    var waveIntroText = '';
     if (combat.isMultiWave) {
       var waveDots = '';
       for (var w = 1; w <= combat.totalWaves; w++) {
         waveDots += w <= combat.currentWave ? (w === combat.currentWave ? '【' + w + '】' : ' ' + w + ' ') : ' ○';
       }
-      waveHtml = '<div class="wave-indicator"><span class="wave-label">波次:</span><span class="wave-dots">' + waveDots + '</span></div>';
+      // 获取当前波的intro文本
+      var waveConfigs = combat.waveConfigs || [];
+      var currentWaveIdx = combat.currentWave - 1;
+      if (waveConfigs[currentWaveIdx] && waveConfigs[currentWaveIdx].intro) {
+        waveIntroText = '<div class="wave-intro">"' + waveConfigs[currentWaveIdx].intro + '"</div>';
+      }
+      waveHtml = '<div class="wave-indicator"><span class="wave-label">波次:</span><span class="wave-dots">' + waveDots + '</span>' + waveIntroText + '</div>';
+    }
+
+    // 回合信息：多波次时追加波次显示
+    var roundText = '回合 ' + combat.round + '/' + combat.maxRounds;
+    if (combat.isMultiWave) {
+      roundText = roundText + '  |  波次 ' + combat.currentWave + '/' + combat.totalWaves;
     }
 
     let html = `
       <div class="combat-header">
         <span class="combat-title">${combat.isBossCombat ? '👑 Boss战' : '⚔ 战斗'}</span>
-        <span class="combat-round">回合 ${combat.round}/${combat.maxRounds}</span>
+        <span class="combat-round">${roundText}</span>
         ${retreatHint}
       </div>
       ${bossPhaseHtml}
@@ -551,9 +565,45 @@ class UIRenderer {
       this.updateUnitCard(ally, 'ally', i + 1);
     });
 
-    // 更新回合数
+    // 更新回合数（多波次时同时更新波次信息）
     const roundEl = document.querySelector('.combat-round');
-    if (roundEl) roundEl.textContent = `回合 ${combat.round}/${combat.maxRounds}`;
+    if (roundEl) {
+      var updateRoundText = '回合 ' + combat.round + '/' + combat.maxRounds;
+      if (combat.isMultiWave) {
+        updateRoundText = updateRoundText + '  |  波次 ' + combat.currentWave + '/' + combat.totalWaves;
+      }
+      roundEl.textContent = updateRoundText;
+    }
+
+    // 更新波次intro叙事横幅
+    if (combat.isMultiWave) {
+      var waveIndicator = document.querySelector('.wave-indicator');
+      if (waveIndicator) {
+        // 更新波次点
+        var updateWaveDots = '';
+        for (var uw = 1; uw <= combat.totalWaves; uw++) {
+          updateWaveDots += uw <= combat.currentWave ? (uw === combat.currentWave ? '【' + uw + '】' : ' ' + uw + ' ') : ' ○';
+        }
+        var updateDotsEl = waveIndicator.querySelector('.wave-dots');
+        if (updateDotsEl) updateDotsEl.textContent = updateWaveDots;
+
+        // 更新波次intro
+        var updateConfigs = combat.waveConfigs || [];
+        var updateWaveIdx = combat.currentWave - 1;
+        var existingIntro = waveIndicator.querySelector('.wave-intro');
+        if (updateConfigs[updateWaveIdx] && updateConfigs[updateWaveIdx].intro) {
+          var newIntroHtml = '"' + updateConfigs[updateWaveIdx].intro + '"';
+          if (existingIntro) {
+            existingIntro.textContent = newIntroHtml;
+          } else {
+            var newIntroDiv = document.createElement('div');
+            newIntroDiv.className = 'wave-intro';
+            newIntroDiv.textContent = newIntroHtml;
+            waveIndicator.appendChild(newIntroDiv);
+          }
+        }
+      }
+    }
 
     // 更新日志
     if (log) {

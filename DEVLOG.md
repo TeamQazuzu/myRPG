@@ -11,7 +11,7 @@
 - 纯前端文字RPG，HTML/CSS/Vanilla JS，无框架依赖
 - GitHub: https://github.com/TeamQazuzu/myRPG
 - 设计文档: `XQ.md`（根目录，GDD v11.1，已定稿可进入开发）
-- **开发状态**：v1.5 守门员Boss战系统
+- **开发状态**：v2.0 守门员Boss技能AI + 多波次框架 + 暗杀事件
 
 ## 文件结构
 ```
@@ -94,7 +94,7 @@ CustomEvent 事件机制，UIRenderer 监听事件驱动渲染：
 - [x] 随从系统（艾琳开局入队，最多2个随从）
 - [x] 帧式场景管理（场景/出口/行动按钮）
 
-}### 灰烟村内容（v1.1 扩展后 + v1.4 新增）
+### 灰烟村内容（v1.1 扩展后 + v1.4 新增）
 - [x] 灰烟村·村口（安全区枢纽，通往14个地点）
 - [x] 灰烟村·酒馆（休息恢复HP/MP）
 - [x] 灰烟村·铁匠铺（NPC对话：老哈）
@@ -246,6 +246,36 @@ state = {
 
 ## 变更日志
 
+### 2026-07-26 v2.0 守门员Boss技能AI + 多波次框架 + 暗杀事件
+
+**Bug修复**
+- 修复：`core/data.js` 多波次Boss的 `intro` 字段引号混用（`"...'`）导致 SyntaxError，整个 DATA 对象未定义，战斗无法启动
+- 修复：村长嘲讽技能的 attack debuff 和 defense buff 永久不恢复（新增 `_originalAttack`/`_originalDefense` 备份 + `tickBossSkillCooldowns` 回合递减恢复）
+- 修复：守夜人连斩技能的 setTimeout 异步导致双重 nextTurn 回合错位（改为 `_skipNextTurn` 标记方案，同步执行两次攻击）
+- 修复：`MultiWaveBossCombatEngine` 构造函数无法透传 `gkData`（改为 `constructor(bossId, gkData, waveConfigs)`）
+- 修复：`scene.js` triggerBossBattle 未根据 waves 配置选择 `MultiWaveBossCombatEngine`
+
+**多波次Boss战框架完善（combat.js 修改）**
+- `MultiWaveBossCombatEngine` 构造函数改为接收 `(bossId, gkData, waveConfigs)` 三参数
+- `startNextWave` 完整实现：重置回合/行动顺序/防御加成，保留玩家HP/MP/技能冷却
+- 每波独立回合数限制（`perWaveRounds`），Boss阶段重置
+- `calculateRewards` 合并所有波次奖励 + 额外经验加成
+- `scene.js` triggerBossBattle 自动识别 waves 配置并使用多波次引擎
+
+**守夜人暗杀铺垫事件（scene.js 新增）**
+- `checkNightwatcherAmbush(scene)` 方法：玩家进入灰烬山脉时检查等级与触发条件
+- 37级首次暗杀：叙事→「组织铭牌碎片」线索→战斗（暗影刺客 Lv.40）→战后叙事
+- 38级二次暗杀：同流程，强化玩家对Boss存在的感知
+- 使用 `state.world.flags.nightwatcher_ambush_37/38` 追踪，守夜人已击败后不再触发
+
+**UI波次指示器（renderer.js + style.css）**
+- 多波次Boss战时回合信息显示为 `回合 X/Y  |  波次 A/B`
+- Boss阶段圆点指示器 + 波次intro叙事横幅（`.wave-indicator` / `.wave-intro`）
+- 战斗更新时动态刷新波次信息
+
+**文件变更**
+- 修改文件：`core/data.js`、`systems/combat.js`、`systems/scene.js`、`ui/renderer.js`、`css/style.css`、`DEVLOG.md`
+
 ### 2026-07-25 v1.5 守门员Boss战系统
 
 **BossCombatEngine 类（combat.js 新增）**
@@ -292,7 +322,7 @@ state = {
 **文件变更**
 - 修改文件：`systems/combat.js`、`systems/scene.js`、`systems/dialogue.js`、`ui/renderer.js`、`css/style.css`、`DEVLOG.md`
 
-### 202}6-07-25 v1.4 灰烟村场景扩展（裁缝铺/皮匠铺/村医屋/墓地）
+### 2026-07-25 v1.4 灰烟村场景扩展（裁缝铺/皮匠铺/村医屋/墓地）
 
 **新增 4 个场景帧**
 - 灰烟村·裁缝铺（安全区，NPC：玛莎+学徒小柯）

@@ -484,6 +484,13 @@ class SceneManager {
       window.gameApp.state.player.location = scene.name;
     }
 
+    // ===== 守夜人暗杀铺垫事件检查（灰烬山脉场景）=====
+    var ambushBlocked = this.checkNightwatcherAmbush(scene);
+    if (ambushBlocked) {
+      // 暗杀事件已自行派发 scene-change，跳过后续流程
+      return;
+    }
+
     // ===== 场景事件钩子 =====
     var eventResult = this.checkSceneEvents(scene);
     if (eventResult && eventResult.blocked) {
@@ -495,90 +502,92 @@ class SceneManager {
     document.dispatchEvent(evt);
   }
 
-  // ========== 场景事件系统 ==========
-  checkSceneEvents(scene) {
-    if (!window.gameApp || !window.gameApp.state) return null;
+  // ========== 守夜人暗杀铺垫事件（37级/38级各一次）==========
+  // 在灰烬山脉区域触发，让玩家意识到Boss存在
+  checkNightwatcherAmbush(scene) {
+    if (!window.gameApp || !window.gameApp.state) return;
     var state = window.gameApp.state;
     var player = state.player;
-    if (!player || !player.canPlay || player.dead) return null;
+    if (!player || !player.canPlay || player.dead) return;
 
-    // ===== 守夜人暗杀铺垫事件（37-38级，仅野外场景，守夜人未败）=====
+    // 检查是否在灰烬山脉区域（场景名以 '灰烬山脉' 开头 或 id 以 'ashMountains' 开头）
+    var sceneId = scene.id || '';
+    var sceneName = scene.name || '';
+    var isAshMountains = sceneName.indexOf('灰烬山脉') === 0 || sceneId.indexOf('ashMountains') === 0;
+    if (!isAshMountains) return;
+
+    // 检查守夜人是否已被击败
     var nightWatcherDefeated = state.world && state.world.gatekeepers && state.world.gatekeepers.nightWatcher && state.world.gatekeepers.nightWatcher.defeated;
-    if (!nightWatcherDefeated && scene.type === 'wild' && player.level >= 37 && player.level <= 38) {
-      // 检查是否已经触发过暗杀事件
-      var ambushTriggered = state.narrative && state.narrative.flags && state.narrative.flags.nightWatcher_ambush;
-      if (ambushTriggered) return null;
+    if (nightWatcherDefeated) return;
 
-      // 20%概率触发暗杀事件
-      if (Math.random() < 0.20) {
-        console.log('[场景事件] 守夜人暗杀事件触发！');
+    // 确保 state.world.flags 存在
+    if (!state.world.flags) state.world.flags = {};
 
-        // 标记已触发（防止重复）
-        if (state.narrative && state.narrative.flags) {
-          state.narrative.flags.nightWatcher_ambush = true;
-        }
-
-        // 先渲染场景，再触发暗杀对话
-        var evt = new CustomEvent('scene-change', { detail: { scene: scene } });
-        document.dispatchEvent(evt);
-
-        // 延迟显示暗杀事件
-        var self = this;
-        setTimeout(function() {
-          self.showAmbushEvent();
-        }, 500);
-
-        return { blocked: true, reason: 'ambush' };
-      }
+    // 37级触发第一次暗杀
+    if (player.level === 37 && !state.world.flags.nightwatcher_ambush_37) {
+      this.triggerNightwatcherAmbush(37);
+      return true; // 阻断正常场景流程
+    }
+    // 38级触发第二次暗杀
+    else if (player.level === 38 && !state.world.flags.nightwatcher_ambush_38) {
+      this.triggerNightwatcherAmbush(38);
+      return true; // 阻断正常场景流程
     }
 
-    return null;
+    return false; // 未触发暗杀事件，正常进入场景
   }
 
-  // ========== 守夜人暗杀事件 ==========
-  showAmbushEvent() {
+  // ========== 触发守夜人暗杀事件 ==========
+  triggerNightwatcherAmbush(level) {
     var self = this;
-    var event = new CustomEvent('game-log', { detail: { message: '......' } });
-    document.dispatchEvent(event);
+    var state = window.gameApp.state;
 
+    // 先渲染场景画面
+    var scene = this.currentScene;
+    var evt = new CustomEvent('scene-change', { detail: { scene: scene } });
+    document.dispatchEvent(evt);
+
+    console.log('[场景事件] 守夜人暗杀事件触发！等级:', level);
+
+    // 延迟0.5秒后开始暗杀叙事
     setTimeout(function() {
-      var event2 = new CustomEvent('game-log', { detail: { message: '你感到一道冰冷的视线从背后投来。还没来得及回头——' } });
+      // 第一段叙事文本
+      var event1 = new CustomEvent('game-log', {
+        detail: { message: '一股寒意从背后袭来。你下意识侧身，一道银光擦过你的耳边——有人想暗杀你。' }
+      });
+      document.dispatchEvent(event1);
+    }, 500);
+
+    // 延迟2秒后：低语
+    setTimeout(function() {
+      var event2 = new CustomEvent('game-log', {
+        detail: { message: '黑影中传来低语：\'……还不到时候。\' 然后消失。' }
+      });
       document.dispatchEvent(event2);
-    }, 800);
+    }, 2500);
 
+    // 延迟4秒后：触发战斗
     setTimeout(function() {
-      var event3 = new CustomEvent('game-log', { detail: { message: '一道黑影从暗处闪出，刀光一闪！' } });
-      document.dispatchEvent(event3);
-    }, 1600);
-
-    setTimeout(function() {
-      // 触发暗杀者战斗
       var player = self.getPlayerData();
       if (!player) return;
       var allies = self.getAllyUnits();
 
-      // 构建暗杀者单位
-      var assassinLevel = window.gameApp.state.player.level;
-      var assassinHp = Math.floor(assassinLevel * 40 * 2.5);
-      var assassinAtk = Math.floor(assassinLevel * 10 * 2);
-      var assassinDef = Math.floor(assassinLevel * 3 * 1.5);
-      var assassinSpd = Math.floor(assassinLevel * 3 + 15);
-
+      // 构建暗影刺客单位（固定属性）
       var assassin = {
-        id: 'ambush_shadow_assassin',
+        id: 'ambush_shadow_assassin_' + level,
         name: '暗影刺客',
-        level: assassinLevel,
-        hp: assassinHp,
-        maxHp: assassinHp,
-        attack: assassinAtk,
-        defense: assassinDef,
-        speed: assassinSpd,
-        exp: Math.floor(assassinLevel * 30),
-        gold: Math.floor(assassinLevel * 10),
+        level: 40,
+        hp: 3000,
+        maxHp: 3000,
+        attack: 450,
+        defense: 50,
+        speed: 45,
+        exp: 0,
+        gold: 0,
         type: 'elite',
         critRate: 35,
         aiStrategy: 'aggressive',
-        drop: { name: '黑色匕首碎片', type: 'material', rarity: 'purple' },
+        drop: { name: '组织铭牌碎片', type: 'quest', rarity: 'purple' },
       };
 
       var combat = new CombatEngine();
@@ -587,31 +596,41 @@ class SceneManager {
       self.currentCombat = combat;
 
       // 开场日志
-      combat.combatLog.push('暗影刺客：「......走的太快了。」');
+      combat.combatLog.push('暗影刺客从暗处现身，手中匕首闪着冷光。');
 
-      // 战斗结束后显示铺垫对话
+      // 设置标记（防止重复触发）
+      var flagKey = 'nightwatcher_ambush_' + level;
+      state.world.flags[flagKey] = true;
+
+      // 战斗结束后显示铺垫叙事（无论胜负）
       var origEndCombat = combat.endCombat.bind(combat);
       combat.endCombat = function(result) {
         origEndCombat(result);
-        if (result === 'player_victory') {
-          setTimeout(function() {
-            self.showLog('暗影刺客留下的匕首上刻着一个微小的符号——像是某种组织的标记。');
-          }, 2800);
-          setTimeout(function() {
-            self.showLog('\"有些人不该知道太多。\"——那个符号让你想起了什么。灰烬山脉深处，有人在注视着你。');
-          }, 4000);
-          setTimeout(function() {
-            self.showLog('你需要变得更强。灰烬山脉的守夜人......也许他知道些什么。');
-          }, 5200);
-        } else if (result === 'player_defeat') {
-          setTimeout(function() {
-            self.showLog('你勉强逃过一劫。暗影刺客在你昏迷时消失了......下次他不会给你反应的时间。');
-          }, 2800);
-        }
+        // 延迟2秒显示战后叙事
+        setTimeout(function() {
+          self.showLog('那个人……不像是山里的强盗。他身上的铭牌，你从未见过。');
+        }, 2000);
       };
 
       combat.startCombat(player, allies, [assassin]);
-    }, 2000);
+    }, 4500);
+  }
+
+  // ========== 场景事件系统 ==========
+  checkSceneEvents(scene) {
+    if (!window.gameApp || !window.gameApp.state) return null;
+    var state = window.gameApp.state;
+    var player = state.player;
+    if (!player || !player.canPlay || player.dead) return null;
+
+    // 暗杀事件已移至独立方法 checkNightwatcherAmbush
+
+    return null;
+  }
+
+  // ========== 守夜人暗杀事件（旧版，已废弃，保留空壳兼容）==========
+  showAmbushEvent() {
+    // 已由 checkNightwatcherAmbush + triggerNightwatcherAmbush 替代
   }
 
   // ========== 触发战斗（手动）==========
@@ -978,12 +997,19 @@ class SceneManager {
     }
     var allies = this.getAllyUnits();
 
+    // 【Bug3修复】原代码引用了未在 triggerBossBattle 作用域内定义的 gkData（gkData 仅在
+    // buildGatekeeperUnit 内部定义），导致多波次分支执行 gkData.waves 时抛 ReferenceError，
+    // 守门员（如 hermit / finalBoss）配置了 waves 时无法进入多波次战斗。
+    // 修复：在此处显式取出 gkData，并将 gkData 透传给 MultiWaveBossCombatEngine，
+    // 使其通过 super(bossId, gkData) 正确初始化 this.gkData（用于战斗风格、阶段、自愈等逻辑）。
+    var gkData = DATA && DATA.gatekeepers && DATA.gatekeepers[gkId] ? DATA.gatekeepers[gkId] : null;
+
     // 创建Boss战斗引擎（支持多波次）
-    var gkWaves = gkData.waves || null;
+    var gkWaves = gkData && gkData.waves ? gkData.waves : null;
     var bossCombat;
     if (gkWaves && gkWaves.length > 1) {
       console.log('[Boss战] 多波次Boss战，波数:', gkWaves.length);
-      bossCombat = new MultiWaveBossCombatEngine(gkId, gkWaves);
+      bossCombat = new MultiWaveBossCombatEngine(gkId, gkData, gkWaves);
     } else {
       bossCombat = new BossCombatEngine(gkId);
     }

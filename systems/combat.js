@@ -1590,9 +1590,14 @@ class CombatEngine {
 // ========== 守门员Boss战斗引擎 ==========
 class BossCombatEngine extends CombatEngine {
   // 构造函数：接收守门员ID，初始化Boss战相关属性
-  constructor(bossId) {
+  // 【Bug3修复】新增可选参数 gkData，便于子类 MultiWaveBossCombatEngine 通过 super(bossId, gkData)
+  // 透传守门员配置；若未传入则按原逻辑从 DATA.gatekeepers 自行查找，保持向后兼容。
+  constructor(bossId, gkData) {
     super();
-    var gkData = DATA && DATA.gatekeepers && DATA.gatekeepers[bossId] ? DATA.gatekeepers[bossId] : null;
+    // 优先使用传入的 gkData；未传入时回退到 DATA 查找（兼容旧的 new BossCombatEngine(bossId) 调用）
+    if (typeof gkData === 'undefined' || gkData === null) {
+      gkData = DATA && DATA.gatekeepers && DATA.gatekeepers[bossId] ? DATA.gatekeepers[bossId] : null;
+    }
     if (!gkData) {
       console.warn('[Boss战斗] 未找到守门员配置:', bossId);
       gkData = {};
@@ -1751,10 +1756,60 @@ class BossCombatEngine extends CombatEngine {
         this.bossSkillCooldowns[skillId] = this.bossSkillCooldowns[skillId] - 1;
       }
     }
+
+    // 【Bug1修复】嘲讽debuff/defense buff的回合递减与恢复
+    // 原问题：嘲讽技能给 targets 设置 _taunted=2 并降低 attack 20%，
+    // 给 boss 设置 _tauntDefBuff=2 并增加 defense，但没有任何地方递减这些标记和恢复属性，
+    // 导致攻击力降低和防御力提升永久存在。
+    // 修复：每回合（在此处随 nextTurn 调用）递减标记，到0时恢复原始属性。
+
+    // 1) 递减玩家和随从的 _taunted 标记，到0时恢复原始 attack
+    var tauntTargets = [this.playerUnit].concat(this.allyUnits);
+    for (var ti = 0; ti < tauntTargets.length; ti++) {
+      var u = tauntTargets[ti];
+      if (u && u._taunted && u._taunted > 0) {
+        u._taunted = u._taunted - 1;
+        if (u._taunted <= 0) {
+          u._taunted = 0;
+          // 恢复原始 attack（嘲讽期间可能因其他逻辑变动，这里以保存的 _originalAttack 为准）
+          if (typeof u._originalAttack !== 'undefined') {
+            u.attack = u._originalAttack;
+            delete u._originalAttack;
+          }
+          var recoverMsg = (u.name || '单位') + ' 的嘲讽影响消散，攻击力恢复了。';
+          this.combatLog.push(recoverMsg);
+          this.dispatchUpdate(recoverMsg);
+        }
+      }
+    }
+
+    // 2) 递减 Boss 的 _tauntDefBuff 标记，到0时恢复原始 defense
+    var bossUnit = this.enemyUnits && this.enemyUnits.length > 0 ? this.enemyUnits[0] : null;
+    if (bossUnit && bossUnit._tauntDefBuff && bossUnit._tauntDefBuff > 0) {
+      bossUnit._tauntDefBuff = bossUnit._tauntDefBuff - 1;
+      if (bossUnit._tauntDefBuff <= 0) {
+        bossUnit._tauntDefBuff = 0;
+        // 恢复原始 defense
+        if (typeof bossUnit._originalDefense !== 'undefined') {
+          bossUnit.defense = bossUnit._originalDefense;
+          delete bossUnit._originalDefense;
+        }
+        var defRecoverMsg = (bossUnit.name || 'Boss') + ' 的防御增益消退了。';
+        this.combatLog.push(defRecoverMsg);
+        this.dispatchUpdate(defRecoverMsg);
+      }
+    }
   }
 
   // 重写 nextTurn：额外处理Boss技能冷却递减
   nextTurn() {
+    // 【Bug2修复】连斩技能需要连续两次同步攻击，但 executeAction 内部每次都会调用 nextTurn。
+    // 通过 _skipNextTurn 标记让第一次攻击后的 nextTurn 被跳过，从而保证只在第二次攻击结束后
+    // 才推进回合，避免双重推进导致的回合混乱。
+    if (this._skipNextTurn) {
+      this._skipNextTurn = false;
+      return;
+    }
     this.tickBossSkillCooldowns();
     super.nextTurn();
   }
@@ -1813,11 +1868,21 @@ class BossCombatEngine extends CombatEngine {
       for (var ti = 0; ti < targets.length; ti++) {
         targets[ti]._taunted = 2;
         if (targets[ti].attack) {
+          // 【Bug1修复】保存原始attack到 _originalAttack，以便嘲讽结束后恢复
+          // 仅在尚未保存时记录，避免重复嘲讽覆盖原始值
+          if (typeof targets[ti]._originalAttack === 'undefined') {
+            targets[ti]._originalAttack = targets[ti].attack;
+          }
           targets[ti].attack = Math.max(1, Math.floor(targets[ti].attack * 0.8));
         }
       }
       // Boss防御+50%持续2回合
       boss._tauntDefBuff = 2;
+      // 【Bug1修复】保存原始defense到 _originalDefense，以便嘲讽结束后恢复
+      // 仅在尚未保存时记录，避免重复嘲讽覆盖原始值
+      if (typeof boss._originalDefense === 'undefined') {
+        boss._originalDefense = boss.defense || 5;
+      }
       boss.defense = (boss.defense || 5) + Math.floor(boss.defense * 0.5);
       this.nextTurn();
       return;
@@ -1886,15 +1951,31 @@ class BossCombatEngine extends CombatEngine {
       var dsMsg = boss.name + ' 拔刀连斩！';
       this.combatLog.push(dsMsg);
       this.dispatchUpdate(dsMsg);
+      // 【Bug2修复】原实现用 setTimeout 延迟第二次攻击，但第一次 executeAction 内部已经调用
+      // 了 nextTurn()，会先推进回合；而第二次若在 setTimeout 中也调用 nextTurn，会导致双重推进，
+      // 且 setTimeout 异步执行时回合/战斗状态可能已改变，造成逻辑混乱（例如连斩只打出一次、
+      // 或回合计数错位）。
+      // 修复方案：改为同一同步流程执行两次攻击。设置 _skipNextTurn = true，使第一次 executeAction
+      // 内部调用的 nextTurn 被跳过（见本类重写的 nextTurn）；仅当第二次攻击确实执行后，由其内部
+      // 的 nextTurn 正常推进回合。若第一次攻击后战斗已结束或目标已死亡，则恢复 _skipNextTurn
+      // 并主动调用 nextTurn 推进。
+      this._skipNextTurn = true;
       // 第一次攻击
       this.executeAction(boss, 'attack', primaryTarget);
-      // 如果目标还活着且战斗未结束，第二次攻击
-      if (this.battleActive && primaryTarget.alive && primaryTarget.hp > 0) {
-        setTimeout(function() {
-          if (self.battleActive && primaryTarget.alive && primaryTarget.hp > 0) {
-            self.executeAction(boss, 'attack', primaryTarget);
-          }
-        }, 300);
+      // 第一次攻击后若战斗已结束（executeAction 可能已调用 checkBattleEnd 触发 endCombat），
+      // 直接返回，避免继续执行；同时清掉遗留标记。
+      if (!this.battleActive) {
+        this._skipNextTurn = false;
+        return;
+      }
+      // 如果目标仍存活，发起第二次攻击（此时 _skipNextTurn 仍为 true，但第二次 executeAction
+      // 内部调用的 nextTurn 会清掉标记并正常推进回合，符合"两次攻击共用一次回合推进"的预期）
+      if (primaryTarget.alive && primaryTarget.hp > 0) {
+        this.executeAction(boss, 'attack', primaryTarget);
+      } else {
+        // 目标已死：手动推进一次回合（吞掉第一次的标记）
+        this._skipNextTurn = false;
+        this.nextTurn();
       }
       return;
     }
@@ -2102,8 +2183,11 @@ class BossCombatEngine extends CombatEngine {
 // 玩家HP/MP在波次间不恢复，但每波之间有短暂喘息
 // ============================================
 class MultiWaveBossCombatEngine extends BossCombatEngine {
-  constructor(bossId, waveConfigs) {
-    super(bossId);
+  // 【Bug3修复】原构造函数为 constructor(bossId, waveConfigs) 且调用 super(bossId)，
+  // 会丢失 gkData（虽然 BossCombatEngine 内部会自行从 DATA 查找，但为了与 triggerBossBattle
+  // 传入的 gkData 保持一致，并确保子类能正确访问 this.gkData，改为接收 gkData 并透传给父类）。
+  constructor(bossId, gkData, waveConfigs) {
+    super(bossId, gkData);
     this.waveConfigs = waveConfigs || []; // [{enemies: [...], intro: '...', perWaveRounds: 30}]
     this.currentWave = 0;
     this.totalWaves = waveConfigs ? waveConfigs.length : 1;
