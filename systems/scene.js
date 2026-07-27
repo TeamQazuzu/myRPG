@@ -1,208 +1,179 @@
+// systems/scene.js
 class SceneManager {
-  constructor() {
-    this.scenes = {};
-    this.currentScene = null;
-    this._initScenes();
-  }
-
-  _initScenes() {
-    this.scenes = {
-      '灰烟村': {
-        id: 'greyVillage', type: 'safe', name: '灰烟村',
-        desc: '你长大的地方。炉火噼啪作响，艾琳坐在窗边擦拭她的弓。外面天快黑了。',
-        exits: ['酒馆', '铁匠铺', '裁缝铺', '集市', '基地', '墓地', '荒地', '树林', '河边'],
-        npcs: ['ailin', 'blacksmithApprentice', 'herbalist'],
-      },
-      '酒馆': {
-        id: 'greyVillage_tavern', type: 'safe', name: '酒馆',
-        desc: '温暖的酒馆，飘着麦酒和烤肉的香气。墙上挂着旧地图。',
-        exits: ['灰烟村'],
-        npcs: ['ailin'],
-      },
-      '铁匠铺': {
-        id: 'greyVillage_blacksmith', type: 'safe', name: '铁匠铺',
-        desc: '叮叮当当的打铁声，老铁匠正在锻造一把长剑。',
-        exits: ['灰烟村'],
-        npcs: ['blacksmithApprentice'],
-      },
-      '裁缝铺': {
-        id: 'greyVillage_tailor', type: 'safe', name: '裁缝铺',
-        desc: '各色布料堆满柜台，裁缝正在缝制一件皮甲。',
-        exits: ['灰烟村'],
-      },
-      '集市': {
-        id: 'greyVillage_market', type: 'safe', name: '集市',
-        desc: '人来人往的集市，各种货物琳琅满目。',
-        exits: ['灰烟村'],
-        npcs: ['hunter'],
-      },
-      '基地': {
-        id: 'greyVillage_base', type: 'safe', name: '基地',
-        desc: '你的小窝，虽然简陋但很安心。墙上挂着旧地图。',
-        exits: ['灰烟村'],
-      },
-      '墓地': {
-        id: 'greyVillage_graveyard', type: 'safe', name: '墓地',
-        desc: '村外的小墓地，安静而肃穆。',
-        exits: ['灰烟村'],
-      },
-      '荒地': {
-        id: 'greyVillage_wasteland', type: 'wild', name: '荒地',
-        desc: '荒芜的野地，野狗在垃圾堆间游荡。',
-        enemies: ['wolf', 'wolf', 'hare'],
-        level: 1,
-        exits: ['灰烟村'],
-      },
-      '树林': {
-        id: 'greyVillage_forest', type: 'wild', name: '树林',
-        desc: '稀疏的树林，偶尔有野兔窜过。',
-        enemies: ['hare', 'hare', 'wolf'],
-        level: 1,
-        exits: ['灰烟村'],
-      },
-      '河边': {
-        id: 'greyVillage_river', type: 'wild', name: '河边',
-        desc: '潺潺的河水，水边有野鸭栖息。',
-        enemies: ['duck', 'crab'],
-        level: 1,
-        exits: ['灰烟村'],
-      },
-      '山脚洞': {
-        id: 'ashMountains_cave', type: 'wild', name: '山脚洞',
-        desc: '山脚下的洞穴，回荡着诡异的声响。',
-        enemies: ['bandit', 'skeleton', 'wolf'],
-        level: 20,
-        exits: ['灰烟村'],
-      },
-    };
-  }
-
-  enterScene(sceneName) {
-    let scene = this.scenes[sceneName];
-    if (!scene && sceneName.includes('·')) {
-      const parts = sceneName.split('·');
-      scene = this.scenes[parts[parts.length - 1]];
+    constructor() {
+        this.currentScene = null;
+        this.currentCombat = null;
+        this.scenes = {
+            '灰烟村': {
+                id: 'greyVillage',
+                type: 'safe',
+                name: '灰烟村',
+                description: '你长大的地方。炉火噼啪作响，艾琳坐在窗边擦拭她的弓。外面天快黑了。',
+                exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_裁缝铺', '灰烟村_集市', '灰烟村_基地']
+            },
+            '灰烟村_酒馆': {
+                id: 'greyVillage_tavern',
+                type: 'safe',
+                name: '酒馆',
+                description: '温暖的酒馆，飘着麦酒和烤肉的香气。墙上挂着旧地图。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_铁匠铺': {
+                id: 'greyVillage_blacksmith',
+                type: 'safe',
+                name: '铁匠铺',
+                description: '叮叮当当的打铁声，老铁匠正在锻造一把长剑。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_裁缝铺': {
+                id: 'greyVillage_tailor',
+                type: 'safe',
+                name: '裁缝铺',
+                description: '各色布料堆满柜台，裁缝正在缝制一件皮甲。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_集市': {
+                id: 'greyVillage_market',
+                type: 'safe',
+                name: '集市',
+                description: '人来人往的集市，各种货物琳琅满目。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_基地': {
+                id: 'greyVillage_base',
+                type: 'safe',
+                name: '基地',
+                description: '你的小窝，虽然简陋但很安心。墙上挂着旧地图。',
+                exits: ['灰烟村']
+            },
+            '灰烟村_荒地': {
+                id: 'greyVillage_wasteland',
+                type: 'wild',
+                name: '荒地',
+                description: '荒芜的野地，野狗在垃圾堆间游荡。',
+                enemies: ['野狗', '野狗'],
+                level: 1,
+                exits: ['灰烟村']
+            },
+            '灰烟村_树林': {
+                id: 'greyVillage_forest',
+                type: 'wild',
+                name: '树林',
+                description: '稀疏的树林，偶尔有野兔窜过。',
+                enemies: ['野兔', '野兔'],
+                level: 1,
+                exits: ['灰烟村']
+            },
+            '灰烟村_河边': {
+                id: 'greyVillage_river',
+                type: 'wild',
+                name: '河边',
+                description: '潺潺的河水，水边有野鸭栖息。',
+                enemies: ['野鸭', '螃蟹'],
+                level: 1,
+                exits: ['灰烟村']
+            }
+        };
+        this.enemyData = {
+            '野狗': { name: '野狗', hp: 30, maxHp: 30, attack: 8, defense: 2, speed: 10, exp: 12, gold: 5 },
+            '野兔': { name: '野兔', hp: 15, maxHp: 15, attack: 3, defense: 1, speed: 15, exp: 8, gold: 2 },
+            '野鸭': { name: '野鸭', hp: 20, maxHp: 20, attack: 5, defense: 1, speed: 12, exp: 10, gold: 3 },
+            '螃蟹': { name: '螃蟹', hp: 25, maxHp: 25, attack: 6, defense: 5, speed: 5, exp: 12, gold: 4 }
+        };
     }
-    if (!scene) {
-      console.error('[场景] 场景不存在:', sceneName);
-      return;
+
+    enterScene(sceneName) {
+        console.log('[场景] 进入:', sceneName);
+        const scene = this.scenes[sceneName];
+        if (!scene) {
+            console.error('[场景] 场景不存在:', sceneName);
+            return;
+        }
+        this.currentScene = scene;
+        const event = new CustomEvent('scene-change', { detail: { scene: scene } });
+        document.dispatchEvent(event);
+        if (scene.type === 'wild' && scene.enemies && scene.enemies.length > 0) {
+            console.log('[场景] 野外场景，触发战斗，敌人:', scene.enemies.join(', '));
+            this.triggerBattle(scene.enemies);
+        }
     }
-    const actualName = Object.keys(this.scenes).find(k => this.scenes[k] === scene);
-    this.currentScene = scene;
-    const app = window.gameApp;
-    if (app && app.state) {
-      app.state.player.location = actualName;
+
+    triggerBattle(enemyNames) {
+        console.log('[战斗] 触发战斗，敌人:', enemyNames.join(', '));
+        const player = this.getPlayerData();
+        if (!player) {
+            console.error('[战斗] 没有玩家数据');
+            return;
+        }
+        const enemies = enemyNames.map(name => {
+            const data = this.enemyData[name];
+            if (!data) {
+                console.error('[战斗] 找不到敌人数据:', name);
+                return null;
+            }
+            return {
+                ...data,
+                id: Utils.uuid(),
+                status: 'normal',
+                hp: data.hp || 30,
+                maxHp: data.maxHp || 30,
+                speed: data.speed || 5
+            };
+        }).filter(e => e !== null);
+
+        if (enemies.length === 0) {
+            console.error('[战斗] 没有有效敌人');
+            return;
+        }
+
+        const combat = new CombatEngine();
+        window.currentCombat = combat;
+        this.currentCombat = combat;
+        combat.startCombat(player, enemies);
     }
-    document.dispatchEvent(new CustomEvent('scene-change', { detail: { scene } }));
-    if (scene.type === 'wild' && scene.enemies && scene.enemies.length > 0) {
-      setTimeout(() => this.triggerBattle(scene.enemies), 500);
+
+    getPlayerData() {
+        try {
+            if (window.gameApp && window.gameApp.state && window.gameApp.state.player) {
+                const p = window.gameApp.state.player;
+                const base = { ...p.attributes };
+                const stats = {
+                    maxHp: p.maxHp || p.hp || 100,
+                    hp: p.hp || p.maxHp || 100,
+                    speed: base.agi * 0.8,
+                    attack: base.str * 2,
+                    defense: base.str * 1 + base.ten * 3,
+                    physAtk: base.str * 2,
+                    physDef: base.str * 1 + base.ten * 3,
+                    magAtk: base.int * 2,
+                    magDef: base.int * 1 + base.spi * 2 + base.ten * 3,
+                    hit: base.agi * 1.5,
+                    dodge: base.agi * 1,
+                    critRate: 0.05,
+                    critDmg: 1.5,
+                };
+                if (typeof StateUtils !== 'undefined' && StateUtils.getCombatStats) {
+                    const computed = StateUtils.getCombatStats(window.gameApp.state, 'player');
+                    if (computed) {
+                        stats.speed = computed.speed || stats.speed;
+                        stats.physAtk = computed.physAtk || stats.physAtk;
+                        stats.physDef = computed.physDef || stats.physDef;
+                        stats.magAtk = computed.magAtk || stats.magAtk;
+                        stats.magDef = computed.magDef || stats.magDef;
+                        stats.attack = computed.physAtk || stats.attack;
+                        stats.defense = computed.physDef || stats.defense;
+                    }
+                }
+                return { ...p, ...stats };
+            }
+            return null;
+        } catch (e) {
+            console.error('[战斗] 获取玩家失败:', e);
+            return null;
+        }
     }
-  }
 
-  triggerBattle(enemyKeys) {
-    const app = window.gameApp;
-    if (!app || !app.state) return;
-    const state = app.state;
-
-    const playerUnit = this._getPlayerBattleUnit(state);
-    const allyUnits = CompanionSystem.getCompanionsForBattle(state).map(c => CompanionSystem.syncToBattleUnit(state, c.id));
-    const enemyUnits = enemyKeys.map(key => this._createEnemyUnit(key));
-    if (enemyUnits.length === 0) return;
-
-    const combat = new CombatEngine();
-    window.currentCombat = combat;
-    app.combatEngine = combat;
-    combat.start(state, playerUnit, allyUnits, enemyUnits);
-  }
-
-  _getPlayerBattleUnit(state) {
-    const stats = StateUtils.getPlayerCombatStats(state);
-    const classData = DATA.classes[state.player.classPath[0]];
-    const skills = classData ? classData.getSkills(state.player.level, state.player.elementSpec) : [];
-    return {
-      unitId: "player",
-      name: state.player.name,
-      side: "player",
-      class: state.player.class,
-      classPath: state.player.classPath,
-      level: state.player.level,
-      hp: state.player.hp,
-      maxHp: state.player.maxHp,
-      mp: state.player.mp,
-      maxMp: state.player.maxMp,
-      physAtk: stats.physAtk,
-      physDef: stats.physDef,
-      magAtk: stats.magAtk,
-      speed: stats.speed,
-      critRate: stats.critRate,
-      critDmg: stats.critDmg,
-      hit: stats.hit,
-      dodge: stats.dodge,
-      skills: skills,
-      skillPreset: state.player.skillPreset,
-      alive: true,
-      cooldowns: {},
-      combatMode: state.player.combatMode,
-      autoMode: state.player.autoMode,
-    };
-  }
-
-  _createEnemyUnit(key) {
-    let data = DATA.monsters[key];
-    const isGatekeeper = !data && DATA.gatekeepers[key];
-    if (isGatekeeper) {
-      const gk = DATA.gatekeepers[key];
-      const combat = gk.combat || {};
-      data = {
-        name: gk.name,
-        level: gk.level,
-        hp: combat.hp || 100,
-        atk: combat.atk || combat.armor || 10,
-        def: combat.armor || 5,
-        speed: 8,
-        exp: gk.level * 20,
-        gold: gk.level * 10,
-      };
-    }
-    if (!data) {
-      return {
-        unitId: 'e_' + Math.random().toString(36).substr(2, 6),
-        monsterKey: key,
-        name: key, side: "enemy", level: 1,
-        hp: 30, maxHp: 30, atk: 5, def: 2, speed: 5,
-        physAtk: 5, physDef: 2, skills: [], skillPreset: [],
-      };
-    }
-    const id = 'e_' + Math.random().toString(36).substr(2, 6);
-    return {
-      unitId: id,
-      monsterKey: key,
-      name: data.name,
-      side: "enemy",
-      level: data.level,
-      hp: data.hp, maxHp: data.hp,
-      mp: 30, maxMp: 30,
-      physAtk: data.atk,
-      physDef: data.def,
-      speed: data.speed,
-      critRate: 0.05,
-      critDmg: 1.5,
-      hit: data.level * 5,
-      dodge: data.level * 2,
-      skills: [],
-      skillPreset: [],
-    };
-  }
-
-  getScene(sceneName) {
-    return this.scenes[sceneName];
-  }
-
-  getCurrentScene() {
-    return this.currentScene;
-  }
-
-  getScenes() {
-    return this.scenes;
-  }
+    getCurrentScene() { return this.currentScene; }
+    getScenes() { return this.scenes; }
+    getExits() { return this.currentScene ? this.currentScene.exits || [] : []; }
 }
