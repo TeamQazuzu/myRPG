@@ -126,10 +126,43 @@ class SceneManager {
             return;
         }
 
+        // 获取参战随从（带战斗属性计算）
+        const companions = this.getCompanionData();
+
         const combat = new CombatEngine();
         window.currentCombat = combat;
         this.currentCombat = combat;
-        combat.startCombat(player, enemies);
+        combat.startCombat(player, enemies, companions);
+    }
+
+    getCompanionData() {
+        try {
+            if (window.gameApp && window.gameApp.state && window.gameApp.state.companions) {
+                return window.gameApp.state.companions
+                    .filter(c => c.alive !== false)
+                    .map(c => {
+                        const base = { ...c.attributes };
+                        return {
+                            ...c,
+                            speed: base.agi * 0.8,
+                            attack: base.str * 2,
+                            defense: base.str * 1 + base.ten * 3,
+                            physAtk: base.str * 2,
+                            physDef: base.str * 1 + base.ten * 3,
+                            magAtk: base.int * 2,
+                            magDef: base.int * 1 + base.spi * 2 + base.ten * 3,
+                            hit: base.agi * 1.5,
+                            dodge: base.agi * 1,
+                            critRate: 0.05,
+                            critDmg: 1.5,
+                        };
+                    });
+            }
+            return [];
+        } catch (e) {
+            console.error('[战斗] 获取随从失败:', e);
+            return [];
+        }
     }
 
     getPlayerData() {

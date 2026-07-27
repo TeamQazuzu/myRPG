@@ -7,6 +7,7 @@ class GameApp {
     this.sceneManager = null;
     this.uiRenderer = null;
     this.autoSaveTimer = null;
+    this.currentTab = 'scene'; // 当前激活的底部导航tab
   }
 
   async init() {
@@ -73,9 +74,17 @@ class GameApp {
     // 初始化场景管理器
     this.sceneManager = new SceneManager();
 
+    // 清空容器（移除创建界面等）
+    const gc = document.getElementById('game-container');
+    if (gc) gc.innerHTML = '';
+
     // 初始化 UI
     this.uiRenderer = new UIRenderer();
     this.uiRenderer.init('game-container');
+    this.uiRenderer.setSceneRef(this.sceneManager.getScenes());
+
+    // 添加底部导航
+    this.addBottomNavigation();
 
     // 进入初始场景
     this.sceneManager.enterScene('灰烟村');
@@ -84,6 +93,7 @@ class GameApp {
     document.addEventListener('scene-change', (e) => {
       this.state.world.currentZone = e.detail.scene.id || 'greyVillage';
       this.state.world.currentLocation = e.detail.scene.name || '酒馆';
+      this.renderTopBar();
     });
 
     // 监听战斗结束，处理死亡/奖励
@@ -93,12 +103,13 @@ class GameApp {
         this.uiRenderer.addGameLog(deathResult.message);
         if (deathResult.mode === 'epitaph' || deathResult.mode === 'retired') {
           setTimeout(() => {
-            alert('游戏结束。刷新页面重新开始。');
+            this.uiRenderer.showPanel('游戏结束', `<p>${deathResult.message}</p><p style="margin-top:12px;color:var(--text-secondary);">刷新页面重新开始。</p>`);
             SaveManager.delete();
           }, 1000);
         }
       }
       SaveManager.save(this.state);
+      this.renderTopBar();
     });
 
     // 顶部状态栏
@@ -113,14 +124,127 @@ class GameApp {
       document.body.insertBefore(bar, document.body.firstChild);
     }
     const p = this.state.player;
+    const hpPct = p.maxHp > 0 ? Math.max(0, (p.hp / p.maxHp) * 100) : 0;
+    const mpPct = p.maxMp > 0 ? Math.max(0, (p.mp / p.maxMp) * 100) : 0;
     bar.innerHTML = `
-      <span class="tb-name">${p.name}</span>
-      <span class="tb-lv">Lv.${p.level}</span>
-      <span class="tb-hp">HP: ${p.hp}/${p.maxHp}</span>
-      <span class="tb-mp">MP: ${p.mp}/${p.maxMp}</span>
-      <span class="tb-gold">💰 ${p.gold}金 ${p.silver}银 ${p.copper}铜</span>
-      <span class="tb-location">📍 ${p.location}</span>
+      <div class="tb-row-1">
+        <span class="tb-name">${p.name}</span>
+        <span class="tb-lv">Lv.${p.level}</span>
+        <span class="tb-location">📍 ${p.location || '灰烟村'}</span>
+      </div>
+      <div class="tb-row-2">
+        <span class="tb-hp-bar">
+          <span class="tb-bar-label">HP</span>
+          <span class="tb-bar-track"><span class="tb-bar-fill hp" style="width:${hpPct}%"></span></span>
+          <span class="tb-bar-val">${p.hp}/${p.maxHp}</span>
+        </span>
+        <span class="tb-mp-bar">
+          <span class="tb-bar-label">MP</span>
+          <span class="tb-bar-track"><span class="tb-bar-fill mp" style="width:${mpPct}%"></span></span>
+          <span class="tb-bar-val">${p.mp}/${p.maxMp}</span>
+        </span>
+      </div>
+      <div class="tb-row-3">
+        <span class="tb-gold">💰 ${this.formatMoney(p)}</span>
+      </div>
     `;
+  }
+
+  formatMoney(p) {
+    const parts = [];
+    if (p.gold) parts.push(p.gold + '金');
+    if (p.silver) parts.push(p.silver + '银');
+    if (p.copper) parts.push(p.copper + '铜');
+    return parts.length > 0 ? parts.join(' ') : '0铜';
+  }
+
+  addBottomNavigation() {
+    // 防止重复添加
+    if (document.getElementById('bottom-nav')) return;
+
+    const nav = document.createElement('div');
+    nav.id = 'bottom-nav';
+    nav.innerHTML = `
+      <button class="nav-item active" data-action="scene">
+        <span class="nav-icon">🏠</span>
+        <span>场景</span>
+      </button>
+      <button class="nav-item" data-action="inventory">
+        <span class="nav-icon">🎒</span>
+        <span>背包</span>
+      </button>
+      <button class="nav-item" data-action="character">
+        <span class="nav-icon">👤</span>
+        <span>角色</span>
+      </button>
+      <button class="nav-item" data-action="settings">
+        <span class="nav-icon">⚙️</span>
+        <span>设置</span>
+      </button>
+    `;
+    document.body.appendChild(nav);
+
+    nav.querySelectorAll('.nav-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        // 战斗中只允许场景tab
+        if (this.uiRenderer && this.uiRenderer.isCombatActive) {
+          const action = btn.dataset.action;
+          if (action !== 'scene') return;
+        }
+
+        nav.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentTab = btn.dataset.action;
+        this.switchTab(btn.dataset.action);
+      });
+    });
+  }
+
+  switchTab(action) {
+    // 隐藏所有面板
+    const sceneEl = document.getElementById('scene-container');
+    const invPanel = document.getElementById('inventory-panel');
+    const charPanel = document.getElementById('character-panel');
+    const settingsPanel = document.getElementById('settings-panel');
+    const combatContainer = document.getElementById('combat-container');
+    const combatLog = document.getElementById('combat-log');
+
+    if (invPanel) invPanel.remove();
+    if (charPanel) charPanel.remove();
+    if (settingsPanel) settingsPanel.remove();
+
+    // 关闭NPC弹窗
+    const dynPanel = document.getElementById('dynamic-panel');
+    if (dynPanel) dynPanel.style.display = 'none';
+
+    switch (action) {
+      case 'scene':
+        if (sceneEl) sceneEl.style.display = 'block';
+        // 如果战斗中，也显示战斗UI
+        if (this.uiRenderer && this.uiRenderer.isCombatActive) {
+          if (combatContainer) combatContainer.style.display = 'block';
+          if (combatLog) combatLog.style.display = 'block';
+          const actionBtns = document.getElementById('action-buttons');
+          if (actionBtns) actionBtns.style.display = 'flex';
+        } else {
+          // 重新渲染当前场景
+          const cur = this.sceneManager.getCurrentScene();
+          if (cur) this.uiRenderer.renderScene(cur);
+        }
+        break;
+      case 'inventory':
+        if (sceneEl) sceneEl.style.display = 'none';
+        this.openInventory();
+        break;
+      case 'character':
+        if (sceneEl) sceneEl.style.display = 'none';
+        this.uiRenderer.renderCharacter(this.state);
+        break;
+      case 'settings':
+        if (sceneEl) sceneEl.style.display = 'none';
+        this.uiRenderer.renderSettings(this.state);
+        break;
+    }
   }
 
   setupAutoSave() {

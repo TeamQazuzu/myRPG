@@ -4,6 +4,7 @@
 class CombatEngine {
   constructor() {
     this.player = null;
+    this.companions = [];
     this.enemies = [];
     this.combatLog = [];
     this.currentTurn = 0;
@@ -14,8 +15,11 @@ class CombatEngine {
     this.statusEffects = new Map(); // unitId -> [{type, duration, value}]
   }
 
-  startCombat(player, enemies) {
+  startCombat(player, enemies, companions = []) {
     this.player = { ...player, id: 'player', isPlayer: true };
+    this.companions = companions
+      .filter(c => c.alive !== false)
+      .map((c, i) => ({ ...c, id: c.id || `companion_${i}`, isCompanion: true, _origId: c.id }));
     this.enemies = enemies.map((e, i) => ({ ...e, id: e.id || `enemy_${i}`, isEnemy: true }));
     this.combatLog = [];
     this.currentTurn = 0;
@@ -23,7 +27,8 @@ class CombatEngine {
     this.active = true;
     this.statusEffects = new Map();
 
-    this.log(`⚔️ 战斗开始！${this.player.name} VS ${this.enemies.map(e => e.name).join('、')}`);
+    const allyNames = [this.player.name, ...this.companions.map(c => c.name)].join('、');
+    this.log(`⚔️ 战斗开始！${allyNames} VS ${this.enemies.map(e => e.name).join('、')}`);
 
     const event = new CustomEvent('combat-start', { detail: { combat: this } });
     document.dispatchEvent(event);
@@ -51,8 +56,9 @@ class CombatEngine {
 
     this.currentTurn++;
 
-    // 按速度排序决定行动顺序
-    const allUnits = [this.player, ...aliveEnemies];
+    // 按速度排序决定行动顺序（玩家、随从、敌人）
+    const aliveCompanions = this.companions.filter(c => c.hp > 0);
+    const allUnits = [this.player, ...aliveCompanions, ...aliveEnemies];
     allUnits.sort((a, b) => (b.speed || 5) - (a.speed || 5));
 
     for (const unit of allUnits) {
@@ -68,6 +74,9 @@ class CombatEngine {
         document.dispatchEvent(event);
         // 等待玩家输入，不自动继续
         return;
+      } else if (unit.isCompanion) {
+        this.isPlayerTurn = false;
+        this.companionAction(unit);
       } else {
         this.isPlayerTurn = false;
         this.aiAction(unit);
@@ -107,12 +116,29 @@ class CombatEngine {
   }
 
   aiAction(enemy) {
-    const target = this.player;
+    // 敌人随机选择玩家或存活的随从作为目标
+    const aliveAllies = [this.player, ...this.companions.filter(c => c.hp > 0)];
+    const target = aliveAllies[Utils.randInt(0, aliveAllies.length - 1)];
     const roll = Math.random();
     if (roll < 0.15 && enemy.skills && enemy.skills.length > 0) {
       this.performSkill(enemy, target);
     } else {
       this.performAttack(enemy, target);
+    }
+    const event = new CustomEvent('combat-update', { detail: { combat: this, log: this.combatLog[this.combatLog.length - 1] } });
+    document.dispatchEvent(event);
+  }
+
+  companionAction(companion) {
+    const target = this.getFirstAliveEnemy();
+    if (!target) return;
+    // 随从简单AI：普通攻击，低概率治疗玩家
+    if (companion.class === 'mage' && this.player.hp < this.player.maxHp * 0.4 && Math.random() < 0.3) {
+      const heal = Math.floor((companion.magAtk || companion.int * 2 || 10) * 0.8);
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + heal);
+      this.log(`💚 ${companion.name} 治疗 ${this.player.name}，回复 ${heal} HP`);
+    } else {
+      this.performAttack(companion, target);
     }
     const event = new CustomEvent('combat-update', { detail: { combat: this, log: this.combatLog[this.combatLog.length - 1] } });
     document.dispatchEvent(event);
@@ -219,10 +245,31 @@ class CombatEngine {
     return this.player;
   }
 
+  getCompanionUnits() {
+    return this.companions;
+  }
+
+  /** 将战斗后的随从状态同步回游戏 state */
+  syncCompanionsToState(state) {
+    if (!state || !state.companions) return;
+    for (const battleComp of this.companions) {
+      const orig = state.companions.find(c => c.id === battleComp._origId);
+      if (orig) {
+        orig.hp = battleComp.hp;
+        orig.maxHp = battleComp.maxHp;
+        orig.alive = battleComp.hp > 0;
+      }
+    }
+  }
+
   endCombat(result) {
     this.active = false;
     this.isPlayerTurn = false;
     this.log(`🏁 战斗结束：${result === 'player_victory' ? '胜利' : result === 'player_defeat' ? '失败' : '超时'}`);
+
+    // 同步随从状态
+    const state = window.gameApp ? window.gameApp.state : null;
+    if (state) this.syncCompanionsToState(state);
 
     // 掉落处理（胜利时）
     if (result === 'player_victory') {
