@@ -2,8 +2,20 @@
 // 《寻亲风云录》核心状态管理
 // 严格对应 GDD v11.0 第30章完整数据结构
 // ============================================
+
+// 创建预置经验丹
+function createExpPill() {
+  const pill = DATA.items.exp_pill;
+  return {
+    ...pill,
+    id: Utils ? Utils.uuid() : `exp_pill_${Date.now()}_${Math.random()}`,
+    stack: 1,
+  };
+}
+
 // 默认新角色状态
 function createDefaultState() {
+  const expPills = Array(5).fill(null).map(() => createExpPill());
   return {
     version: "1.0.0",
     player: {
@@ -25,6 +37,7 @@ function createDefaultState() {
       attributePoints: 0,
       talentPoints: 0,
       talents: {},
+      skills: ["normal_attack", "defend"],
       hp: 100,
       maxHp: 100,
       mp: 30,
@@ -41,26 +54,9 @@ function createDefaultState() {
       canPlay: true,
       blessingChoice: null,
     },
-    companions: [
-      {
-        id: "ailin",
-        name: "艾琳",
-        class: "ranger",
-        level: 1,
-        hp: 80,
-        maxHp: 80,
-        mp: 20,
-        maxMp: 20,
-        attributes: { str: 6, agi: 12, int: 6, vit: 7, ten: 6, spi: 5 },
-        equipment: {
-          weapon: { name: "父亲的旧弓", type: "bow", rarity: "blue", level: 10, affixes: [] },
-        },
-        aiStrategy: "balanced",
-        alive: true,
-      },
-    ],
+    companions: [],
     inventory: {
-      items: [],
+      items: expPills,
       capacity: 20,
       maxCapacity: 100,
     },
@@ -116,6 +112,9 @@ function createDefaultState() {
       offlineTime: 0,
       lastSave: new Date().toISOString(),
       flags: {},
+      dungeonProgress: {
+        greyVillage_cave: { currentStage: 0, completed: false },
+      },
     },
     quests: {
       active: [],
@@ -222,6 +221,14 @@ const SaveManager = {
     if (!data.version) data.version = "1.0.0";
     if (!data.world) data.world = {};
     if (!data.world.flags) data.world.flags = {};
+    if (!data.world.dungeonProgress) data.world.dungeonProgress = { greyVillage_cave: { currentStage: 0, completed: false } };
+    if (!data.player.skills) data.player.skills = ["normal_attack", "defend"];
+    if (data.companions) {
+      data.companions.forEach(c => {
+        if (!c.skills) c.skills = [];
+        if (!c.talents) c.talents = {};
+      });
+    }
     return data;
   },
   delete() {
@@ -249,21 +256,62 @@ const StateUtils = {
     const zone = DATA.world.zones[state.world.currentZone];
     return zone ? zone.levelRange : [1, 99];
   },
+  // 经验共享：主角和所有存活随从获得等量经验
   addExp(state, amount) {
     if (this.isExpLocked(state)) {
       return { gained: 0, locked: true, message: this.getLockMessage(state) };
     }
+    const result = { gained: amount, locked: false, leveled: false, companionsLeveled: [] };
+    // 主角获得经验
     state.player.exp += amount;
-    let leveled = false;
     while (state.player.exp >= state.player.expToNext && state.player.level < 99) {
       state.player.exp -= state.player.expToNext;
       state.player.level++;
       state.player.attributePoints += 3;
       state.player.expToNext = Math.floor(100 * Math.pow(1.15, state.player.level - 1));
-      leveled = true;
+      result.leveled = true;
       if (this.isExpLocked(state)) break;
     }
-    return { gained: amount, locked: false, leveled };
+    // 随从获得等量经验
+    for (const comp of state.companions) {
+      if (!comp.alive) continue;
+      const compResult = this.addExpToCompanion(comp, amount);
+      if (compResult.leveled) {
+        result.companionsLeveled.push(comp.name);
+      }
+    }
+    return result;
+  },
+  addExpToCompanion(companion, amount) {
+    if (!companion.exp) companion.exp = 0;
+    if (!companion.expToNext) companion.expToNext = Math.floor(100 * Math.pow(1.15, companion.level - 1));
+    companion.exp += amount;
+    let leveled = false;
+    while (companion.exp >= companion.expToNext && companion.level < 99) {
+      companion.exp -= companion.expToNext;
+      companion.level++;
+      companion.expToNext = Math.floor(100 * Math.pow(1.15, companion.level - 1));
+      // 升级时提升属性
+      this.levelUpCompanion(companion);
+      leveled = true;
+    }
+    return { leveled };
+  },
+  levelUpCompanion(companion) {
+    // 根据职业提升基础属性
+    const attrs = companion.attributes;
+    if (companion.class === 'warrior') {
+      attrs.str += 2; attrs.vit += 2; attrs.ten += 1;
+    } else if (companion.class === 'ranger') {
+      attrs.agi += 3; attrs.str += 1;
+    } else if (companion.class === 'mage') {
+      attrs.int += 3; attrs.spi += 2;
+    }
+    // 重新计算HP/MP
+    companion.maxHp = 80 + (attrs.vit - 8) * 10 + companion.level * 8;
+    companion.maxMp = 20 + (attrs.spi - 8) * 5 + companion.level * 3;
+    companion.hp = companion.maxHp;
+    companion.mp = companion.maxMp;
   },
   getLockMessage(state) {
     const cap = this.getLevelCap(state);
@@ -418,13 +466,71 @@ const StateUtils = {
     if (state.inventory.items.length >= state.inventory.capacity) {
       return { ok: false, reason: "背包已满" };
     }
+    // 尝试堆叠
+    if (item.stackable) {
+      const existing = state.inventory.items.find(i => i.id === item.id || (i.stackable && i.type === item.type && i.name === item.name));
+      if (existing && existing.stack < (existing.maxStack || 99)) {
+        existing.stack = (existing.stack || 1) + (item.stack || 1);
+        return { ok: true, stacked: true };
+      }
+    }
     state.inventory.items.push(item);
     return { ok: true };
+  },
+  removeFromInventory(state, itemId, count = 1) {
+    const idx = state.inventory.items.findIndex(i => i.id === itemId);
+    if (idx === -1) return { ok: false, reason: "物品不存在" };
+    const item = state.inventory.items[idx];
+    if (item.stack && item.stack > count) {
+      item.stack -= count;
+      return { ok: true };
+    }
+    state.inventory.items.splice(idx, 1);
+    return { ok: true };
+  },
+  // 使用物品
+  useItem(state, itemId, targetId = 'player') {
+    const item = state.inventory.items.find(i => i.id === itemId);
+    if (!item) return { ok: false, reason: "物品不存在" };
+    if (item.type !== 'consumable') return { ok: false, reason: "该物品不可使用" };
+
+    const target = targetId === 'player' ? state.player : state.companions.find(c => c.id === targetId);
+    if (!target) return { ok: false, reason: "目标不存在" };
+
+    let result = { ok: true, msg: '' };
+    switch (item.subtype) {
+      case 'exp':
+        if (targetId === 'player') {
+          const expResult = this.addExp(state, item.expValue || 0);
+          result.msg = `使用了${item.name}，获得${item.expValue}经验`;
+          if (expResult.leveled) result.msg += '，升级了！';
+        } else {
+          const compResult = this.addExpToCompanion(target, item.expValue || 0);
+          result.msg = `对${target.name}使用了${item.name}，获得${item.expValue}经验`;
+          if (compResult.leveled) result.msg += '，升级了！';
+        }
+        break;
+      case 'heal':
+        target.hp = Math.min(target.maxHp, target.hp + (item.healHp || 0));
+        result.msg = `使用了${item.name}，恢复${item.healHp}点生命值`;
+        break;
+      case 'mana':
+        target.mp = Math.min(target.maxMp, target.mp + (item.healMp || 0));
+        result.msg = `使用了${item.name}，恢复${item.healMp}点法力值`;
+        break;
+      default:
+        return { ok: false, reason: "未知物品类型" };
+    }
+    // 消耗物品
+    this.removeFromInventory(state, itemId, 1);
+    return result;
   },
   recruitCompanion(state, npcId) {
     const npc = DATA.npcs[npcId];
     if (!npc || !npc.recruit) return { ok: false, reason: "不可招募" };
-    if (state.companions.length >= 2) return { ok: false, reason: "随从已满" };
+    if (state.companions.length >= 2) return { ok: false, reason: "随从已满（最多2名）" };
+    // 检查是否已招募
+    if (state.companions.some(c => c.id === npcId)) return { ok: false, reason: "该随从已在队伍中" };
     const companion = {
       id: npcId,
       name: npc.name,
@@ -438,9 +544,17 @@ const StateUtils = {
       equipment: {},
       aiStrategy: "balanced",
       alive: true,
+      skills: this.getDefaultSkills(npc.class),
+      talents: {},
     };
     state.companions.push(companion);
     return { ok: true, companion };
+  },
+  getDefaultSkills(classKey) {
+    if (classKey === 'warrior') return ['normal_attack', 'shield_wall', 'slam'];
+    if (classKey === 'ranger') return ['normal_attack', 'rapid_shot', 'slow_arrow'];
+    if (classKey === 'mage') return ['normal_attack', 'fireball', 'heal'];
+    return ['normal_attack'];
   },
   generateCompanionAttributes(classKey) {
     const base = { str: 8, agi: 8, int: 8, vit: 8, ten: 8, spi: 8 };

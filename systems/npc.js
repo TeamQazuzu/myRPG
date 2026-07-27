@@ -1,21 +1,23 @@
 /**
- * 寻亲风云录 - NPC 对话与任务系统
+ * 寻亲风云录 - NPC 交互系统（重构版）
+ * 支持：招募、商店（买卖）、锻造、附魔、镶嵌
  */
 const NPCSystem = {
-  // 场景NPC配置
+  // ========== 场景NPC配置 ==========
   sceneNPCs: {
-    '灰烟村_酒馆': [
+    '灰烟村·酒馆': [
       {
-        id: 'ailin_tavern',
+        id: 'ailin',
         name: '艾琳',
         dialogue: [
           { text: '你回来了。今天外面风很大，要小心。', condition: null },
-          { text: '我父亲的弓还保养得很好...如果你需要，我可以教你一些射箭技巧。', condition: () => window.gameApp && window.gameApp.state.player.level >= 5 },
+          { text: '我父亲的弓还保养得很好...我可以陪你一起出发吗？', condition: null },
         ],
         actions: [
+          { label: '招募（远程系）', type: 'recruit' },
           { label: '对话', type: 'talk' },
-          { label: '查看装备', type: 'inspect' },
-        ]
+        ],
+        recruitId: 'ailin',
       },
       {
         id: 'tavern_keeper',
@@ -30,32 +32,74 @@ const NPCSystem = {
         ]
       }
     ],
-    '灰烟村_铁匠铺': [
+    '灰烟村·杂货铺': [
+      {
+        id: 'merchant',
+        name: '杂货商米拉',
+        dialogue: [
+          { text: '欢迎光临！这里有各种冒险必备品。', condition: null },
+          { text: '你爹以前赊过账...不过那都过去了。', condition: null },
+        ],
+        actions: [
+          { label: '打开商店', type: 'shop' },
+          { label: '对话', type: 'talk' },
+        ],
+        shopType: 'grocery',
+      }
+    ],
+    '灰烟村·铁匠铺': [
       {
         id: 'blacksmith_old',
         name: '老铁匠',
         dialogue: [
           { text: '叮叮当当！年轻人，想要一把趁手的武器吗？', condition: null },
           { text: '我年轻的时候也想过出去闯荡...但现在，炉火就是我的全部。', condition: null },
-          { text: '听说你父母在寻找什么...或许村长知道更多。', condition: null, triggerEvent: 'smithSword' },
         ],
         actions: [
-          { label: '锻造装备', type: 'forge_menu' },
+          { label: '锻造/强化装备', type: 'forge_menu' },
           { label: '修理装备', type: 'repair' },
-        ]
+          { label: '对话', type: 'talk' },
+        ],
+        shopType: 'blacksmith',
+      },
+      {
+        id: 'warrior_apprentice',
+        name: '铁匠学徒',
+        dialogue: [
+          { text: '师傅说我力气够大，但还缺实战经验...', condition: null },
+          { text: '如果有人愿意带我出去见见世面就好了。', condition: null },
+        ],
+        actions: [
+          { label: '招募（战士系）', type: 'recruit' },
+          { label: '对话', type: 'talk' },
+        ],
+        recruitId: 'warrior_apprentice',
       }
     ],
-    '灰烟村_裁缝铺': [
+    '灰烟村·炼金铺': [
       {
-        id: 'tailor_woman',
-        name: '裁缝',
+        id: 'alchemist',
+        name: '炼金师',
         dialogue: [
-          { text: '需要一件新衣服吗？刚到的棉布，质地很好。', condition: null },
-          { text: '最近村里的布匹供应有些紧张...', condition: null },
+          { text: '瓶中冒着奇异的紫色烟雾...要试试新配制的药水吗？', condition: null },
         ],
         actions: [
-          { label: '购买布衣', type: 'buy', item: { name: '布衣', type: 'armor', rarity: 'white', level: 1, price: 1 } },
-        ]
+          { label: '附魔/镶嵌装备', type: 'alchemist_menu' },
+          { label: '对话', type: 'talk' },
+        ],
+        shopType: 'alchemist',
+      },
+      {
+        id: 'mage_apprentice',
+        name: '炼金学徒',
+        dialogue: [
+          { text: '这些配方太神奇了！但我更想知道外面的世界...', condition: null },
+        ],
+        actions: [
+          { label: '招募（法系）', type: 'recruit' },
+          { label: '对话', type: 'talk' },
+        ],
+        recruitId: 'mage_apprentice',
       }
     ],
     '灰烟村': [
@@ -65,7 +109,6 @@ const NPCSystem = {
         dialogue: [
           { text: '年轻人，你爹娘临走前嘱咐我照看你。', condition: null },
           { text: '如果你真想变强，就得去灰烟村外面看看。但记住，外面的世界很危险。', condition: null },
-          { text: '你爹娘...他们留下了一些东西。等你准备好了，我可以告诉你更多。', condition: () => window.gameApp && window.gameApp.state.player.level >= 10, triggerEvent: 'villageChiefTruth' },
         ],
         actions: [
           { label: '接受试炼', type: 'gatekeeper_battle' },
@@ -86,10 +129,52 @@ const NPCSystem = {
     ]
   },
 
+  // ========== 查询NPC ==========
   getNPCsForScene(sceneName) {
-    return this.sceneNPCs[sceneName] || [];
+    // 尝试直接匹配
+    if (this.sceneNPCs[sceneName]) return this.sceneNPCs[sceneName];
+    // 尝试去掉前缀匹配
+    const shortName = sceneName.replace(/^灰烟村[·\-_]/, '灰烟村·');
+    if (this.sceneNPCs[shortName]) return this.sceneNPCs[shortName];
+    // 尝试用DATA.scenes中的npcs字段构建
+    const scene = DATA.scenes ? Object.values(DATA.scenes).find(s => s.name === sceneName) : null;
+    if (scene && scene.npcs) {
+      return scene.npcs.map(npcId => {
+        const npcData = DATA.npcs[npcId];
+        if (!npcData) return null;
+        return {
+          id: npcId,
+          name: npcData.name,
+          dialogue: [{ text: npcData.desc || '...', condition: null }],
+          actions: this._inferActions(npcId, npcData, scene),
+          recruitId: npcData.recruit ? npcId : null,
+        };
+      }).filter(Boolean);
+    }
+    return [];
   },
 
+  _inferActions(npcId, npcData, scene) {
+    const actions = [{ label: '对话', type: 'talk' }];
+    if (npcData.recruit) {
+      actions.push({ label: '招募', type: 'recruit' });
+    }
+    if (scene.shopType && (npcId === 'merchant' || npcId === 'blacksmith_old' || npcId === 'alchemist')) {
+      actions.push({ label: '交易', type: 'shop' });
+    }
+    if (npcId === 'blacksmith_old') {
+      actions.push({ label: '锻造', type: 'forge_menu' });
+    }
+    if (npcId === 'alchemist') {
+      actions.push({ label: '附魔/镶嵌', type: 'alchemist_menu' });
+    }
+    if (npcId === 'village_chief') {
+      actions.push({ label: '挑战', type: 'gatekeeper_battle' });
+    }
+    return actions;
+  },
+
+  // ========== 对话系统 ==========
   getDialogue(npc) {
     if (!npc || !npc.dialogue) return '...';
     const available = npc.dialogue.filter(d => {
@@ -97,7 +182,6 @@ const NPCSystem = {
       try { return d.condition(); } catch (e) { return false; }
     });
     if (available.length === 0) return '...';
-    // 轮流显示，记录已对话次数
     const state = window.gameApp ? window.gameApp.state : null;
     const key = `npc_talk_count_${npc.id}`;
     const count = (state && state.world.flags[key]) || 0;
@@ -107,16 +191,307 @@ const NPCSystem = {
       state.world.flags[key] = count + 1;
     }
     const line = available[idx];
-    // 触发事件
     if (line.triggerEvent && state) {
       if (!state.quests.events[line.triggerEvent]) {
         state.quests.events[line.triggerEvent] = true;
-        NPCSystem.logEvent(`📜 触发事件：${line.triggerEvent}`);
+        this.logEvent(`📜 触发事件：${line.triggerEvent}`);
       }
     }
     return line.text;
   },
 
+  // ========== 招募系统 ==========
+  canRecruit(state, npcId) {
+    if (state.companions.length >= 2) return { ok: false, reason: '随从已满（最多2名）' };
+    if (state.companions.some(c => c.id === npcId)) return { ok: false, reason: '该随从已在队伍中' };
+    const npcData = DATA.npcs[npcId];
+    if (!npcData || !npcData.recruit) return { ok: false, reason: '此NPC不可招募' };
+    return { ok: true };
+  },
+
+  recruitCompanion(state, npcId) {
+    const check = this.canRecruit(state, npcId);
+    if (!check.ok) return { ok: false, msg: check.reason };
+
+    const npcData = DATA.npcs[npcId];
+    const playerLevel = state.player.level;
+
+    // 创建随从对象
+    const companion = {
+      id: npcId,
+      name: npcData.name,
+      class: npcData.class,
+      level: playerLevel,
+      exp: 0,
+      expToNext: Math.floor(100 * Math.pow(1.15, playerLevel - 1)),
+      attributes: this._getCompanionBaseAttrs(npcData.class),
+      hp: 0, maxHp: 0,
+      mp: 0, maxMp: 0,
+      alive: true,
+      skills: this._getCompanionSkills(npcData.class),
+      talents: {},
+      equipment: {},
+      aiStrategy: 'balanced',
+    };
+
+    // 根据等级调整属性
+    this._scaleCompanionToLevel(companion);
+
+    state.companions.push(companion);
+    return { ok: true, msg: `${npcData.name} 加入了队伍！`, companion };
+  },
+
+  _getCompanionBaseAttrs(classKey) {
+    const attrs = { str: 8, agi: 8, int: 8, vit: 8, ten: 8, spi: 8 };
+    if (classKey === 'warrior') {
+      attrs.str = 12; attrs.vit = 10; attrs.ten = 10;
+      attrs.agi = 6; attrs.int = 5; attrs.spi = 5;
+    } else if (classKey === 'ranger') {
+      attrs.agi = 14; attrs.str = 10;
+      attrs.int = 5; attrs.vit = 7; attrs.ten = 6; attrs.spi = 6;
+    } else if (classKey === 'mage') {
+      attrs.int = 14; attrs.spi = 12;
+      attrs.str = 5; attrs.agi = 6; attrs.vit = 6; attrs.ten = 5;
+    }
+    return attrs;
+  },
+
+  _getCompanionSkills(classKey) {
+    if (classKey === 'warrior') return ['normal_attack', 'shield_wall', 'slam'];
+    if (classKey === 'ranger') return ['normal_attack', 'rapid_shot', 'slow_arrow'];
+    if (classKey === 'mage') return ['normal_attack', 'fireball', 'heal'];
+    return ['normal_attack', 'defend'];
+  },
+
+  _scaleCompanionToLevel(companion) {
+    const attrs = companion.attributes;
+    const lv = companion.level;
+    // 根据等级提升属性
+    for (let i = 1; i < lv; i++) {
+      if (companion.class === 'warrior') {
+        attrs.str += 2; attrs.vit += 2; attrs.ten += 1;
+      } else if (companion.class === 'ranger') {
+        attrs.agi += 3; attrs.str += 1;
+      } else if (companion.class === 'mage') {
+        attrs.int += 3; attrs.spi += 2;
+      }
+    }
+    companion.maxHp = 80 + (attrs.vit - 8) * 10 + lv * 8;
+    companion.maxMp = 20 + (attrs.spi - 8) * 5 + lv * 3;
+    companion.hp = companion.maxHp;
+    companion.mp = companion.maxMp;
+    // 计算战斗属性
+    companion.physAtk = attrs.str * 2;
+    companion.physDef = attrs.str * 1 + attrs.ten * 3;
+    companion.magAtk = attrs.int * 2;
+    companion.magDef = attrs.int * 1 + attrs.spi * 2 + attrs.ten * 3;
+    companion.hit = attrs.agi * 1.5;
+    companion.dodge = attrs.agi * 1;
+    companion.speed = attrs.agi * 0.8;
+    companion.critRate = 0.05;
+    companion.critDmg = 1.5;
+  },
+
+  // ========== 商店系统 ==========
+  getShopItems(shopType) {
+    const shop = DATA.shops[shopType];
+    if (!shop || !shop.items) return [];
+    return shop.items.map(entry => {
+      const item = DATA.items[entry.itemId];
+      if (!item) return null;
+      return { ...item, price: entry.price, stock: entry.stock };
+    }).filter(Boolean);
+  },
+
+  buyItem(state, shopType, itemId, count = 1) {
+    const shop = DATA.shops[shopType];
+    if (!shop) return { ok: false, msg: '商店类型不存在' };
+    const entry = shop.items.find(i => i.itemId === itemId);
+    if (!entry) return { ok: false, msg: '商品不存在' };
+    const itemTpl = DATA.items[itemId];
+    if (!itemTpl) return { ok: false, msg: '物品模板不存在' };
+
+    const totalPrice = entry.price * count;
+    if (!StateUtils.spendGold(state, totalPrice)) {
+      return { ok: false, msg: `金币不足，需要 ${totalPrice} 金币` };
+    }
+
+    const bought = { ...itemTpl, id: Utils.uuid(), stack: count };
+    const addResult = InventorySystem.addToInventory(state, bought);
+    if (!addResult.ok) {
+      StateUtils.addGold(state, totalPrice); // 退款
+      return { ok: false, msg: '背包已满' };
+    }
+    return { ok: true, msg: `购买成功：${itemTpl.name} x${count}`, item: bought };
+  },
+
+  sellItem(state, itemInstanceId, count = 1) {
+    const item = state.inventory.items.find(i => i.id === itemInstanceId);
+    if (!item) return { ok: false, msg: '物品不存在' };
+    const stack = item.stack || 1;
+    const sellCount = Math.min(count, stack);
+
+    // 查找基础价格
+    const tpl = DATA.items[item.id] || Object.values(DATA.items).find(t => t.name === item.name);
+    const basePrice = item.price || (tpl ? tpl.price : 0);
+    const sellPrice = Math.max(1, Math.floor(basePrice * 0.5 * sellCount));
+
+    if (typeof InventorySystem !== 'undefined' && InventorySystem.removeFromInventory) {
+      InventorySystem.removeFromInventory(state, itemInstanceId, sellCount);
+    } else {
+      if (sellCount >= stack) {
+        state.inventory.items = state.inventory.items.filter(i => i.id !== itemInstanceId);
+      } else {
+        item.stack -= sellCount;
+      }
+    }
+
+    StateUtils.addGold(state, sellPrice);
+    return { ok: true, msg: `出售成功：${item.name} x${sellCount}，获得 ${sellPrice} 金币` };
+  },
+
+  // ========== 锻造系统 ==========
+  forgeEquipment(state, slot) {
+    const item = state.equipment[slot];
+    if (!item) return { ok: false, msg: '该槽位没有装备' };
+    const cost = 10;
+    if (!StateUtils.spendGold(state, cost)) {
+      return { ok: false, msg: `锻造需要 ${cost} 金币` };
+    }
+    // 简化锻造：随机提升基础属性 5-15%
+    const boost = 0.05 + Math.random() * 0.1;
+    if (item.baseStats) {
+      for (const key in item.baseStats) {
+        item.baseStats[key] = Math.floor(item.baseStats[key] * (1 + boost));
+      }
+    }
+    return { ok: true, msg: `${item.name} 锻造成功！属性提升 ${Math.floor(boost * 100)}%` };
+  },
+
+  enhanceEquipment(state, slot) {
+    const item = state.equipment[slot];
+    if (!item) return { ok: false, msg: '该槽位没有装备' };
+    const cost = 20;
+    if (!StateUtils.spendGold(state, cost)) {
+      return { ok: false, msg: `强化需要 ${cost} 金币` };
+    }
+    // 简化强化：提升等级并增加属性
+    item.level += 1;
+    if (item.baseStats) {
+      for (const key in item.baseStats) {
+        item.baseStats[key] = Math.floor(item.baseStats[key] * 1.1);
+      }
+    }
+    return { ok: true, msg: `${item.name} 强化成功！等级提升至 ${item.level}` };
+  },
+
+  // ========== 附魔系统 ==========
+  enchantEquipment(state, slot) {
+    const item = state.equipment[slot];
+    if (!item) return { ok: false, msg: '该槽位没有装备' };
+    const cost = 15;
+    if (!StateUtils.spendGold(state, cost)) {
+      return { ok: false, msg: `附魔需要 ${cost} 金币` };
+    }
+    // 简化附魔：随机添加一条词条
+    const affixPool = Object.entries(DATA.affixPool).filter(([k, v]) => {
+      const rarityTier = DATA.rarity[item.rarity]?.tier || 0;
+      const affixTier = DATA.rarity[v.minRarity]?.tier || 0;
+      return affixTier <= rarityTier;
+    });
+    if (affixPool.length === 0) return { ok: false, msg: '该装备品质太低，无法附魔' };
+    const [affixKey, affixData] = Utils.pickOne(affixPool);
+    if (!item.affixes) item.affixes = [];
+    item.affixes.push({ id: affixKey, name: affixData.name });
+    return { ok: true, msg: `${item.name} 附魔成功！获得词条：${affixData.name}` };
+  },
+
+  socketEquipment(state, slot, gemId) {
+    const item = state.equipment[slot];
+    if (!item) return { ok: false, msg: '该槽位没有装备' };
+    const cost = 25;
+    if (!StateUtils.spendGold(state, cost)) {
+      return { ok: false, msg: `镶嵌需要 ${cost} 金币` };
+    }
+    // 简化镶嵌：添加宝石属性
+    if (!item.sockets) item.sockets = [];
+    if (item.sockets.length >= 3) return { ok: false, msg: '该装备孔洞已满' };
+    const gem = DATA.items[gemId];
+    item.sockets.push({ gemId, name: gem ? gem.name : '未知宝石' });
+    return { ok: true, msg: `${item.name} 镶嵌成功！` };
+  },
+
+  // ========== 修理 ==========
+  repairEquipment(state) {
+    const cost = 2;
+    if (!StateUtils.spendGold(state, cost)) {
+      return { ok: false, msg: `修理费 ${cost} 金币不足` };
+    }
+    state.player.hp = state.player.maxHp;
+    state.player.mp = state.player.maxMp;
+    state.companions.forEach(c => {
+      if (c.alive) {
+        c.hp = c.maxHp;
+        c.mp = c.maxMp;
+      }
+    });
+    return { ok: true, msg: '装备已修复，队伍也得到了休整。' };
+  },
+
+  // ========== 使用物品（经验丹等） ==========
+  useItem(state, itemId, targetId = 'player') {
+    const itemIdx = state.inventory.items.findIndex(i => i.id === itemId);
+    if (itemIdx < 0) return { ok: false, msg: '物品不在背包中' };
+    const item = state.inventory.items[itemIdx];
+
+    if (item.subtype === 'exp' && item.expValue) {
+      if (targetId === 'player') {
+        const result = StateUtils.addExp(state, item.expValue);
+        this._removeItem(state, itemIdx, 1);
+        return { ok: true, msg: result.leveled ? `🆙 使用了${item.name}，升级了！` : `⭐ 使用了${item.name}，获得大量经验`, result };
+      } else {
+        const comp = state.companions.find(c => c.id === targetId);
+        if (!comp) return { ok: false, msg: '目标随从不存在' };
+        const result = StateUtils.addExpToCompanion(comp, item.expValue);
+        this._removeItem(state, itemIdx, 1);
+        return { ok: true, msg: result.leveled ? `🆙 ${comp.name}使用了${item.name}，升级了！` : `⭐ ${comp.name}使用了${item.name}，获得大量经验`, result };
+      }
+    }
+
+    if (item.subtype === 'heal' && item.healHp) {
+      const target = targetId === 'player' ? state.player : state.companions.find(c => c.id === targetId);
+      if (!target) return { ok: false, msg: '目标不存在' };
+      const before = target.hp;
+      target.hp = Math.min(target.maxHp, target.hp + item.healHp);
+      const healed = target.hp - before;
+      this._removeItem(state, itemIdx, 1);
+      return { ok: true, msg: `${target.name} 使用 ${item.name}，恢复 ${healed} HP` };
+    }
+
+    if (item.subtype === 'mana' && item.healMp) {
+      const target = targetId === 'player' ? state.player : state.companions.find(c => c.id === targetId);
+      if (!target) return { ok: false, msg: '目标不存在' };
+      const before = target.mp || 0;
+      target.mp = Math.min(target.maxMp || before, before + item.healMp);
+      const restored = target.mp - before;
+      this._removeItem(state, itemIdx, 1);
+      return { ok: true, msg: `${target.name} 使用 ${item.name}，恢复 ${restored} MP` };
+    }
+
+    return { ok: false, msg: '该物品无法使用' };
+  },
+
+  _removeItem(state, itemIdx, count) {
+    const item = state.inventory.items[itemIdx];
+    const stack = item.stack || 1;
+    if (count >= stack) {
+      state.inventory.items.splice(itemIdx, 1);
+    } else {
+      item.stack = stack - count;
+    }
+  },
+
+  // ========== 处理NPC动作 ==========
   handleAction(npc, actionIndex, state) {
     const action = npc.actions[actionIndex];
     if (!action) return { ok: false, msg: '无效操作' };
@@ -135,22 +510,30 @@ const NPCSystem = {
         delete bought.price;
         const addResult = InventorySystem.addToInventory(state, bought);
         if (!addResult.ok) {
-          StateUtils.addGold(state, price); // 退款
+          StateUtils.addGold(state, price);
           return { ok: false, msg: '背包已满' };
         }
         return { ok: true, msg: `购买成功：${bought.name}`, type: 'buy' };
 
+      case 'shop':
+        return { ok: true, msg: 'shop', type: 'shop', shopType: npc.shopType || 'grocery' };
+
+      case 'recruit': {
+        const recruitId = npc.recruitId || npc.id;
+        const result = this.recruitCompanion(state, recruitId);
+        return { ok: result.ok, msg: result.msg, type: 'recruit', companion: result.companion };
+      }
+
       case 'forge_menu':
         return { ok: true, msg: 'forge_menu', type: 'forge_menu' };
 
-      case 'repair':
-        const repairCost = 2;
-        if (!StateUtils.spendGold(state, repairCost)) {
-          return { ok: false, msg: `修理费 ${repairCost} 金币不足` };
-        }
-        // 恢复装备耐久（简化：恢复玩家HP）
-        state.player.hp = state.player.maxHp;
-        return { ok: true, msg: '装备已修复，你也得到了休整。', type: 'repair' };
+      case 'alchemist_menu':
+        return { ok: true, msg: 'alchemist_menu', type: 'alchemist_menu' };
+
+      case 'repair': {
+        const res = this.repairEquipment(state);
+        return { ok: res.ok, msg: res.msg, type: 'repair' };
+      }
 
       case 'gatekeeper_battle':
         return { ok: true, msg: 'gatekeeper', type: 'gatekeeper' };
@@ -169,12 +552,9 @@ const NPCSystem = {
     if (renderer && renderer.addGameLog) renderer.addGameLog(msg);
   },
 
-  // 检查任务推进
   checkQuestProgress(state) {
     const events = state.quests.events;
     const flags = state.world.flags;
-
-    // 示例：完成所有灰烟村事件后解锁新场景
     const greyVillageEvents = ['smithSword', 'riverWoman', 'hunterBoar'];
     const completed = greyVillageEvents.filter(e => events[e]).length;
     if (completed >= 2 && !flags.greyVillage_explored) {

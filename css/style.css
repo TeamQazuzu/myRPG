@@ -1,4 +1,4 @@
-/* ========== 寻亲风云录 - 移动端适配 ========== */
+/* ========== 寻亲风云录 - 移动端竖屏适配 ========== */
 :root {
   --bg-deep: #0a0f1a;
   --bg-card: #111827;
@@ -18,11 +18,17 @@
   --radius: 10px;
   --radius-sm: 6px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --nav-height: 56px;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 
-html { font-size: 16px; }
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
 
 body {
   background: var(--bg-deep);
@@ -32,7 +38,9 @@ body {
   min-height: 100dvh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
-  padding-bottom: calc(60px + var(--safe-bottom));
+  overscroll-behavior-y: none;
+  padding-bottom: calc(var(--nav-height) + var(--safe-bottom));
+  padding-top: var(--safe-top);
 }
 
 #game-container {
@@ -40,6 +48,25 @@ body {
   max-width: 480px;
   margin: 0 auto;
   padding: 0 12px;
+}
+
+/* ========== 横屏提示 ========== */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  body::before {
+    content: "请旋转手机至竖屏以获得最佳体验";
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    background: var(--bg-deep);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold-dim);
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    padding: 40px;
+  }
 }
 
 /* ========== 顶部资源栏（固定） ========== */
@@ -130,28 +157,32 @@ body {
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
-  padding: 6px 0 calc(6px + var(--safe-bottom));
+  padding: 4px 0 calc(4px + var(--safe-bottom));
   max-width: 100%;
+  height: calc(var(--nav-height) + var(--safe-bottom));
 }
 
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   padding: 4px 0;
-  min-width: 56px;
+  min-width: 64px;
+  min-height: 44px;
   background: none;
   border: none;
   color: var(--text-dim);
   font-size: 10px;
   cursor: pointer;
   transition: color 0.2s;
+  flex: 1;
 }
 
-.nav-item .nav-icon { font-size: 20px; line-height: 1; }
+.nav-item .nav-icon { font-size: 22px; line-height: 1; }
 .nav-item.active { color: var(--gold-dim); }
-.nav-item:active { opacity: 0.7; }
+.nav-item:active { opacity: 0.7; transform: scale(0.95); }
 
 /* ========== 角色创建 ========== */
 .creation-frame {
@@ -294,15 +325,19 @@ body {
 }
 
 .npc-btn {
-  padding: 12px 10px;
+  padding: 14px 10px;
   background: var(--bg-card-inner);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--gold-dim);
-  font-size: 13px;
+  font-size: 14px;
   cursor: pointer;
   text-align: center;
   transition: all 0.15s;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .npc-btn:active { background: var(--border-light); transform: scale(0.97); }
 
@@ -326,7 +361,7 @@ body {
 }
 
 .exit-btn {
-  padding: 14px 10px;
+  padding: 16px 10px;
   background: var(--bg-card-inner);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -335,6 +370,11 @@ body {
   cursor: pointer;
   text-align: center;
   transition: all 0.15s;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
 }
 .exit-btn:active { background: var(--border-light); transform: scale(0.97); }
 .exit-btn.wild-exit { border-color: rgba(255,68,102,0.3); }
@@ -347,41 +387,57 @@ body {
   right: 0;
   z-index: 300;
   background: var(--bg-card);
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
   border-top: 2px solid var(--gold-dim);
   padding: 20px 16px calc(20px + var(--safe-bottom));
   color: var(--text-primary);
-  max-height: 70vh;
+  max-height: 75vh;
   overflow-y: auto;
   animation: slideUp 0.25s ease-out;
+  -webkit-overflow-scrolling: touch;
+}
+
+#dynamic-panel-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 299;
+  background: rgba(0,0,0,0.5);
+  animation: fadeIn 0.2s ease-out;
 }
 
 @keyframes slideUp {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
 }
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 #dynamic-panel h3 {
   color: var(--gold-dim);
-  margin-bottom: 12px;
-  font-size: 16px;
+  margin-bottom: 14px;
+  font-size: 17px;
+  font-weight: bold;
 }
 
 .panel-close-btn {
   display: block;
   width: 100%;
-  padding: 10px;
-  margin-top: 12px;
+  padding: 14px;
+  margin-top: 14px;
   background: var(--bg-card-inner);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15px;
   cursor: pointer;
   text-align: center;
+  min-height: 48px;
+  font-weight: 500;
 }
-.panel-close-btn:active { background: var(--border-light); }
+.panel-close-btn:active { background: var(--border-light); transform: scale(0.98); }
 
 .npc-dialogue {
   background: var(--bg-input);
@@ -490,38 +546,45 @@ body {
 /* 战斗按钮 - 底部固定 */
 #action-buttons {
   position: fixed;
-  bottom: calc(60px + var(--safe-bottom));
+  bottom: calc(var(--nav-height) + var(--safe-bottom));
   left: 0;
   right: 0;
   z-index: 150;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0;
+  gap: 4px;
   background: var(--bg-card);
   border-top: 1px solid var(--border);
-  padding: 6px 4px;
+  padding: 8px 12px calc(8px + var(--safe-bottom));
 }
 
 .action-btn {
-  padding: 10px 4px;
-  background: transparent;
-  border: none;
+  padding: 12px 4px;
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
-  font-size: 20px;
+  font-size: 22px;
   cursor: pointer;
   text-align: center;
   line-height: 1;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.1s;
 }
 .action-btn::after {
   content: attr(data-label);
   display: block;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-dim);
-  margin-top: 4px;
+  font-weight: 500;
 }
 .action-btn:disabled { opacity: 0.3; pointer-events: none; }
-.action-btn:active:not(:disabled) { background: var(--bg-card-inner); }
+.action-btn:active:not(:disabled) { background: var(--border-light); transform: scale(0.96); }
 
 /* 战斗日志 */
 #combat-log {
@@ -831,7 +894,256 @@ body {
   transform: translate(-50%, -50%) scale(1);
 }
 
+/* ========== 小屏幕优化 (< 380px) ========== */
+@media screen and (max-width: 380px) {
+  html { font-size: 14px; }
+  #game-container { padding: 0 8px; }
+
+  .class-select-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .class-btn {
+    padding: 12px 0;
+    font-size: 13px;
+  }
+
+  .npc-list,
+  .exit-grid {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .inv-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+  .item-card {
+    min-height: 64px;
+    padding: 6px 2px;
+  }
+  .item-name { font-size: 11px; }
+
+  .char-stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .char-stat-value { font-size: 16px; }
+
+  .action-btn {
+    font-size: 20px;
+    min-height: 52px;
+    padding: 10px 2px;
+  }
+  .action-btn::after { font-size: 10px; }
+
+  .combat-title { font-size: 15px; }
+  .enemy-name, .player-name { font-size: 13px; }
+
+  #combat-log {
+    max-height: 120px;
+    margin-bottom: 70px;
+  }
+}
+
+/* ========== 超小屏幕优化 (< 340px) ========== */
+@media screen and (max-width: 340px) {
+  .inv-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .char-stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .nav-item .nav-icon { font-size: 20px; }
+  .nav-item { font-size: 9px; min-width: 56px; }
+}
+
+/* ========== 触摸优化 ========== */
+button, .npc-btn, .exit-btn, .action-btn, .nav-item, .panel-close-btn, .menu-btn, .settings-btn, .class-btn, .forge-btn, .npc-action-btn {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ========== 防止iOS双击缩放 ========== */
+@media (pointer: coarse) {
+  * {
+    touch-action: manipulation;
+  }
+}
+
+/* ========== 刘海屏适配 ========== */
+@supports (padding-top: env(safe-area-inset-top)) {
+  #top-bar {
+    padding-top: calc(8px + env(safe-area-inset-top));
+  }
+  #toast-msg {
+    top: calc(50% + env(safe-area-inset-top) * 0.3);
+  }
+}
+
 /* ========== 滚动条 ========== */
 ::-webkit-scrollbar { width: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ========== 商店UI ========== */
+.shop-container h4 { color: var(--gold-dim); margin-bottom: 12px; }
+.shop-section { margin-bottom: 16px; }
+.shop-section strong { display: block; color: var(--text-dim); font-size: 12px; margin-bottom: 8px; }
+.shop-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.shop-item-card {
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  text-align: center;
+}
+.shop-item-name { font-size: 13px; font-weight: bold; margin-bottom: 4px; }
+.shop-item-desc { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+.shop-item-price { font-size: 12px; color: var(--gold); margin-bottom: 6px; }
+.shop-buy-btn, .shop-sell-btn {
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  width: 100%;
+}
+.shop-buy-btn:active, .shop-sell-btn:active { background: var(--border-light); }
+
+/* ========== 技能菜单 ========== */
+.skill-menu h4, .combat-item-menu h4, .combat-target-menu h4, .item-target-menu h4 {
+  color: var(--gold-dim); margin-bottom: 12px; font-size: 15px;
+}
+.skill-select-btn, .item-select-btn, .target-select-btn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.skill-select-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.skill-select-btn .skill-name { font-weight: bold; flex: 1; }
+.skill-select-btn .skill-cost { color: var(--accent-blue); font-size: 11px; }
+.skill-select-btn .skill-desc { color: var(--text-dim); font-size: 11px; width: 100%; }
+.skill-select-btn .skill-cd { color: var(--danger); font-size: 11px; margin-left: auto; }
+.item-select-btn:active, .target-select-btn:active, .skill-select-btn:active:not(.disabled) {
+  background: var(--border-light);
+}
+.item-cancel-btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  margin-top: 10px;
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+}
+.item-cancel-btn:active { background: var(--border-light); }
+
+/* ========== 背包可使用物品 ========== */
+.item-card.usable {
+  cursor: pointer;
+  border-color: var(--accent) !important;
+  position: relative;
+}
+.item-card.usable:active { transform: scale(0.97); }
+.item-use-hint {
+  font-size: 10px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+/* ========== 随从详细面板 ========== */
+.companion-detail-panel {
+  padding: 12px 0;
+}
+.companion-detail-panel .char-basic-card {
+  border-left: 3px solid var(--accent-purple);
+}
+.comp-skill-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 2px;
+  background: rgba(192,132,252,0.15);
+  border: 1px solid rgba(192,132,252,0.3);
+  border-radius: 4px;
+  color: var(--accent-purple);
+  font-size: 12px;
+}
+
+/* ========== 锻造/附魔菜单 ========== */
+.forge-container h4, .alchemist-container h4 {
+  color: var(--gold-dim); margin-bottom: 12px;
+}
+.forge-section, .alchemist-section {
+  margin-bottom: 16px;
+}
+.forge-section strong, .alchemist-section strong {
+  display: block; color: var(--text-dim); font-size: 12px; margin-bottom: 8px;
+}
+.forge-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.enchant-btn {
+  padding: 6px 12px;
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--accent-purple);
+  font-size: 12px;
+  cursor: pointer;
+}
+.enchant-btn:active { background: var(--border-light); }
+
+/* ========== 场景动作按钮 ========== */
+.scene-action-btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  margin-top: 10px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  text-align: center;
+}
+.scene-action-btn:active { opacity: 0.85; transform: scale(0.98); }
+
+/* ========== 地下城面板 ========== */
+.dungeon-panel {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.1);
+}

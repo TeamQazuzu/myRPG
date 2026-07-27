@@ -123,7 +123,8 @@ class UIRenderer {
                     ${scene.exits.map(exit => {
                         const sc = this.sceneRef ? this.sceneRef[exit] : null;
                         const isWild = sc && sc.type === 'wild';
-                        return `<button class="exit-btn${isWild ? ' wild-exit' : ''}" data-scene="${exit}">${exit.replace(/^[^_]+_/, '')}</button>`;
+                        const exitName = sc ? (sc.name || exit) : exit;
+                        return `<button class="exit-btn${isWild ? ' wild-exit' : ''}" data-scene="${exit}">${exitName}</button>`;
                     }).join('')}
                     </div>
                 </div>
@@ -158,23 +159,75 @@ class UIRenderer {
             panel.id = 'dynamic-panel';
             document.body.appendChild(panel);
         }
+        // 创建遮罩层
+        let overlay = document.getElementById('dynamic-panel-overlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'dynamic-panel-overlay';
+            document.body.appendChild(overlay);
+        }
         panel.innerHTML = `
             <h3>${title}</h3>
             <div class="panel-body">${html}</div>
             <button class="panel-close-btn" id="panel-close">关闭</button>
         `;
+        panel.style.transition = 'none';
+        panel.style.transform = 'translateY(0)';
         panel.style.display = 'block';
+        overlay.style.display = 'block';
         // 关闭按钮
-        document.getElementById('panel-close').addEventListener('click', () => {
-            panel.style.display = 'none';
-        });
-        // 点击遮罩关闭（可选）
+        const closeBtn = document.getElementById('panel-close');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.closePanel());
+        }
+        // 点击遮罩关闭
+        overlay.onclick = () => this.closePanel();
+        // 滑动关闭（向下滑动超过80px关闭面板）
+        this._bindSwipeToClose(panel);
         return panel;
+    }
+
+    _bindSwipeToClose(panel) {
+        let startY = 0;
+        let currentY = 0;
+        const onTouchStart = (e) => {
+            startY = e.touches[0].clientY;
+            panel.style.transition = 'none';
+        };
+        const onTouchMove = (e) => {
+            currentY = e.touches[0].clientY;
+            const delta = currentY - startY;
+            if (delta > 0) {
+                panel.style.transform = `translateY(${delta}px)`;
+            }
+        };
+        const onTouchEnd = () => {
+            const delta = currentY - startY;
+            panel.style.transition = 'transform 0.2s ease';
+            if (delta > 80) {
+                this.closePanel();
+            } else {
+                panel.style.transform = 'translateY(0)';
+            }
+            startY = 0;
+            currentY = 0;
+        };
+        panel.addEventListener('touchstart', onTouchStart, { passive: true });
+        panel.addEventListener('touchmove', onTouchMove, { passive: true });
+        panel.addEventListener('touchend', onTouchEnd, { passive: true });
     }
 
     closePanel() {
         const panel = document.getElementById('dynamic-panel');
-        if (panel) panel.style.display = 'none';
+        const overlay = document.getElementById('dynamic-panel-overlay');
+        if (panel) {
+            panel.style.transform = 'translateY(100%)';
+            setTimeout(() => {
+                panel.style.display = 'none';
+                panel.style.transform = 'translateY(0)';
+            }, 200);
+        }
+        if (overlay) overlay.style.display = 'none';
     }
 
     openNPCDialog(npc) {
@@ -206,13 +259,35 @@ class UIRenderer {
                     if (res.type === 'gatekeeper') {
                         this.closePanel();
                         if (window.gameApp && window.gameApp.sceneManager) {
-                            window.gameApp.sceneManager.triggerBattle(['野狗', '野狗']);
+                            const scene = window.gameApp.sceneManager.currentScene;
+                            const enemies = scene && scene.enemies ? scene.enemies : ['village_chief_boss'];
+                            window.gameApp.sceneManager.triggerBattle(enemies);
                         }
                         return;
                     }
                     if (res.type === 'forge_menu') {
                         this.closePanel();
-                        this.showForgeMenu(state);
+                        setTimeout(() => this.showForgeMenu(state), 250);
+                        return;
+                    }
+                    if (res.type === 'alchemist_menu') {
+                        this.closePanel();
+                        setTimeout(() => this.showAlchemistMenu(state), 250);
+                        return;
+                    }
+                    if (res.type === 'shop') {
+                        this.closePanel();
+                        setTimeout(() => this.showShop(state, res.shopType || 'grocery'), 250);
+                        return;
+                    }
+                    if (res.type === 'recruit') {
+                        const dia = panel.querySelector('.npc-dialogue');
+                        if (dia) dia.textContent = res.msg;
+                        if (res.ok) {
+                            btn.disabled = true;
+                            btn.textContent = '已招募';
+                        }
+                        if (window.gameApp) window.gameApp.renderTopBar();
                         return;
                     }
                     const dia = panel.querySelector('.npc-dialogue');
@@ -311,11 +386,11 @@ class UIRenderer {
         // 随从
         let companionHtml = '';
         if (state.companions && state.companions.length > 0) {
-            companionHtml = '<div class="char-section"><strong class="char-section-title">随从</strong>';
-            state.companions.forEach(c => {
+            companionHtml = '<div class="char-section"><strong class="char-section-title">随从（点击查看详情）</strong>';
+            state.companions.forEach((c, idx) => {
                 const hpPct = c.maxHp > 0 ? Math.max(0, (c.hp / c.maxHp) * 100) : 0;
                 companionHtml += `
-                    <div class="companion-card">
+                    <div class="companion-card" data-companion-idx="${idx}">
                         <div class="companion-header">
                             <span class="companion-name">${c.name}</span>
                             <span class="companion-lv">Lv.${c.level}</span>
@@ -366,6 +441,20 @@ class UIRenderer {
         const existing = document.getElementById('character-panel');
         if (existing) existing.remove();
         container.insertAdjacentHTML('beforeend', html);
+
+        // 绑定随从点击事件
+        setTimeout(() => {
+            const panel = document.getElementById('character-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.companion-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const idx = parseInt(card.dataset.companionIdx);
+                    if (!isNaN(idx)) {
+                        this.renderCompanionDetail(state, idx);
+                    }
+                });
+            });
+        }, 0);
     }
 
     // ========== 设置面板 ==========
@@ -590,11 +679,7 @@ class UIRenderer {
         });
         document.getElementById('btn-skill').addEventListener('click', () => {
             if (!combat.isPlayerTurn) return;
-            const target = this.getTarget(combat);
-            if (target) {
-                document.getElementById('btn-skill').disabled = true;
-                combat.playerAction('skill', target);
-            }
+            this.showSkillMenu(combat);
         });
         document.getElementById('btn-defend').addEventListener('click', () => {
             if (!combat.isPlayerTurn) return;
@@ -612,28 +697,7 @@ class UIRenderer {
         });
         document.getElementById('btn-item').addEventListener('click', () => {
             if (!combat.isPlayerTurn) return;
-            const player = combat.getPlayerUnit();
-            if (player && window.gameApp && window.gameApp.state) {
-                const state = window.gameApp.state;
-                const consumable = state.inventory.items.find(i => i.type === 'potion' || i.type === 'consumable');
-                if (!consumable) {
-                    if (combat.combatLog) combat.combatLog.push('背包中没有可用的消耗品');
-                    this.updateCombat(combat);
-                    return;
-                }
-                const heal = consumable.heal || 20;
-                const maxHp = player.maxHp || 100;
-                player.hp = Math.min(maxHp, (player.hp || 0) + heal);
-                if (typeof InventorySystem !== 'undefined') {
-                    InventorySystem.removeFromInventory(state, consumable.id, 1);
-                }
-                document.getElementById('btn-item').disabled = true;
-                combat.playerAction('item', null);
-                if (combat.combatLog) {
-                    combat.combatLog.push(`${player.name} 使用 ${consumable.name}，回复 ${heal} HP`);
-                }
-                this.updateCombat(combat);
-            }
+            this.showCombatItemMenu(combat);
         });
         this.enableButtons(combat.isPlayerTurn);
     }
@@ -808,11 +872,13 @@ class UIRenderer {
         } else {
             for (const item of state.inventory.items) {
                 const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+                const isUsable = item.type === 'consumable' || item.type === 'potion' || item.subtype === 'heal' || item.subtype === 'mana' || item.subtype === 'exp';
                 html += `
-                    <div class="item-card" style="border-color:${rarityColor}">
+                    <div class="item-card ${isUsable ? 'usable' : ''}" style="border-color:${rarityColor}" data-item-id="${item.id}" data-usable="${isUsable ? '1' : '0'}">
                         <div class="item-rarity" style="color:${rarityColor}">${DATA.rarity[item.rarity]?.name || item.rarity || ''}</div>
                         <div class="item-name">${item.name}</div>
                         <div class="item-level">Lv.${item.level || 1}${item.stack > 1 ? ' x' + item.stack : ''}</div>
+                        ${isUsable ? '<div class="item-use-hint">点击使用</div>' : ''}
                     </div>
                 `;
             }
@@ -828,7 +894,7 @@ class UIRenderer {
         if (existing) existing.remove();
         container.insertAdjacentHTML('beforeend', html);
 
-        // 绑定关闭按钮（不用inline onclick）
+        // 绑定关闭按钮和物品点击事件
         setTimeout(() => {
             const closeBtn = document.getElementById('inv-close-btn');
             if (closeBtn) {
@@ -848,6 +914,395 @@ class UIRenderer {
                     }
                 });
             }
+            // 绑定可使用物品点击事件
+            const panel = document.getElementById('inventory-panel');
+            if (panel) {
+                panel.querySelectorAll('.item-card[data-usable="1"]').forEach(card => {
+                    card.addEventListener('click', () => {
+                        const itemId = card.dataset.itemId;
+                        this.showItemUseTarget(state, itemId);
+                    });
+                });
+            }
+        }, 0);
+    }
+
+    // ========== 战斗道具菜单（选择目标） ==========
+    showCombatItemMenu(combat) {
+        const state = window.gameApp ? window.gameApp.state : null;
+        if (!state) return;
+        const consumables = state.inventory.items.filter(i =>
+            i.type === 'potion' || i.type === 'consumable' || i.subtype === 'heal' || i.subtype === 'mana'
+        );
+        if (consumables.length === 0) {
+            if (combat.combatLog) combat.combatLog.push('背包中没有可用的消耗品');
+            this.updateCombat(combat);
+            return;
+        }
+        let html = '<div class="combat-item-menu"><h4>选择要使用的物品</h4>';
+        consumables.forEach(item => {
+            html += `<button class="item-select-btn" data-item-id="${item.id}">${item.name} ${item.stack > 1 ? 'x' + item.stack : ''}</button>`;
+        });
+        html += '<button class="item-cancel-btn" id="item-cancel">取消</button></div>';
+        this.showPanel('🎒 使用物品', html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.item-select-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const itemId = btn.dataset.itemId;
+                    this.closePanel();
+                    this.showCombatItemTarget(combat, itemId);
+                });
+            });
+            document.getElementById('item-cancel')?.addEventListener('click', () => this.closePanel());
+        }, 0);
+    }
+
+    showCombatItemTarget(combat, itemId) {
+        const state = window.gameApp ? window.gameApp.state : null;
+        const item = state.inventory.items.find(i => i.id === itemId);
+        if (!item) return;
+        let html = '<div class="combat-target-menu"><h4>选择目标</h4>';
+        const player = combat.getPlayerUnit();
+        html += `<button class="target-select-btn" data-target="player">👤 ${player.name} (自己)</button>`;
+        combat.companions.forEach((comp, idx) => {
+            if (comp.hp > 0) {
+                html += `<button class="target-select-btn" data-target="${comp.id}">🏹 ${comp.name}</button>`;
+            }
+        });
+        html += '<button class="item-cancel-btn" id="target-cancel">取消</button></div>';
+        this.showPanel(`🎯 对谁使用 ${item.name}？`, html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.target-select-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.dataset.target;
+                    const targetUnit = targetId === 'player' ? player : combat.companions.find(c => c.id === targetId);
+                    this.closePanel();
+                    if (targetUnit) {
+                        document.getElementById('btn-item').disabled = true;
+                        combat.playerAction('item', { itemId, target: targetUnit });
+                    }
+                });
+            });
+            document.getElementById('target-cancel')?.addEventListener('click', () => this.closePanel());
+        }, 0);
+    }
+
+    // ========== 技能选择面板 ==========
+    showSkillMenu(combat) {
+        const player = combat.getPlayerUnit();
+        if (!player || !player.skills) return;
+        let html = '<div class="skill-menu"><h4>选择技能</h4>';
+        player.skills.forEach(skillId => {
+            const skill = DATA.skills[skillId];
+            if (!skill) return;
+            const onCd = combat.cooldowns[skillId] > 0;
+            const noMp = player.mp < (skill.cost?.mp || 0);
+            const disabled = onCd || noMp;
+            html += `<button class="skill-select-btn ${disabled ? 'disabled' : ''}" data-skill="${skillId}" ${disabled ? 'disabled' : ''}>
+                <span class="skill-name">${skill.name}</span>
+                <span class="skill-cost">${skill.cost?.mp || 0}MP</span>
+                <span class="skill-desc">${skill.description || ''}</span>
+                ${onCd ? `<span class="skill-cd">CD:${combat.cooldowns[skillId]}</span>` : ''}
+            </button>`;
+        });
+        html += '<button class="item-cancel-btn" id="skill-cancel">取消</button></div>';
+        this.showPanel('✨ 技能', html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.skill-select-btn:not(.disabled)').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const skillId = btn.dataset.skill;
+                    combat.selectSkill(skillId);
+                    this.closePanel();
+                    // 根据技能目标类型选择目标
+                    const skill = DATA.skills[skillId];
+                    if (skill && (skill.target === 'ally' || skill.target === 'self')) {
+                        this.showSkillTarget(combat, skillId, 'ally');
+                    } else {
+                        this.showSkillTarget(combat, skillId, 'enemy');
+                    }
+                });
+            });
+            document.getElementById('skill-cancel')?.addEventListener('click', () => this.closePanel());
+        }, 0);
+    }
+
+    showSkillTarget(combat, skillId, targetType) {
+        const skill = DATA.skills[skillId];
+        let html = '<div class="combat-target-menu"><h4>选择目标</h4>';
+        if (targetType === 'ally') {
+            const player = combat.getPlayerUnit();
+            html += `<button class="target-select-btn" data-target="player">👤 ${player.name}</button>`;
+            combat.companions.forEach(comp => {
+                if (comp.hp > 0) html += `<button class="target-select-btn" data-target="${comp.id}">🏹 ${comp.name}</button>`;
+            });
+        } else {
+            combat.enemies.forEach((enemy, idx) => {
+                if (enemy.hp > 0) html += `<button class="target-select-btn" data-target-index="${idx}">🐺 ${enemy.name}</button>`;
+            });
+        }
+        html += '<button class="item-cancel-btn" id="target-cancel">取消</button></div>';
+        this.showPanel(`🎯 ${skill.name} - 选择目标`, html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.target-select-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    this.closePanel();
+                    let target = null;
+                    if (targetType === 'ally') {
+                        const tid = btn.dataset.target;
+                        target = tid === 'player' ? combat.getPlayerUnit() : combat.companions.find(c => c.id === tid);
+                    } else {
+                        const idx = parseInt(btn.dataset.targetIndex);
+                        target = combat.enemies[idx];
+                    }
+                    if (target) {
+                        document.getElementById('btn-skill').disabled = true;
+                        combat.playerAction('skill', target);
+                    }
+                });
+            });
+            document.getElementById('target-cancel')?.addEventListener('click', () => this.closePanel());
+        }, 0);
+    }
+
+    // ========== 商店UI ==========
+    showShop(state, shopType) {
+        const shopData = DATA.shops[shopType];
+        const items = NPCSystem.getShopItems(shopType);
+        let html = '<div class="shop-container">';
+        html += `<h4>${shopData?.name || '商店'}</h4>`;
+        html += '<div class="shop-section"><strong>购买</strong><div class="shop-grid">';
+        items.forEach(item => {
+            const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+            html += `<div class="shop-item-card" style="border-color:${rarityColor}">
+                <div class="shop-item-name" style="color:${rarityColor}">${item.name}</div>
+                <div class="shop-item-desc">${item.description || ''}</div>
+                <div class="shop-item-price">💰 ${item.price} 金币</div>
+                <button class="shop-buy-btn" data-item-id="${item.id}">购买</button>
+            </div>`;
+        });
+        html += '</div></div>';
+        // 出售部分
+        html += '<div class="shop-section"><strong>出售</strong><div class="shop-grid">';
+        const sellables = state.inventory.items.filter(i => i.type !== 'quest' && i.type !== 'treasure');
+        if (sellables.length === 0) {
+            html += '<p style="color:var(--text-dim)">没有可出售的物品</p>';
+        } else {
+            sellables.forEach(item => {
+                const tpl = DATA.items[item.id] || Object.values(DATA.items).find(t => t.name === item.name);
+                const basePrice = item.price || (tpl ? tpl.price : 0);
+                const sellPrice = Math.max(1, Math.floor(basePrice * 0.5));
+                html += `<div class="shop-item-card">
+                    <div class="shop-item-name">${item.name} ${item.stack > 1 ? 'x' + item.stack : ''}</div>
+                    <div class="shop-item-price">💰 ${sellPrice} 金币</div>
+                    <button class="shop-sell-btn" data-instance-id="${item.id}">出售</button>
+                </div>`;
+            });
+        }
+        html += '</div></div></div>';
+        this.showPanel('🏪 商店', html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.shop-buy-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const itemId = btn.dataset.itemId;
+                    const res = NPCSystem.buyItem(state, shopType, itemId, 1);
+                    const msgEl = document.createElement('div');
+                    msgEl.style.cssText = `color:${res.ok ? '#a5d6a7' : '#ef9a9a'};font-size:13px;margin-top:4px;`;
+                    msgEl.textContent = res.msg;
+                    btn.parentNode.appendChild(msgEl);
+                    setTimeout(() => msgEl.remove(), 2000);
+                    if (window.gameApp) window.gameApp.renderTopBar();
+                });
+            });
+            panel.querySelectorAll('.shop-sell-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const instanceId = btn.dataset.instanceId;
+                    const res = NPCSystem.sellItem(state, instanceId, 1);
+                    const msgEl = document.createElement('div');
+                    msgEl.style.cssText = `color:${res.ok ? '#a5d6a7' : '#ef9a9a'};font-size:13px;margin-top:4px;`;
+                    msgEl.textContent = res.msg;
+                    btn.parentNode.appendChild(msgEl);
+                    setTimeout(() => msgEl.remove(), 2000);
+                    if (window.gameApp) window.gameApp.renderTopBar();
+                });
+            });
+        }, 0);
+    }
+
+    // ========== 炼金铺UI（附魔/镶嵌） ==========
+    showAlchemistMenu(state) {
+        let html = '<div class="alchemist-container"><h4>🔮 炼金铺</h4>';
+        html += '<div class="alchemist-section"><strong>附魔装备</strong><div class="forge-list">';
+        let hasEquip = false;
+        for (const slot in state.equipment) {
+            const item = state.equipment[slot];
+            if (!item) continue;
+            hasEquip = true;
+            const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+            html += `<div class="forge-item">
+                <span style="color:${rarityColor}">${item.name}</span>
+                <button class="enchant-btn" data-slot="${slot}" data-type="enchant">✨ 附魔 (15金)</button>
+            </div>`;
+        }
+        if (!hasEquip) html += '<p style="color:var(--text-dim)">没有可附魔的装备</p>';
+        html += '</div></div>';
+        html += '<div class="alchemist-section"><strong>镶嵌宝石</strong><div class="forge-list">';
+        const gems = state.inventory.items.filter(i => i.type === 'gem');
+        if (gems.length === 0) {
+            html += '<p style="color:var(--text-dim)">背包中没有宝石</p>';
+        }
+        html += '</div></div></div>';
+        this.showPanel('🔮 炼金铺', html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.enchant-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const slot = btn.dataset.slot;
+                    const res = NPCSystem.enchantEquipment(state, slot);
+                    const msgEl = document.createElement('p');
+                    msgEl.style.color = res.ok ? '#a5d6a7' : '#ef9a9a';
+                    msgEl.textContent = res.msg;
+                    btn.parentNode.appendChild(msgEl);
+                    if (window.gameApp) window.gameApp.renderTopBar();
+                });
+            });
+        }, 0);
+    }
+
+    // ========== 随从详细面板 ==========
+    renderCompanionDetail(state, companionIndex) {
+        const comp = state.companions[companionIndex];
+        if (!comp) return;
+        const container = this.container;
+        if (!container) return;
+        const attrs = comp.attributes || {};
+        const attrNames = { str: '力量', agi: '敏捷', int: '智力', vit: '体质', ten: '坚韧', spi: '精神' };
+        const attrIcons = { str: '💪', agi: '💨', int: '🧠', vit: '❤️', ten: '🛡️', spi: '✨' };
+        let attrsHtml = '';
+        for (const key in attrs) {
+            attrsHtml += `<div class="char-stat-card"><div class="char-stat-label">${attrIcons[key] || ''} ${attrNames[key] || key}</div><div class="char-stat-value">${attrs[key]}</div></div>`;
+        }
+        const slotNames = { weapon: '武器', offhand: '副手', helmet: '头盔', chest: '胸甲', legs: '腿甲', boots: '靴子', gloves: '手套', necklace: '项链', ring1: '戒指1', ring2: '戒指2' };
+        let equipHtml = '';
+        const eq = comp.equipment || {};
+        for (const slot in slotNames) {
+            const item = eq[slot];
+            if (item) {
+                const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+                equipHtml += `<div class="equip-slot-card" style="border-left:3px solid ${rarityColor}"><span class="equip-slot-name">${slotNames[slot]}</span><span class="equip-item-name" style="color:${rarityColor}">${item.name}</span></div>`;
+            } else {
+                equipHtml += `<div class="equip-slot-card empty"><span class="equip-slot-name">${slotNames[slot]}</span><span class="equip-item-name" style="color:var(--text-dim)">空</span></div>`;
+            }
+        }
+        const skillsHtml = (comp.skills || []).map(sid => {
+            const skill = DATA.skills[sid];
+            return skill ? `<span class="comp-skill-tag">${skill.name}</span>` : '';
+        }).join('');
+        const hpPct = comp.maxHp > 0 ? (comp.hp / comp.maxHp) * 100 : 0;
+        const html = `
+            <div class="companion-detail-panel" id="companion-panel">
+                <div class="char-card char-basic-card">
+                    <div class="char-name-row"><span class="char-name">${comp.name}</span><span class="char-class">${comp.class === 'warrior' ? '战士' : comp.class === 'ranger' ? '游侠' : '法师'}</span></div>
+                    <div class="char-level-row"><span>Lv.${comp.level}</span></div>
+                    <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%;background:#9c27b0"></div></div>
+                    <div>HP: ${comp.hp}/${comp.maxHp} | MP: ${comp.mp}/${comp.maxMp}</div>
+                </div>
+                <div class="char-section"><strong class="char-section-title">六维属性</strong><div class="char-stats-grid">${attrsHtml}</div></div>
+                <div class="char-section"><strong class="char-section-title">装备</strong><div class="equip-grid">${equipHtml}</div></div>
+                <div class="char-section"><strong class="char-section-title">技能</strong><div class="comp-skills">${skillsHtml || '无'}</div></div>
+                <button class="menu-btn" id="comp-close-btn">关闭</button>
+            </div>
+        `;
+        const existing = document.getElementById('companion-panel');
+        if (existing) existing.remove();
+        container.insertAdjacentHTML('beforeend', html);
+        setTimeout(() => {
+            document.getElementById('comp-close-btn')?.addEventListener('click', () => {
+                document.getElementById('companion-panel')?.remove();
+            });
+        }, 0);
+    }
+
+    // ========== 背包物品使用目标选择 ==========
+    showItemUseTarget(state, itemId) {
+        const item = state.inventory.items.find(i => i.id === itemId);
+        if (!item) return;
+        let html = '<div class="item-target-menu"><h4>选择使用目标</h4>';
+        html += `<button class="target-select-btn" data-target="player">👤 ${state.player.name} (自己)</button>`;
+        state.companions.forEach(comp => {
+            if (comp.alive) {
+                html += `<button class="target-select-btn" data-target="${comp.id}">🏹 ${comp.name}</button>`;
+            }
+        });
+        html += '<button class="item-cancel-btn" id="item-use-cancel">取消</button></div>';
+        this.showPanel(`🎯 对谁使用 ${item.name}？`, html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.target-select-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.dataset.target;
+                    this.closePanel();
+                    const res = NPCSystem.useItem(state, itemId, targetId);
+                    this.showToast(res.msg);
+                    if (res.ok) {
+                        // 刷新背包显示
+                        this.renderInventory(state);
+                        if (window.gameApp) window.gameApp.renderTopBar();
+                    }
+                });
+            });
+            document.getElementById('item-use-cancel')?.addEventListener('click', () => this.closePanel());
+        }, 0);
+    }
+
+    // ========== 修改锻造菜单以支持强化 ==========
+    showForgeMenu(state) {
+        const eq = state.equipment;
+        let html = '<div class="forge-container"><h4>🔨 铁匠铺</h4>';
+        html += '<div class="forge-section"><strong>锻造/强化</strong><div class="forge-list">';
+        let hasItem = false;
+        for (const slot in eq) {
+            const item = eq[slot];
+            if (!item) continue;
+            hasItem = true;
+            const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+            html += `<div class="forge-item">
+                <span style="color:${rarityColor}">${item.name} (Lv.${item.level})</span>
+                <div class="forge-actions">
+                    <button class="forge-btn" data-slot="${slot}" data-type="forge">🔨 锻造 (10金)</button>
+                    <button class="forge-btn" data-slot="${slot}" data-type="enhance">⬆️ 强化 (20金)</button>
+                </div>
+            </div>`;
+        }
+        if (!hasItem) html += '<p style="color:var(--text-dim)">当前没有可锻造的装备。</p>';
+        html += '</div></div></div>';
+        this.showPanel('🔨 锻造铺', html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.forge-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const slot = btn.dataset.slot;
+                    const type = btn.dataset.type;
+                    const res = type === 'forge' ? NPCSystem.forgeEquipment(state, slot) : NPCSystem.enhanceEquipment(state, slot);
+                    const msgEl = document.createElement('p');
+                    msgEl.style.color = res.ok ? '#a5d6a7' : '#ef9a9a';
+                    msgEl.textContent = res.msg;
+                    btn.parentNode.appendChild(msgEl);
+                    if (window.gameApp) window.gameApp.renderTopBar();
+                });
+            });
         }, 0);
     }
 }

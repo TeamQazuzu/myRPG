@@ -177,6 +177,10 @@ class GameApp {
         <span class="nav-icon">👤</span>
         <span>角色</span>
       </button>
+      <button class="nav-item" data-action="companions">
+        <span class="nav-icon">🏹</span>
+        <span>随从</span>
+      </button>
       <button class="nav-item" data-action="settings">
         <span class="nav-icon">⚙️</span>
         <span>设置</span>
@@ -205,12 +209,14 @@ class GameApp {
     const sceneEl = document.getElementById('scene-container');
     const invPanel = document.getElementById('inventory-panel');
     const charPanel = document.getElementById('character-panel');
+    const compPanel = document.getElementById('companion-panel');
     const settingsPanel = document.getElementById('settings-panel');
     const combatContainer = document.getElementById('combat-container');
     const combatLog = document.getElementById('combat-log');
 
     if (invPanel) invPanel.remove();
     if (charPanel) charPanel.remove();
+    if (compPanel) compPanel.remove();
     if (settingsPanel) settingsPanel.remove();
 
     // 关闭NPC弹窗
@@ -239,6 +245,10 @@ class GameApp {
       case 'character':
         if (sceneEl) sceneEl.style.display = 'none';
         this.uiRenderer.renderCharacter(this.state);
+        break;
+      case 'companions':
+        if (sceneEl) sceneEl.style.display = 'none';
+        this.uiRenderer.renderCompanionDetail(this.state, 0);
         break;
       case 'settings':
         if (sceneEl) sceneEl.style.display = 'none';

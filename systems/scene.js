@@ -1,114 +1,198 @@
-// systems/scene.js
+// systems/scene.js - 场景管理器（重构版）
+// 依赖：DATA（core/data.js）、CombatEngine、StateUtils、Utils、InventorySystem
 class SceneManager {
     constructor() {
         this.currentScene = null;
         this.currentCombat = null;
-        this.scenes = {
-            '灰烟村': {
-                id: 'greyVillage',
-                type: 'safe',
-                name: '灰烟村',
-                description: '你长大的地方。炉火噼啪作响，艾琳坐在窗边擦拭她的弓。外面天快黑了。',
-                exits: ['灰烟村_酒馆', '灰烟村_铁匠铺', '灰烟村_裁缝铺', '灰烟村_集市', '灰烟村_基地']
-            },
-            '灰烟村_酒馆': {
-                id: 'greyVillage_tavern',
-                type: 'safe',
-                name: '酒馆',
-                description: '温暖的酒馆，飘着麦酒和烤肉的香气。墙上挂着旧地图。',
-                exits: ['灰烟村']
-            },
-            '灰烟村_铁匠铺': {
-                id: 'greyVillage_blacksmith',
-                type: 'safe',
-                name: '铁匠铺',
-                description: '叮叮当当的打铁声，老铁匠正在锻造一把长剑。',
-                exits: ['灰烟村']
-            },
-            '灰烟村_裁缝铺': {
-                id: 'greyVillage_tailor',
-                type: 'safe',
-                name: '裁缝铺',
-                description: '各色布料堆满柜台，裁缝正在缝制一件皮甲。',
-                exits: ['灰烟村']
-            },
-            '灰烟村_集市': {
-                id: 'greyVillage_market',
-                type: 'safe',
-                name: '集市',
-                description: '人来人往的集市，各种货物琳琅满目。',
-                exits: ['灰烟村']
-            },
-            '灰烟村_基地': {
-                id: 'greyVillage_base',
-                type: 'safe',
-                name: '基地',
-                description: '你的小窝，虽然简陋但很安心。墙上挂着旧地图。',
-                exits: ['灰烟村']
-            },
-            '灰烟村_荒地': {
-                id: 'greyVillage_wasteland',
-                type: 'wild',
-                name: '荒地',
-                description: '荒芜的野地，野狗在垃圾堆间游荡。',
-                enemies: ['野狗', '野狗'],
-                level: 1,
-                exits: ['灰烟村']
-            },
-            '灰烟村_树林': {
-                id: 'greyVillage_forest',
-                type: 'wild',
-                name: '树林',
-                description: '稀疏的树林，偶尔有野兔窜过。',
-                enemies: ['野兔', '野兔'],
-                level: 1,
-                exits: ['灰烟村']
-            },
-            '灰烟村_河边': {
-                id: 'greyVillage_river',
-                type: 'wild',
-                name: '河边',
-                description: '潺潺的河水，水边有野鸭栖息。',
-                enemies: ['野鸭', '螃蟹'],
-                level: 1,
-                exits: ['灰烟村']
-            }
-        };
-        this.enemyData = {
-            '野狗': { name: '野狗', hp: 30, maxHp: 30, attack: 8, defense: 2, speed: 10, exp: 12, gold: 5 },
-            '野兔': { name: '野兔', hp: 15, maxHp: 15, attack: 3, defense: 1, speed: 15, exp: 8, gold: 2 },
-            '野鸭': { name: '野鸭', hp: 20, maxHp: 20, attack: 5, defense: 1, speed: 12, exp: 10, gold: 3 },
-            '螃蟹': { name: '螃蟹', hp: 25, maxHp: 25, attack: 6, defense: 5, speed: 5, exp: 12, gold: 4 }
-        };
+        this.combatContext = null; // { type, sceneId, stageIndex }
+        this._boundCombatEnd = this._onCombatEnd.bind(this);
+        document.addEventListener('combat-end', this._boundCombatEnd);
     }
 
-    enterScene(sceneName) {
-        console.log('[场景] 进入:', sceneName);
-        const scene = this.scenes[sceneName];
+    // ========== 场景查询 ==========
+    _getScenes() {
+        return (typeof DATA !== 'undefined' && DATA.scenes) ? DATA.scenes : {};
+    }
+
+    _getScene(key) {
+        const scenes = this._getScenes();
+        if (scenes[key]) return scenes[key];
+        // 支持通过中文名称查找（兼容旧入口）
+        for (const id in scenes) {
+            if (scenes[id].name === key) return scenes[id];
+        }
+        return null;
+    }
+
+    // ========== 进入场景 ==========
+    enterScene(sceneIdOrName) {
+        console.log('[场景] 进入:', sceneIdOrName);
+        const scene = this._getScene(sceneIdOrName);
         if (!scene) {
-            console.error('[场景] 场景不存在:', sceneName);
+            console.error('[场景] 场景不存在:', sceneIdOrName);
             return;
         }
         this.currentScene = scene;
+
+        // 清除之前可能残留的动态按钮
+        this._clearDynamicUI();
+
         const event = new CustomEvent('scene-change', { detail: { scene: scene } });
         document.dispatchEvent(event);
+
+        // 根据场景类型处理交互
         if (scene.type === 'wild' && scene.enemies && scene.enemies.length > 0) {
-            console.log('[场景] 野外场景，触发战斗，敌人:', scene.enemies.join(', '));
-            this.triggerBattle(scene.enemies);
+            if (scene.autoCombat) {
+                console.log('[场景] 野外场景，自动触发战斗，敌人:', scene.enemies.join(', '));
+                this.triggerBattle(scene.enemies, { type: scene.type, sceneId: scene.id });
+            } else if (scene.allowExplore) {
+                this._showEncounterButton('迎战', () => {
+                    this.triggerBattle(scene.enemies, { type: scene.type, sceneId: scene.id });
+                });
+            }
+        } else if (scene.type === 'boss' && scene.enemies && scene.enemies.length > 0) {
+            this._showEncounterButton('挑战', () => {
+                this.triggerBattle(scene.enemies, { type: scene.type, sceneId: scene.id });
+            });
+        } else if (scene.type === 'dungeon') {
+            this._handleDungeonEntry(scene);
         }
     }
 
-    triggerBattle(enemyNames) {
-        console.log('[战斗] 触发战斗，敌人:', enemyNames.join(', '));
+    // ========== 动态 UI 辅助 ==========
+    _clearDynamicUI() {
+        const container = document.getElementById('scene-container');
+        if (!container) return;
+        container.querySelectorAll('.scene-action-btn, .dungeon-panel').forEach(el => el.remove());
+    }
+
+    _showEncounterButton(label, onClick) {
+        const container = document.getElementById('scene-container');
+        if (!container) return;
+        const btn = document.createElement('button');
+        btn.className = 'scene-action-btn';
+        btn.textContent = label;
+        btn.style.cssText = 'margin-top:12px;padding:10px 20px;font-size:16px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;width:100%;';
+        btn.addEventListener('click', () => {
+            btn.remove();
+            onClick();
+        });
+        container.appendChild(btn);
+    }
+
+    // ========== 地下城逻辑 ==========
+    _handleDungeonEntry(scene) {
+        const state = window.gameApp ? window.gameApp.state : null;
+        const progress = state && state.world && state.world.dungeonProgress
+            ? state.world.dungeonProgress[scene.id]
+            : null;
+        let currentStage = 0;
+        if (progress) currentStage = progress.currentStage || 0;
+
+        const stages = DATA.dungeonStages && DATA.dungeonStages[scene.id]
+            ? DATA.dungeonStages[scene.id]
+            : [];
+
+        if (currentStage >= stages.length) {
+            this._showDungeonPanel(scene, '已通关', '该地下城所有层数均已攻略完毕。', true);
+            return;
+        }
+
+        const stage = stages[currentStage];
+        const desc = stage.desc || `第 ${currentStage + 1} 层`;
+        this._showDungeonPanel(
+            scene,
+            `第 ${currentStage + 1}/${stages.length} 层`,
+            desc,
+            false,
+            () => {
+                this.triggerBattle(stage.enemies, { type: scene.type, sceneId: scene.id, stageIndex: currentStage });
+            }
+        );
+    }
+
+    _showDungeonPanel(scene, title, desc, completed, onFight) {
+        const container = document.getElementById('scene-container');
+        if (!container) return;
+        container.querySelectorAll('.dungeon-panel').forEach(el => el.remove());
+        const panel = document.createElement('div');
+        panel.className = 'dungeon-panel';
+        panel.style.cssText = 'margin-top:12px;padding:12px;background:rgba(0,0,0,0.25);border-radius:8px;border:1px solid rgba(255,255,255,0.1);';
+        let html = `<div style="font-weight:bold;margin-bottom:6px;color:var(--accent);">${title}</div>`;
+        html += `<div style="margin-bottom:10px;color:var(--text-secondary);font-size:14px;">${desc}</div>`;
+        if (!completed && onFight) {
+            html += `<button class="scene-action-btn" style="padding:8px 16px;background:#ff9800;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:14px;">进入战斗</button>`;
+        } else if (completed) {
+            html += `<div style="color:#a5d6a7;font-size:14px;">地下城已通关</div>`;
+        }
+        panel.innerHTML = html;
+        container.appendChild(panel);
+        const fightBtn = panel.querySelector('.scene-action-btn');
+        if (fightBtn) {
+            fightBtn.addEventListener('click', () => {
+                panel.remove();
+                onFight();
+            });
+        }
+    }
+
+    // ========== 战斗结束监听（推进地下城） ==========
+    _onCombatEnd(e) {
+        const result = e.detail.result;
+        const ctx = this.combatContext;
+        if (result !== 'player_victory' || !ctx || ctx.type !== 'dungeon') {
+            this.combatContext = null;
+            return;
+        }
+
+        const state = window.gameApp ? window.gameApp.state : null;
+        if (!state || !state.world || !state.world.dungeonProgress) {
+            this.combatContext = null;
+            return;
+        }
+
+        const progress = state.world.dungeonProgress[ctx.sceneId];
+        if (!progress) {
+            this.combatContext = null;
+            return;
+        }
+
+        progress.currentStage = (progress.currentStage || 0) + 1;
+        const stages = DATA.dungeonStages && DATA.dungeonStages[ctx.sceneId]
+            ? DATA.dungeonStages[ctx.sceneId]
+            : [];
+
+        if (progress.currentStage >= stages.length) {
+            progress.completed = true;
+            console.log('[场景] 地下城完成:', ctx.sceneId);
+            setTimeout(() => {
+                const scene = this._getScene(ctx.sceneId);
+                if (scene && scene.exits && scene.exits.length > 0) {
+                    // 优先返回非地下城内部出口
+                    const exit = scene.exits.find(id => !id.startsWith(ctx.sceneId + '_')) || scene.exits[0];
+                    this.enterScene(exit);
+                }
+            }, 1500);
+        } else {
+            // 短暂延迟后刷新当前场景，显示下一层
+            setTimeout(() => this.enterScene(ctx.sceneId), 1200);
+        }
+        this.combatContext = null;
+    }
+
+    // ========== 触发战斗 ==========
+    triggerBattle(enemyIds, context) {
+        if (context) this.combatContext = context;
+        console.log('[战斗] 触发战斗，敌人:', enemyIds.join(', '));
         const player = this.getPlayerData();
         if (!player) {
             console.error('[战斗] 没有玩家数据');
             return;
         }
-        const enemies = enemyNames.map(name => {
-            const data = this.enemyData[name];
+        const enemies = enemyIds.map(id => {
+            const data = DATA.enemies[id];
             if (!data) {
-                console.error('[战斗] 找不到敌人数据:', name);
+                console.error('[战斗] 找不到敌人数据:', id);
                 return null;
             }
             return {
@@ -126,80 +210,70 @@ class SceneManager {
             return;
         }
 
-        // 获取参战随从（带战斗属性计算）
         const companions = this.getCompanionData();
-
         const combat = new CombatEngine();
         window.currentCombat = combat;
         this.currentCombat = combat;
         combat.startCombat(player, enemies, companions);
     }
 
+    // ========== 获取参战随从（带战斗属性计算） ==========
     getCompanionData() {
         try {
-            if (window.gameApp && window.gameApp.state && window.gameApp.state.companions) {
-                return window.gameApp.state.companions
-                    .filter(c => c.alive !== false)
-                    .map(c => {
-                        const base = { ...c.attributes };
-                        return {
-                            ...c,
-                            speed: base.agi * 0.8,
-                            attack: base.str * 2,
-                            defense: base.str * 1 + base.ten * 3,
-                            physAtk: base.str * 2,
-                            physDef: base.str * 1 + base.ten * 3,
-                            magAtk: base.int * 2,
-                            magDef: base.int * 1 + base.spi * 2 + base.ten * 3,
-                            hit: base.agi * 1.5,
-                            dodge: base.agi * 1,
-                            critRate: 0.05,
-                            critDmg: 1.5,
-                        };
-                    });
-            }
-            return [];
+            const state = window.gameApp ? window.gameApp.state : null;
+            if (!state || !state.companions) return [];
+            return state.companions
+                .filter(c => c.alive !== false)
+                .map(c => {
+                    const stats = (typeof StateUtils !== 'undefined' && StateUtils.getCombatStats)
+                        ? StateUtils.getCombatStats(state, c.id) || {}
+                        : {};
+                    const base = c.attributes || {};
+                    return {
+                        ...c,
+                        speed: stats.speed || base.agi * 0.8 || 5,
+                        attack: stats.physAtk || base.str * 2 || 10,
+                        defense: stats.physDef || (base.str * 1 + base.ten * 3) || 0,
+                        physAtk: stats.physAtk || base.str * 2 || 10,
+                        physDef: stats.physDef || (base.str * 1 + base.ten * 3) || 0,
+                        magAtk: stats.magAtk || base.int * 2 || 10,
+                        magDef: stats.magDef || (base.int * 1 + base.spi * 2 + base.ten * 3) || 0,
+                        hit: stats.hit || base.agi * 1.5 || 80,
+                        dodge: stats.dodge || base.agi * 1 || 20,
+                        critRate: stats.critRate || 0.05,
+                        critDmg: stats.critDmg || 1.5,
+                    };
+                });
         } catch (e) {
             console.error('[战斗] 获取随从失败:', e);
             return [];
         }
     }
 
+    // ========== 获取玩家数据（带战斗属性计算） ==========
     getPlayerData() {
         try {
-            if (window.gameApp && window.gameApp.state && window.gameApp.state.player) {
-                const p = window.gameApp.state.player;
-                const base = { ...p.attributes };
-                const stats = {
-                    maxHp: p.maxHp || p.hp || 100,
-                    hp: p.hp || p.maxHp || 100,
-                    speed: base.agi * 0.8,
-                    attack: base.str * 2,
-                    defense: base.str * 1 + base.ten * 3,
-                    physAtk: base.str * 2,
-                    physDef: base.str * 1 + base.ten * 3,
-                    magAtk: base.int * 2,
-                    magDef: base.int * 1 + base.spi * 2 + base.ten * 3,
-                    hit: base.agi * 1.5,
-                    dodge: base.agi * 1,
-                    critRate: 0.05,
-                    critDmg: 1.5,
-                };
-                if (typeof StateUtils !== 'undefined' && StateUtils.getCombatStats) {
-                    const computed = StateUtils.getCombatStats(window.gameApp.state, 'player');
-                    if (computed) {
-                        stats.speed = computed.speed || stats.speed;
-                        stats.physAtk = computed.physAtk || stats.physAtk;
-                        stats.physDef = computed.physDef || stats.physDef;
-                        stats.magAtk = computed.magAtk || stats.magAtk;
-                        stats.magDef = computed.magDef || stats.magDef;
-                        stats.attack = computed.physAtk || stats.attack;
-                        stats.defense = computed.physDef || stats.defense;
-                    }
-                }
-                return { ...p, ...stats };
-            }
-            return null;
+            const state = window.gameApp ? window.gameApp.state : null;
+            if (!state || !state.player) return null;
+            const p = state.player;
+            const stats = (typeof StateUtils !== 'undefined' && StateUtils.getCombatStats)
+                ? StateUtils.getCombatStats(state, 'player') || {}
+                : {};
+            const base = p.attributes || {};
+            return {
+                ...p,
+                speed: stats.speed || base.agi * 0.8 || 5,
+                attack: stats.physAtk || base.str * 2 || 10,
+                defense: stats.physDef || (base.str * 1 + base.ten * 3) || 0,
+                physAtk: stats.physAtk || base.str * 2 || 10,
+                physDef: stats.physDef || (base.str * 1 + base.ten * 3) || 0,
+                magAtk: stats.magAtk || base.int * 2 || 10,
+                magDef: stats.magDef || (base.int * 1 + base.spi * 2 + base.ten * 3) || 0,
+                hit: stats.hit || base.agi * 1.5 || 80,
+                dodge: stats.dodge || base.agi * 1 || 20,
+                critRate: stats.critRate || 0.05,
+                critDmg: stats.critDmg || 1.5,
+            };
         } catch (e) {
             console.error('[战斗] 获取玩家失败:', e);
             return null;
@@ -207,6 +281,8 @@ class SceneManager {
     }
 
     getCurrentScene() { return this.currentScene; }
-    getScenes() { return this.scenes; }
+    getScenes() { return this._getScenes(); }
     getExits() { return this.currentScene ? this.currentScene.exits || [] : []; }
 }
+
+try { module.exports = SceneManager; } catch(e) {}
