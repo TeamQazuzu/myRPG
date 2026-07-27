@@ -241,6 +241,15 @@ const NPCSystem = {
     return { ok: true, msg: `${npcData.name} 加入了队伍！`, companion };
   },
 
+  // ========== 解雇随从 ==========
+  dismissCompanion(state, companionId) {
+    const idx = state.companions.findIndex(c => c.id === companionId);
+    if (idx === -1) return { ok: false, msg: '该随从不在队伍中' };
+    const comp = state.companions[idx];
+    state.companions.splice(idx, 1);
+    return { ok: true, msg: `${comp.name} 离开了队伍。` };
+  },
+
   _getCompanionBaseAttrs(classKey) {
     const attrs = { str: 8, agi: 8, int: 8, vit: 8, ten: 8, spi: 8 };
     if (classKey === 'warrior') {

@@ -776,6 +776,65 @@ body {
 .companion-lv { font-size: 12px; color: var(--accent-purple); }
 .companion-hp-text { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
 
+/* 随从列表视图 */
+.companion-list-panel {
+  padding: 12px 0;
+}
+.companion-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.companion-list-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-purple);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+.companion-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.companion-class {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: rgba(255,255,255,0.05);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.companion-list-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.companion-list-actions .menu-btn {
+  flex: 1;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.menu-btn.danger {
+  color: var(--danger, #ff4466);
+  border-color: rgba(255,68,102,0.3);
+}
+.menu-btn.danger:active {
+  background: rgba(255,68,102,0.1);
+}
+.comp-detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.comp-detail-actions .menu-btn {
+  flex: 1;
+  min-width: 80px;
+}
+.companion-card { cursor: pointer; transition: background 0.15s; }
+.companion-card:active { background: rgba(255,255,255,0.03); }
+
 /* ========== 设置面板 ========== */
 .settings-panel {
   padding: 12px 0;

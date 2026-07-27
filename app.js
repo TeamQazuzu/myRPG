@@ -248,7 +248,7 @@ class GameApp {
         break;
       case 'companions':
         if (sceneEl) sceneEl.style.display = 'none';
-        this.uiRenderer.renderCompanionDetail(this.state, 0);
+        this.uiRenderer.renderCompanionList(this.state);
         break;
       case 'settings':
         if (sceneEl) sceneEl.style.display = 'none';

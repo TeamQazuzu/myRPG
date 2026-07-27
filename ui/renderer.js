@@ -233,18 +233,32 @@ class UIRenderer {
     openNPCDialog(npc) {
         const state = window.gameApp ? window.gameApp.state : null;
         if (!state) return;
-        let result = { msg: '...' };
-        if (typeof NPCSystem !== 'undefined' && NPCSystem.handleAction) {
-            result = NPCSystem.handleAction(npc, 0, state);
+        // 只获取对话文本，不触发任何动作（修复：原来会自动执行action[0]导致自动招募）
+        let dialogueText = '...';
+        if (typeof NPCSystem !== 'undefined' && NPCSystem.getDialogue) {
+            dialogueText = NPCSystem.getDialogue(npc);
         }
+        // 构建操作按钮，根据招募状态显示不同状态
         let actionHtml = '';
         if (npc.actions && npc.actions.length > 0) {
             actionHtml = `<div class="npc-actions">` +
-                npc.actions.map((a, i) => `<button class="npc-action-btn" data-idx="${i}">${a.label}</button>`).join('') +
+                npc.actions.map((a, i) => {
+                    if (a.type === 'recruit') {
+                        const recruitId = npc.recruitId || npc.id;
+                        const alreadyRecruited = state.companions.some(c => c.id === recruitId);
+                        if (alreadyRecruited) {
+                            return `<button class="npc-action-btn" disabled>已招募</button>`;
+                        }
+                        if (state.companions.length >= 2) {
+                            return `<button class="npc-action-btn" disabled>队伍已满</button>`;
+                        }
+                    }
+                    return `<button class="npc-action-btn" data-idx="${i}">${a.label}</button>`;
+                }).join('') +
                 `</div>`;
         }
         this.showPanel(`🗣️ ${npc.name}`, `
-            <div class="npc-dialogue">${result.msg}</div>
+            <div class="npc-dialogue">${dialogueText}</div>
             ${actionHtml}
         `);
         // 绑定按钮事件
@@ -252,6 +266,7 @@ class UIRenderer {
             const panel = document.getElementById('dynamic-panel');
             if (!panel) return;
             panel.querySelectorAll('.npc-action-btn').forEach(btn => {
+                if (btn.disabled) return;
                 btn.addEventListener('click', () => {
                     const idx = parseInt(btn.dataset.idx);
                     if (typeof NPCSystem === 'undefined') return;
@@ -1179,6 +1194,78 @@ class UIRenderer {
         }, 0);
     }
 
+    // ========== 随从列表视图 ==========
+    renderCompanionList(state) {
+        const container = this.container;
+        if (!container) return;
+        const sceneEl = document.getElementById('scene-container');
+        if (sceneEl) sceneEl.style.display = 'none';
+        let html = `
+            <div class="companion-list-panel" id="companion-panel">
+                <h3>🏹 随从队伍 (${state.companions.length}/2)</h3>
+        `;
+        if (state.companions.length === 0) {
+            html += '<p style="color:var(--text-dim);text-align:center;padding:32px 0;">还没有随从。<br>去酒馆、铁匠铺、炼金铺寻找可以招募的伙伴吧。</p>';
+        } else {
+            html += '<div class="companion-list-grid">';
+            state.companions.forEach((comp, idx) => {
+                const hpPct = comp.maxHp > 0 ? Math.max(0, (comp.hp / comp.maxHp) * 100) : 0;
+                const className = comp.class === 'warrior' ? '战士' : comp.class === 'ranger' ? '游侠' : '法师';
+                const classIcon = comp.class === 'warrior' ? '⚔️' : comp.class === 'ranger' ? '🏹' : '🔮';
+                html += `
+                    <div class="companion-list-card">
+                        <div class="companion-list-header">
+                            <span class="companion-name">${classIcon} ${comp.name}</span>
+                            <span class="companion-class">${className}</span>
+                        </div>
+                        <div class="companion-lv">Lv.${comp.level}</div>
+                        <div class="hp-bar"><div class="hp-fill" style="width:${hpPct}%;background:#9c27b0"></div></div>
+                        <div class="companion-hp-text">HP: ${comp.hp}/${comp.maxHp} | MP: ${comp.mp}/${comp.maxMp}</div>
+                        <div class="companion-list-actions">
+                            <button class="menu-btn companion-view-btn" data-idx="${idx}">查看详情</button>
+                            <button class="menu-btn danger companion-dismiss-btn" data-idx="${idx}">解雇</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        }
+        html += '<button class="menu-btn" id="comp-list-close" style="margin-top:12px;">关闭</button>';
+        html += '</div>';
+
+        const existing = document.getElementById('companion-panel');
+        if (existing) existing.remove();
+        container.insertAdjacentHTML('beforeend', html);
+
+        setTimeout(() => {
+            document.getElementById('comp-list-close')?.addEventListener('click', () => {
+                document.getElementById('companion-panel')?.remove();
+                if (sceneEl) sceneEl.style.display = 'block';
+            });
+            container.querySelectorAll('.companion-view-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(btn.dataset.idx);
+                    this.renderCompanionDetail(state, idx);
+                });
+            });
+            container.querySelectorAll('.companion-dismiss-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(btn.dataset.idx);
+                    const comp = state.companions[idx];
+                    if (!comp) return;
+                    if (confirm(`确定要解雇 ${comp.name} 吗？\n解雇后该随从的装备和经验将丢失。`)) {
+                        const res = NPCSystem.dismissCompanion(state, comp.id);
+                        this.showToast(res.msg);
+                        this.renderCompanionList(state);
+                        if (window.gameApp) window.gameApp.renderTopBar();
+                    }
+                });
+            });
+        }, 0);
+    }
+
     // ========== 随从详细面板 ==========
     renderCompanionDetail(state, companionIndex) {
         const comp = state.companions[companionIndex];
@@ -1220,7 +1307,11 @@ class UIRenderer {
                 <div class="char-section"><strong class="char-section-title">六维属性</strong><div class="char-stats-grid">${attrsHtml}</div></div>
                 <div class="char-section"><strong class="char-section-title">装备</strong><div class="equip-grid">${equipHtml}</div></div>
                 <div class="char-section"><strong class="char-section-title">技能</strong><div class="comp-skills">${skillsHtml || '无'}</div></div>
-                <button class="menu-btn" id="comp-close-btn">关闭</button>
+                <div class="comp-detail-actions">
+                    <button class="menu-btn danger" id="comp-dismiss-btn">解雇此随从</button>
+                    <button class="menu-btn" id="comp-back-btn">返回列表</button>
+                    <button class="menu-btn" id="comp-close-btn">关闭</button>
+                </div>
             </div>
         `;
         const existing = document.getElementById('companion-panel');
@@ -1229,6 +1320,17 @@ class UIRenderer {
         setTimeout(() => {
             document.getElementById('comp-close-btn')?.addEventListener('click', () => {
                 document.getElementById('companion-panel')?.remove();
+            });
+            document.getElementById('comp-back-btn')?.addEventListener('click', () => {
+                this.renderCompanionList(state);
+            });
+            document.getElementById('comp-dismiss-btn')?.addEventListener('click', () => {
+                if (confirm(`确定要解雇 ${comp.name} 吗？\n解雇后该随从的装备和经验将丢失。`)) {
+                    const res = NPCSystem.dismissCompanion(state, comp.id);
+                    this.showToast(res.msg);
+                    this.renderCompanionList(state);
+                    if (window.gameApp) window.gameApp.renderTopBar();
+                }
             });
         }, 0);
     }
