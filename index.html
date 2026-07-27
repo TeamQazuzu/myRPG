@@ -1,50 +1,29 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>寻亲风云录</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>寻亲风云录</title>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div id="game-container">
-    <div class="app-header">
-      <div class="header-left">
-        <span class="loc-name" id="loc-name">灰烟村</span>
-        <span class="loc-detail" id="loc-detail"></span>
-      </div>
-      <div class="header-right">
-        <span>Lv.<span id="player-level">1</span></span>
-        <span class="gold-display" id="gold-display">50金</span>
-      </div>
-    </div>
-    <div class="app-body" id="app-body">
-      <div class="scene-view" id="scene-view"></div>
-      <div class="combat-view" id="combat-view" style="display:none"></div>
-      <div class="panel-view" id="panel-view" style="display:none"></div>
-    </div>
-    <div class="app-footer">
-      <div class="action-bar" id="action-bar"></div>
-      <div class="menu-bar" id="menu-bar">
-        <button class="menu-btn" data-panel="inventory">🎒 背包</button>
-        <button class="menu-btn" data-panel="equipment">⚔️ 装备</button>
-        <button class="menu-btn" data-panel="companions">👥 同伴</button>
-        <button class="menu-btn" data-panel="skills">✨ 技能</button>
-        <button class="menu-btn" data-panel="settings">⚙️ 设置</button>
-        <button class="menu-btn" data-panel="save">💾 存档</button>
-      </div>
-    </div>
-    <div class="log-window" id="log-window" style="display:none"></div>
-  </div>
+    <div id="game-container"></div>
 
-  <script src="core/data.js"></script>
-  <script src="core/state.js"></script>
-  <script src="systems/equipment.js"></script>
-  <script src="systems/inventory.js"></script>
-  <script src="systems/companion.js"></script>
-  <script src="systems/combat.js"></script>
-  <script src="systems/scene.js"></script>
-  <script src="ui/renderer.js"></script>
-  <script src="app.js"></script>
+    <!-- 核心层 -->
+    <script src="core/data.js"></script>
+    <script src="core/utils.js"></script>
+    <script src="core/state.js"></script>
+
+    <!-- 系统层 -->
+    <script src="systems/combat.js"></script>
+    <script src="systems/equipment.js"></script>
+    <script src="systems/inventory.js"></script>
+    <script src="systems/scene.js"></script>
+
+    <!-- UI层 -->
+    <script src="ui/renderer.js"></script>
+
+    <!-- 主入口 -->
+    <script src="app.js"></script>
 </body>
 </html>
