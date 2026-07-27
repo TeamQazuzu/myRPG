@@ -19,6 +19,16 @@ const EquipmentSystem = {
     if (!rarityInfo) {
       return { ok: false, msg: '未知品质: ' + nq };
     }
+    // 锻造品质上限：比同等级掉落高一档
+    if (typeof Utils !== 'undefined' && Utils.getForgeMaxRarity) {
+      const forgeMax = Utils.getForgeMaxRarity(state.player.level);
+      if (forgeMax) {
+        const forgeMaxTier = DATA.rarity[forgeMax]?.tier ?? 99;
+        if (rarityInfo.tier > forgeMaxTier) {
+          return { ok: false, msg: '当前锻造等级最高只能升到' + DATA.rarity[forgeMax].name };
+        }
+      }
+    }
     const limits = DATA.equipLimits.find(l => state.player.level >= l.levelRange[0] && state.player.level <= l.levelRange[1]);
     if (limits) {
       const maxTier = DATA.rarity[limits.maxRarity]?.tier ?? 99;

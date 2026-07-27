@@ -57,6 +57,43 @@ const Utils = {
     return Math.max(min, Math.min(max, val));
   },
 
+  // ========== 掉落品质限制（按怪物等级） ==========
+  // 25级以下：最高绿色；26-45级：最高蓝色；46-65级：最高紫色；66-85级：最高橙色；86+：无限制
+  getDropMaxRarity(enemyLevel) {
+    if (enemyLevel <= 25) return 'green';
+    if (enemyLevel <= 45) return 'blue';
+    if (enemyLevel <= 65) return 'purple';
+    if (enemyLevel <= 85) return 'orange';
+    return null; // null 表示无限制
+  },
+
+  // 锻造品质比同等级掉落高一档
+  getForgeMaxRarity(playerLevel) {
+    const dropMax = this.getDropMaxRarity(playerLevel);
+    const order = ['white', 'green', 'blue', 'purple', 'orange', 'red'];
+    if (!dropMax) return null; // 86+无限制
+    const idx = order.indexOf(dropMax);
+    if (idx < 0 || idx >= order.length - 1) return null;
+    return order[idx + 1]; // 下一档
+  },
+
+  // 根据上限获取可用的掉落品质列表（加权，低品质更常见）
+  getDropRarityPool(maxRarity) {
+    const allRarities = ['white', 'green', 'blue', 'purple', 'orange', 'red'];
+    const order = ['white', 'green', 'blue', 'purple', 'orange', 'red'];
+    const maxIdx = maxRarity ? order.indexOf(maxRarity) : allRarities.length - 1;
+    const available = allRarities.slice(0, maxIdx + 1);
+    // 加权：越稀有概率越低
+    const weights = [40, 30, 18, 8, 3, 1];
+    const filtered = [];
+    const filteredWeights = [];
+    for (let i = 0; i < available.length; i++) {
+      filtered.push(available[i]);
+      filteredWeights.push(weights[i]);
+    }
+    return { rarities: filtered, weights: filteredWeights };
+  },
+
   // ========== 装备生成 ==========
   generateItem(baseType, level, rarityOverride) {
     const rarities = ['white', 'green', 'blue', 'purple', 'orange', 'red'];

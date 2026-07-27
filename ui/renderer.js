@@ -364,12 +364,17 @@ class UIRenderer {
         const attrIcons = { str: '💪', agi: '💨', int: '🧠', vit: '❤️', ten: '🛡️', spi: '✨' };
 
         let attrsHtml = '';
+        const hasPoints = (p.attributePoints || 0) > 0;
         for (const key in attrs) {
             const val = attrs[key];
             attrsHtml += `
-                <div class="char-stat-card">
+                <div class="char-stat-card ${hasPoints ? 'allocatable' : ''}">
                     <div class="char-stat-label">${attrIcons[key] || ''} ${attrNames[key] || key}</div>
-                    <div class="char-stat-value">${val}</div>
+                    <div class="char-stat-row">
+                        ${hasPoints ? `<button class="attr-btn attr-minus" data-attr="${key}">−</button>` : ''}
+                        <div class="char-stat-value" id="attr-val-${key}">${val}</div>
+                        ${hasPoints ? `<button class="attr-btn attr-plus" data-attr="${key}">+</button>` : ''}
+                    </div>
                 </div>
             `;
         }
@@ -381,8 +386,8 @@ class UIRenderer {
             ring1: '戒指1', ring2: '戒指2'
         };
         let equipHtml = '';
-        for (const slot in state.equipment) {
-            const item = state.equipment[slot];
+        for (const slot in slotNames) {
+            const item = p.equipment ? p.equipment[slot] : state.equipment ? state.equipment[slot] : null;
             const label = slotNames[slot] || slot;
             if (item) {
                 const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
@@ -442,6 +447,12 @@ class UIRenderer {
                     ${p.attributePoints > 0 ? `<div class="char-points-hint">可分配点数: ${p.attributePoints}</div>` : ''}
                 </div>
 
+                <div class="char-section" id="char-derived-section">
+                    <strong class="char-section-title">战斗属性</strong>
+                    <div class="derived-stats-grid" id="derived-stats-grid">
+                    </div>
+                </div>
+
                 <div class="char-section">
                     <strong class="char-section-title">装备</strong>
                     <div class="equip-grid">
@@ -457,10 +468,37 @@ class UIRenderer {
         if (existing) existing.remove();
         container.insertAdjacentHTML('beforeend', html);
 
-        // 绑定随从点击事件
+        // 填充派生战斗属性
+        const updateDerivedStats = () => {
+            const stats = StateUtils.getCombatStats(state, 'player');
+            if (!stats) return;
+            const grid = document.getElementById('derived-stats-grid');
+            if (!grid) return;
+            const rows = [
+                ['⚔️ 物理攻击', stats.physAtk, 'var(--danger)'],
+                ['🔮 法术攻击', stats.magAtk, 'var(--accent-blue)'],
+                ['🛡️ 物理防御', stats.physDef, 'var(--text-secondary)'],
+                ['🔷 法术防御', stats.magDef, 'var(--accent-purple)'],
+                ['🎯 命中', stats.hit, 'var(--gold-dim)'],
+                ['💨 闪避', stats.dodge, 'var(--accent)'],
+                ['⚡ 速度', (Math.round(stats.speed * 10) / 10), 'var(--gold)'],
+                ['💥 暴击率', (stats.critRate * 100).toFixed(1) + '%', 'var(--danger)'],
+                ['💥 暴伤', (stats.critDmg * 100).toFixed(0) + '%', 'var(--danger)'],
+                ['❤️ 生命', stats.hp, 'var(--danger)'],
+                ['✨ 法力', stats.mp, 'var(--accent-blue)'],
+            ];
+            grid.innerHTML = rows.map(([label, val, color]) =>
+                `<div class="derived-stat-row"><span class="ds-label">${label}</span><span class="ds-value" style="color:${color}">${val}</span></div>`
+            ).join('');
+        };
+
+        // 绑定随从点击事件和属性点分配
         setTimeout(() => {
             const panel = document.getElementById('character-panel');
             if (!panel) return;
+            // 填充派生属性
+            updateDerivedStats();
+            // 随从点击
             panel.querySelectorAll('.companion-card').forEach(card => {
                 card.addEventListener('click', () => {
                     const idx = parseInt(card.dataset.companionIdx);
@@ -469,6 +507,53 @@ class UIRenderer {
                     }
                 });
             });
+            // 属性点分配（+/-按钮）
+            if (state.player.attributePoints > 0) {
+                const attrNames = { str: '力量', agi: '敏捷', int: '智力', vit: '体质', ten: '坚韧', spi: '精神' };
+                // 记录已分配的点数（用于回退）
+                const allocated = {};
+                panel.querySelectorAll('.attr-plus').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const attr = btn.dataset.attr;
+                        if (state.player.attributePoints <= 0) return;
+                        state.player.attributes[attr]++;
+                        state.player.attributePoints--;
+                        allocated[attr] = (allocated[attr] || 0) + 1;
+                        const valEl = document.getElementById('attr-val-' + attr);
+                        if (valEl) valEl.textContent = state.player.attributes[attr];
+                        const hintEl = panel.querySelector('.char-points-hint');
+                        if (hintEl) hintEl.textContent = '可分配点数: ' + state.player.attributePoints;
+                        // 重算HP/MP并更新顶栏
+                        if (window.gameApp) window.gameApp.recalcPlayerStats();
+                        if (window.gameApp) window.gameApp.renderTopBar();
+                        // 更新派生战斗属性
+                        updateDerivedStats();
+                        // 没有点了就刷新面板去掉按钮
+                        if (state.player.attributePoints <= 0) {
+                            this.renderCharacter(state);
+                            this.showToast('属性点已全部分配');
+                        }
+                    });
+                });
+                panel.querySelectorAll('.attr-minus').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const attr = btn.dataset.attr;
+                        if (!allocated[attr] || allocated[attr] <= 0) return;
+                        state.player.attributes[attr]--;
+                        state.player.attributePoints++;
+                        allocated[attr]--;
+                        const valEl = document.getElementById('attr-val-' + attr);
+                        if (valEl) valEl.textContent = state.player.attributes[attr];
+                        const hintEl = panel.querySelector('.char-points-hint');
+                        if (hintEl) hintEl.textContent = '可分配点数: ' + state.player.attributePoints;
+                        if (window.gameApp) window.gameApp.recalcPlayerStats();
+                        if (window.gameApp) window.gameApp.renderTopBar();
+                        updateDerivedStats();
+                    });
+                });
+            }
         }, 0);
     }
 
@@ -887,13 +972,15 @@ class UIRenderer {
         } else {
             for (const item of state.inventory.items) {
                 const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
-                const isUsable = item.type === 'consumable' || item.type === 'potion' || item.subtype === 'heal' || item.subtype === 'mana' || item.subtype === 'exp';
+                const isUsable = item.type === 'consumable' || item.type === 'potion' || item.subtype === 'heal' || item.subtype === 'mana' || item.subtype === 'exp' || (item.type === 'consumable' && (item.heal || item.healHp || item.healMp || item.expValue));
+                const isViewable = !isUsable && (item.description || item.type === 'treasure' || item.type === 'quest');
                 html += `
-                    <div class="item-card ${isUsable ? 'usable' : ''}" style="border-color:${rarityColor}" data-item-id="${item.id}" data-usable="${isUsable ? '1' : '0'}">
+                    <div class="item-card ${isUsable ? 'usable' : ''} ${isViewable ? 'viewable' : ''}" style="border-color:${rarityColor}" data-item-id="${item.id}" data-usable="${isUsable ? '1' : '0'}">
                         <div class="item-rarity" style="color:${rarityColor}">${DATA.rarity[item.rarity]?.name || item.rarity || ''}</div>
                         <div class="item-name">${item.name}</div>
                         <div class="item-level">Lv.${item.level || 1}${item.stack > 1 ? ' x' + item.stack : ''}</div>
                         ${isUsable ? '<div class="item-use-hint">点击使用</div>' : ''}
+                        ${isViewable ? '<div class="item-view-hint">点击查看</div>' : ''}
                     </div>
                 `;
             }
@@ -929,14 +1016,26 @@ class UIRenderer {
                     }
                 });
             }
-            // 绑定可使用物品点击事件
+            // 绑定物品点击事件
             const panel = document.getElementById('inventory-panel');
             if (panel) {
+                // 可使用物品：弹出目标选择
                 panel.querySelectorAll('.item-card[data-usable="1"]').forEach(card => {
                     card.addEventListener('click', () => {
                         const itemId = card.dataset.itemId;
                         this.showItemUseTarget(state, itemId);
                     });
+                });
+                // 非使用物品但有描述/宝箱类型：点击查看详情
+                panel.querySelectorAll('.item-card[data-usable="0"]').forEach(card => {
+                    const itemId = card.dataset.itemId;
+                    const item = state.inventory.items.find(i => i.id === itemId);
+                    if (item && (item.description || item.type === 'treasure' || item.type === 'quest')) {
+                        card.style.cursor = 'pointer';
+                        card.addEventListener('click', () => {
+                            this.showItemDetail(state, item);
+                        });
+                    }
                 });
             }
         }, 0);
@@ -1332,6 +1431,46 @@ class UIRenderer {
                     if (window.gameApp) window.gameApp.renderTopBar();
                 }
             });
+        }, 0);
+    }
+
+    // ========== 物品详情查看 ==========
+    showItemDetail(state, item) {
+        const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+        const rarityName = DATA.rarity[item.rarity]?.name || '';
+        let detailHtml = `<div style="color:${rarityColor};font-weight:bold;font-size:15px;margin-bottom:8px;">${item.name} ${rarityName ? '(' + rarityName + ')' : ''}</div>`;
+        detailHtml += `<div style="color:var(--text-secondary);font-size:12px;margin-bottom:4px;">等级: ${item.level || 1}</div>`;
+        if (item.description) {
+            detailHtml += `<div style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px;margin:8px 0;font-size:13px;line-height:1.7;color:var(--text-primary);">${item.description}</div>`;
+        }
+        if (item.type === 'treasure') {
+            detailHtml += `<div style="margin-top:12px;"><button class="npc-action-btn" id="treasure-open-btn" style="width:100%;">📦 打开宝箱</button></div>`;
+        }
+        this.showPanel('📋 物品详情', detailHtml);
+        setTimeout(() => {
+            const openBtn = document.getElementById('treasure-open-btn');
+            if (openBtn) {
+                openBtn.addEventListener('click', () => {
+                    // 打开宝箱：生成一件同等级的随机装备
+                    const itemLevel = item.level || state.player.level;
+                    const maxRarity = Utils.getDropMaxRarity(itemLevel);
+                    const pool = Utils.getDropRarityPool(maxRarity);
+                    const dropRarity = Utils.weightedRandom(pool.rarities, pool.weights);
+                    const types = ['sword', 'armor', 'helmet', 'boots', 'gloves', 'necklace', 'ring'];
+                    const reward = Utils.generateItem(Utils.pickOne(types), itemLevel, dropRarity);
+                    const addResult = InventorySystem.addToInventory(state, reward);
+                    if (addResult.ok) {
+                        // 从背包移除宝箱
+                        StateUtils.removeFromInventory(state, item.id);
+                        this.closePanel();
+                        this.renderInventory(state);
+                        this.showToast(`获得了 ${reward.name}（${DATA.rarity[reward.rarity]?.name}）`);
+                        if (window.gameApp) window.gameApp.renderTopBar();
+                    } else {
+                        this.showToast('背包已满，无法打开宝箱');
+                    }
+                });
+            }
         }, 0);
     }
 

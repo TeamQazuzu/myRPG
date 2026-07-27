@@ -27,7 +27,7 @@ const NPCSystem = {
           { text: '听说村外的野狗最近很不安分，你可要小心。', condition: null },
         ],
         actions: [
-          { label: '购买麦酒（5铜）', type: 'buy', item: { name: '麦酒', type: 'consumable', heal: 15, price: 0.05 } },
+          { label: '购买麦酒（5铜）', type: 'buy', item: { name: '麦酒', type: 'consumable', subtype: 'heal', heal: 15, price: 0.05 } },
           { label: '打听消息', type: 'talk' },
         ]
       }
@@ -467,14 +467,17 @@ const NPCSystem = {
       }
     }
 
-    if (item.subtype === 'heal' && item.healHp) {
-      const target = targetId === 'player' ? state.player : state.companions.find(c => c.id === targetId);
-      if (!target) return { ok: false, msg: '目标不存在' };
-      const before = target.hp;
-      target.hp = Math.min(target.maxHp, target.hp + item.healHp);
-      const healed = target.hp - before;
-      this._removeItem(state, itemIdx, 1);
-      return { ok: true, msg: `${target.name} 使用 ${item.name}，恢复 ${healed} HP` };
+    if (item.subtype === 'heal') {
+      const healAmt = item.healHp || item.heal || 0;
+      if (healAmt > 0) {
+        const target = targetId === 'player' ? state.player : state.companions.find(c => c.id === targetId);
+        if (!target) return { ok: false, msg: '目标不存在' };
+        const before = target.hp;
+        target.hp = Math.min(target.maxHp, target.hp + healAmt);
+        const healed = target.hp - before;
+        this._removeItem(state, itemIdx, 1);
+        return { ok: true, msg: `${target.name} 使用 ${item.name}，恢复 ${healed} HP` };
+      }
     }
 
     if (item.subtype === 'mana' && item.healMp) {

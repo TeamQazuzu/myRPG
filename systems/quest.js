@@ -174,9 +174,19 @@ var QuestSystem = {
     // 物品
     if (r.items && r.items.length > 0) {
       for (var i = 0; i < r.items.length; i++) {
-        var item = { id: Utils.uuid(), name: r.items[i], type: 'quest', rarity: 'green', level: 1, stack: 1 };
+        var itemName = r.items[i];
+        var itemTpl = null;
+        if (typeof DATA !== 'undefined' && DATA.items) {
+          itemTpl = DATA.items[itemName] || Object.values(DATA.items).find(function(t) { return t.name === itemName; });
+        }
+        var item;
+        if (itemTpl) {
+          item = Object.assign({}, itemTpl, { id: Utils.uuid(), stack: 1 });
+        } else {
+          item = { id: Utils.uuid(), name: itemName, type: 'quest', rarity: 'green', level: 1, stack: 1 };
+        }
         StateUtils.addToInventory(state, item);
-        console.log('  +物品:', r.items[i]);
+        console.log('  +物品:', itemName);
       }
     }
     // Buff

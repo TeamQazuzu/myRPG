@@ -776,9 +776,18 @@ var DialogueSystem = {
         break;
 
       case 'give_item':
-        // 给物品
+        // 给物品：优先从DATA.items模板查找，保留完整属性
         if (window.gameApp && window.gameApp.state) {
-          var item = { id: Utils.uuid(), name: actionValue, type: 'material', rarity: 'white', stack: 1 };
+          var itemTpl = null;
+          if (typeof DATA !== 'undefined' && DATA.items) {
+            itemTpl = DATA.items[actionValue] || Object.values(DATA.items).find(function(t) { return t.name === actionValue; });
+          }
+          var item;
+          if (itemTpl) {
+            item = { ...itemTpl, id: Utils.uuid(), stack: 1 };
+          } else {
+            item = { id: Utils.uuid(), name: actionValue, type: 'material', rarity: 'white', stack: 1 };
+          }
           var result = StateUtils.addToInventory(window.gameApp.state, item);
           if (result.ok) {
             window.gameApp.uiRenderer.addGameLog('获得了 ' + actionValue);

@@ -641,10 +641,17 @@ class CombatEngine {
       } else if (Math.random() < 0.3) {
         // 默认随机装备掉落
         const types = ['sword', 'armor', 'helmet', 'boots', 'gloves', 'necklace', 'ring'];
-        const drop = Utils.generateItem(Utils.pickOne(types), state.player.level);
+        // 根据怪物等级限制掉落品质
+        const enemyLevel = enemy.level || 1;
+        const maxRarity = Utils.getDropMaxRarity(enemyLevel);
+        const pool = Utils.getDropRarityPool(maxRarity);
+        const dropRarity = Utils.weightedRandom(pool.rarities, pool.weights);
+        // 装备等级为怪物等级+-5随机，最高99
+        const itemLevel = Utils.clamp(enemyLevel + Utils.randInt(-5, 5), 1, 99);
+        const drop = Utils.generateItem(Utils.pickOne(types), itemLevel, dropRarity);
         const addResult = InventorySystem.addToInventory(state, drop);
         if (addResult.ok) {
-          this.log(`🎁 掉落：${drop.name} (${DATA.rarity[drop.rarity]?.name || drop.rarity})`);
+          this.log(`🎁 掉落：${drop.name} (Lv.${drop.level} ${DATA.rarity[drop.rarity]?.name || drop.rarity})`);
         }
       }
     }

@@ -139,6 +139,7 @@ function createDefaultState() {
     crafting: {
       recipes: [],
       materials: {},
+      forgeLevel: 1, // 锻造技能等级
     },
     skills: {
       mining:      { level: 1, exp: 0 },
@@ -272,28 +273,37 @@ const StateUtils = {
       result.leveled = true;
       if (this.isExpLocked(state)) break;
     }
-    // 随从获得等量经验
+    // 随从获得等量经验（受主角等级上限约束）
     for (const comp of state.companions) {
       if (!comp.alive) continue;
-      const compResult = this.addExpToCompanion(comp, amount);
+      const compResult = this.addExpToCompanion(comp, amount, state.player.level);
       if (compResult.leveled) {
         result.companionsLeveled.push(comp.name);
+      }
+      if (compResult.locked) {
+        result.companionsLeveled.push(comp.name + '(已封顶)');
       }
     }
     return result;
   },
-  addExpToCompanion(companion, amount) {
+  addExpToCompanion(companion, amount, playerLevel) {
     if (!companion.exp) companion.exp = 0;
     if (!companion.expToNext) companion.expToNext = Math.floor(100 * Math.pow(1.15, companion.level - 1));
+    // 随从等级不可超过主角等级
+    const maxLevel = Math.min(99, playerLevel || 99);
+    if (companion.level >= maxLevel) {
+      return { leveled: false, locked: true };
+    }
     companion.exp += amount;
     let leveled = false;
-    while (companion.exp >= companion.expToNext && companion.level < 99) {
+    while (companion.exp >= companion.expToNext && companion.level < maxLevel) {
       companion.exp -= companion.expToNext;
       companion.level++;
       companion.expToNext = Math.floor(100 * Math.pow(1.15, companion.level - 1));
       // 升级时提升属性
       this.levelUpCompanion(companion);
       leveled = true;
+      if (companion.level >= maxLevel) break;
     }
     return { leveled };
   },
@@ -505,14 +515,16 @@ const StateUtils = {
           result.msg = `使用了${item.name}，获得${item.expValue}经验`;
           if (expResult.leveled) result.msg += '，升级了！';
         } else {
-          const compResult = this.addExpToCompanion(target, item.expValue || 0);
+          const compResult = this.addExpToCompanion(target, item.expValue || 0, state.player.level);
           result.msg = `对${target.name}使用了${item.name}，获得${item.expValue}经验`;
           if (compResult.leveled) result.msg += '，升级了！';
+          if (compResult.locked) result.msg += '（已达主角等级上限）';
         }
         break;
       case 'heal':
-        target.hp = Math.min(target.maxHp, target.hp + (item.healHp || 0));
-        result.msg = `使用了${item.name}，恢复${item.healHp}点生命值`;
+        const healAmt = item.healHp || item.heal || 0;
+        target.hp = Math.min(target.maxHp, target.hp + healAmt);
+        result.msg = `使用了${item.name}，恢复${healAmt}点生命值`;
         break;
       case 'mana':
         target.mp = Math.min(target.maxMp, target.mp + (item.healMp || 0));
