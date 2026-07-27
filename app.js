@@ -1,4 +1,3 @@
-// app.js - 主应用入口（重写版）
 class GameApp {
   constructor() {
     this.sceneManager = new SceneManager();
@@ -12,12 +11,10 @@ class GameApp {
   init() {
     console.log('[应用] 初始化游戏');
     this.uiRenderer.init('game-container');
-
-    // 尝试加载存档
     this.state = SaveManager.load();
     if (!this.state) {
-      console.log('[应用] 没有找到存档，显示角色创建');
-      this.showCharacterCreation();
+      console.log('[应用] 没有存档，显示角色创建');
+      this._showCharacterCreation();
     } else {
       console.log('[应用] 加载玩家:', this.state.player.name);
       this.startGame();
@@ -26,351 +23,256 @@ class GameApp {
 
   startGame() {
     console.log('[应用] 开始游戏');
-    this.syncPlayerToCombatData();
+    this._initPlayerSkills();
     this.uiRenderer.updatePlayerInfo(this.state.player);
-
-    // ===== 离线挂机采集结算 =====
-    this.processOfflineGather();
-
-    // ===== 离线经验结算 =====
-    this.processOfflineExp();
-
-    // ===== 经验锁引导检查 =====
-    this.checkExpLockGuidance();
-
-    // 更新存档时间
+    this._processOfflineGather();
+    this._processOfflineExp();
+    this._checkExpLockGuidance();
     this.state.world.lastSave = new Date().toISOString();
-
-    this.sceneManager.enterScene('灰烟村');
-    this.startAutoSave();
+    this.sceneManager.enterScene(this.state.player.location || '灰烟村');
+    this._startAutoSave();
   }
 
-  // ========== 经验锁升级引导 ==========
-  // 当玩家首次达到等级上限时，显示引导提示
-  checkExpLockGuidance() {
-    var state = this.state;
-    if (!state || !StateUtils) return;
-
-    var isLocked = StateUtils.isExpLocked(state);
-    if (!isLocked) return;
-
-    var cap = StateUtils.getLevelCap(state);
-    var flagKey = 'exp_lock_guided_' + cap;
-
-    // 初始化 flags
-    if (!state.world.flags) state.world.flags = {};
-
-    // 如果已经提示过这个上限，不再重复
-    if (state.world.flags[flagKey]) return;
-
-    // 标记已提示
-    state.world.flags[flagKey] = true;
-
-    // 获取引导消息
-    var lockMsg = StateUtils.getLockMessage(state) || '你已至当前极限。';
-
-    // 添加到游戏日志（单条合并消息，因为日志显示会覆盖前一条）
-    if (this.uiRenderer && this.uiRenderer.addGameLog) {
-      this.uiRenderer.addGameLog('🔒 等级已达上限 Lv.' + cap + ' — ' + lockMsg);
-    }
-
-    // 保存状态
-    this.saveGame();
-  }
-
-  // ========== 离线挂机采集结算 ==========
-  processOfflineGather() {
-    var state = this.state;
-    if (!state || !state.world || !state.world.lastSave) return;
-    var lastSave = new Date(state.world.lastSave);
-    var now = new Date();
-    var offlineMs = now.getTime() - lastSave.getTime();
-
-    // 少于5分钟不结算
-    if (offlineMs < 5 * 60 * 1000) return;
-
-    // 最多计算24小时
-    var offlineHours = Math.min(24, offlineMs / (1000 * 60 * 60));
-    // 每小时2轮采集
-    var totalCycles = Math.floor(offlineHours * 2);
-    if (totalCycles < 1) return;
-
-    // 检查是否有挂机采集状态
-    var idleGather = state.world.idleGather;
-    if (!idleGather || !idleGather.target) return;
-
-    console.log('[离线结算] 离线' + offlineHours.toFixed(1) + '小时，采集' + totalCycles + '轮，目标：' + idleGather.target);
-
-    // 执行离线采集（简化版：不触发战斗）
-    var target = idleGather.target;
-    var results = {
-      target: target,
-      cycles: totalCycles,
-      itemsGathered: 0,
-      goldFound: 0,
-      rareFinds: [],
-      log: [],
-    };
-
-    for (var i = 1; i <= totalCycles; i++) {
-      var roll = Math.random();
-      if (roll < 0.75) {
-        // 75%：采集成功（离线效率略高）
-        var amount = 1 + Math.floor(Math.random() * 3);
-        var item = {
-          id: Utils.uuid(),
-          name: target,
-          type: 'material',
-          rarity: 'white',
-          level: 1,
-          stack: amount,
-        };
-        var addResult = StateUtils.addToInventory(state, item);
-        if (addResult.ok) {
-          results.itemsGathered += amount;
-        } else {
-          results.log.push('第' + i + '轮：背包已满，采集中断');
-          break;
-        }
-      } else if (roll < 0.88) {
-        // 13%：发现金币（离线不战斗，金币概率提高）
-        var gold = 2 + Math.floor(Math.random() * 8);
-        StateUtils.addGold(state, gold);
-        results.goldFound += gold;
-      } else {
-        // 12%：发现稀有物品
-        var rareItem = {
-          id: Utils.uuid(),
-          name: '精炼' + target,
-          type: 'material',
-          rarity: 'green',
-          level: 1,
-          stack: 1,
-        };
-        var rareResult = StateUtils.addToInventory(state, rareItem);
-        if (rareResult.ok) {
-          results.rareFinds.push(rareItem.name);
-        }
-      }
-    }
-
-    // 清除挂机状态
-    state.world.idleGather = null;
-
-    // 显示离线结算结果
-    if (results.itemsGathered > 0 || results.goldFound > 0 || results.rareFinds.length > 0) {
-      this.showOfflineGatherResults(results, offlineHours);
-    }
-  }
-
-  // ========== 离线采集结算UI ==========
-  showOfflineGatherResults(results, offlineHours) {
-    var html = '<div class="offline-gather-results">';
-    html += '<div class="offline-title">你离开了一段时间...</div>';
-    html += '<div class="offline-duration">离线约 ' + offlineHours.toFixed(1) + ' 小时</div>';
-    html += '<div class="offline-summary">';
-    html += '<div>挂机采集 ' + results.target + ' 完成 ' + results.cycles + ' 轮</div>';
-    if (results.itemsGathered > 0) {
-      html += '<div class="stat-success">材料 +' + results.itemsGathered + '</div>';
-    }
-    if (results.goldFound > 0) {
-      html += '<div class="stat-gold">金币 +' + results.goldFound + '</div>';
-    }
-    if (results.rareFinds.length > 0) {
-      html += '<div class="stat-rare">稀有发现：' + results.rareFinds.join('、') + '</div>';
-    }
-    html += '</div></div>';
-
-    this.uiRenderer.showPanel('离线结算', html);
-  }
-
-  // ========== 离线经验结算 ==========
-  processOfflineExp() {
-    var state = this.state;
-    if (!state || !state.world || !state.world.lastSave) return;
-
-    var lastSave = new Date(state.world.lastSave);
-    var now = new Date();
-    var offlineMs = now.getTime() - lastSave.getTime();
-
-    // 少于1小时不结算
-    if (offlineMs < 60 * 60 * 1000) return;
-
-    // 最多计算24小时，每小时给少量经验（相当于缓慢修炼）
-    var offlineHours = Math.min(24, offlineMs / (1000 * 60 * 60));
-    var playerLevel = state.player.level || 1;
-    var offlineExp = Math.floor(offlineHours * (5 + playerLevel * 2));
-
-    if (offlineExp > 0) {
-      var expResult = StateUtils.addExp(state, offlineExp);
-      // 队友共享离线经验（队友可能未封顶，独立结算）
-      var compOfflineUps = [];
-      if (state.companions && state.companions.length > 0 && typeof CompanionSystem !== 'undefined' && CompanionSystem) {
-        state.companions.forEach(function(c) {
-          if (!c) return;
-          var cr = CompanionSystem.addExp(c, offlineExp, state);
-          if (cr && cr.leveledUp) compOfflineUps.push(c.name + ' 升到 ' + cr.newLevel + ' 级');
-        });
-      }
-      if (expResult.locked) {
-        // 经验被锁定，显示锁定提示
-        if (compOfflineUps.length > 0) {
-          this.uiRenderer.addGameLog('离线修炼：你已封顶，但 ' + compOfflineUps.join('、'));
-        } else {
-          this.uiRenderer.addGameLog('离线修炼：经验已达当前等级上限，无法继续提升');
-        }
-      } else if (expResult.gained > 0) {
-        var msg = '离线修炼获得经验 +' + expResult.gained;
-        if (expResult.leveled) {
-          msg += '（升级了！）';
-        }
-        if (compOfflineUps.length > 0) {
-          msg += '；' + compOfflineUps.join('、');
-        }
-        this.uiRenderer.addGameLog(msg);
-      } else if (compOfflineUps.length > 0) {
-        this.uiRenderer.addGameLog('离线修炼：' + compOfflineUps.join('、'));
-      }
-    }
-  }
-
-  // 将六维属性同步到战斗用的 attack/defense/speed
-  syncPlayerToCombatData() {
+  _initPlayerSkills() {
     const p = this.state.player;
-    const attrs = p.attributes;
-    p.attack = (attrs.str * 2) + (p.equipment && p.equipment.weapon && p.equipment.weapon.baseStats ? (p.equipment.weapon.baseStats.physAtk || 0) : 0);
-    p.defense = (attrs.str * 1 + attrs.ten * 3);
-    p.speed = attrs.agi * 0.8;
-    p.maxHp = 100 + attrs.vit * 10;
-    if (p.hp > p.maxHp) p.hp = p.maxHp;
-    p.maxMp = 30 + attrs.spi * 5;
-    if (p.mp > p.maxMp) p.mp = p.maxMp;
-
-    // 叠加装备基础属性和词条属性
-    if (this.state.equipment) {
-      for (var slotKey in this.state.equipment) {
-        var item = this.state.equipment[slotKey];
-        if (!item) continue;
-        // 叠加基础属性
-        if (item.baseStats) {
-          if (item.baseStats.physAtk) p.attack += item.baseStats.physAtk;
-          if (item.baseStats.physDef) p.defense += item.baseStats.physDef;
-          if (item.baseStats.maxHp) p.maxHp += item.baseStats.maxHp;
-        }
-        // 叠加词条属性
-        if (item.affixes && item.affixes.length > 0) {
-          // 初始化临时stats对象用于词条计算
-          var affixStats = { physAtk: 0, physDef: 0, maxHp: 0, speed: 0, critRate: 0, critDmg: 0 };
-          for (var ai = 0; ai < item.affixes.length; ai++) {
-            StateUtils.applyAffix(affixStats, item.affixes[ai]);
-          }
-          // 将词条计算结果叠加到主角属性上
-          if (affixStats.physAtk > 0) p.attack += Math.floor(affixStats.physAtk);
-          if (affixStats.physDef > 0) p.defense += Math.floor(affixStats.physDef);
-          if (affixStats.maxHp > 0) p.maxHp += Math.floor(affixStats.maxHp);
-          if (affixStats.speed > 0) p.speed += affixStats.speed;
+    if (!p.skills || p.skills.length === 0) {
+      const classData = DATA.classes[p.classPath[0]];
+      if (classData) {
+        const branch = p.classPath[0] === 'mage' ? p.elementSpec : null;
+        const skills = classData.getSkills(p.level, branch);
+        p.skills = skills;
+        if (!p.skillPreset || p.skillPreset.length === 0) {
+          p.skillPreset = skills;
         }
       }
     }
-
-    // 同步随从战斗属性
-    if (this.state.companions) {
-      this.state.companions.forEach(c => {
-        if (c.alive === false) return;
-        const cAttr = c.attributes || { str: 8, agi: 8, int: 8, vit: 8, ten: 8, spi: 8 };
-        c.attack = cAttr.str * 2;
-        c.defense = cAttr.str * 1 + cAttr.ten * 3;
-        c.speed = cAttr.agi * 0.8;
-        c.maxHp = c.maxHp || (80 + cAttr.vit * 10);
-        if (c.hp > c.maxHp) c.hp = c.maxHp;
-      });
+    if (!p.skillPreset || p.skillPreset.length === 0) {
+      p.skillPreset = p.skills.slice(0, 2);
     }
+    if (!p.cooldowns) p.cooldowns = {};
   }
 
-  updatePlayerInfo() {
-    if (this.state) {
-      this.syncPlayerToCombatData();
-      this.uiRenderer.updatePlayerInfo(this.state.player);
-    }
-  }
-
-  saveGame() {
-    if (this.state) {
-      SaveManager.save(this.state);
-    }
-  }
-
-  startAutoSave() {
-    if (this.autoSaveTimer) clearInterval(this.autoSaveTimer);
-    var settings = this.state && this.state.settings ? this.state.settings : {};
-    const interval = (settings.autoSaveInterval || 300) * 1000;
-    if (settings.autoSave !== false) {
-      this.autoSaveTimer = setInterval(() => {
-        console.log('[应用] 自动存档...');
-        this.saveGame();
-      }, interval);
-    }
-  }
-
-  showCharacterCreation() {
-    this.uiRenderer.showCharacterCreation((name, classKey, hardcore) => {
-      this.createNewPlayer(name, classKey, hardcore);
+  _showCharacterCreation() {
+    const classes = Object.keys(DATA.classes).filter(k => !['mage_fire', 'mage_frost', 'mage_lightning', 'mage_heal'].includes(k));
+    let html = `<div class="creation-frame">
+      <h1>《寻亲风云录》</h1>
+      <p class="creation-narrative">
+        你从小在灰烟村长大。<br>
+        父母留下的信件指引你踏上旅途。<br>
+        前方等待你的是什么？
+      </p>
+      <div class="creation-form">
+        <input type="text" id="char-name" placeholder="输入名字" maxlength="10" value="酒馆少年">
+        <div class="class-select">
+          <p>选择职业:</p>`;
+    classes.forEach(cls => {
+      const cd = DATA.classes[cls];
+      html += `<button class="class-btn" data-class="${cls}">${cd.name}</button>`;
     });
+    html += `</div>
+        <div class="mode-select">
+          <input type="checkbox" id="hardcore-mode"> 硬核模式（死亡即删档）
+        </div>
+        <button class="start-btn" id="start-btn">开始旅程</button>
+      </div>
+    </div>`;
+    this.uiRenderer._showPopup(html);
+    let selectedClass = 'warrior';
+    document.querySelectorAll('.class-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('.class-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedClass = btn.dataset.class;
+      };
+    });
+    const firstBtn = document.querySelector('.class-btn');
+    if (firstBtn) firstBtn.classList.add('selected');
+    document.getElementById('start-btn').onclick = () => {
+      const name = document.getElementById('char-name').value.trim() || '酒馆少年';
+      const hardcore = document.getElementById('hardcore-mode').checked;
+      this._createNewPlayer(name, selectedClass, hardcore);
+    };
   }
 
-  createNewPlayer(name, classKey, hardcore = false) {
+  _createNewPlayer(name, classKey, hardcore) {
     this.state = createDefaultState();
     const p = this.state.player;
     p.name = name;
     p.hardcore = hardcore;
+    p.combatMode = 'auto';
+    p.autoMode = 'skillFirst';
     p.classPath = [classKey];
-
-    // 根据职业调整初始属性
+    const cd = DATA.classes[classKey];
+    p.class = cd.name;
     if (classKey === 'warrior') {
-      p.class = '见习战士';
       p.attributes = { str: 12, agi: 8, int: 5, vit: 10, ten: 10, spi: 5 };
     } else if (classKey === 'ranger') {
-      p.class = '见习游侠';
       p.attributes = { str: 8, agi: 14, int: 6, vit: 7, ten: 6, spi: 5 };
     } else if (classKey === 'mage') {
-      p.class = '见习法师';
       p.attributes = { str: 5, agi: 7, int: 14, vit: 6, ten: 5, spi: 12 };
+      p.elementSpec = 'fire';
     }
-
-    // 重新计算基础生命/法力
     p.maxHp = 100 + p.attributes.vit * 10;
     p.hp = p.maxHp;
     p.maxMp = 30 + p.attributes.spi * 5;
     p.mp = p.maxMp;
-
-    // 初始化装备
-    const weaponType = classKey === 'ranger' ? 'bow' : (classKey === 'mage' ? 'staff' : 'sword');
-    const weaponName = classKey === 'ranger' ? '父亲的旧弓' : (classKey === 'mage' ? '父亲的旧法杖' : '父亲的旧短剑');
+    const weaponType = classKey === 'ranger' ? 'bow' : classKey === 'mage' ? 'staff' : 'sword';
+    const weaponName = classKey === 'ranger' ? '父亲的旧弓' : classKey === 'mage' ? '父亲的旧法杖' : '父亲的旧短剑';
     this.state.equipment.weapon = {
-      name: weaponName,
-      type: weaponType,
-      rarity: 'blue',
-      level: 10,
-      affixes: [],
-      baseStats: Utils.calcBaseStats(weaponType, 10),
+      name: weaponName, type: weaponType, rarity: 'blue', level: 10,
+      baseStats: Utils.calcBaseStats(weaponType, 10), affixes: [],
     };
-
-    // 同步艾琳的属性
-    if (this.state.companions && this.state.companions[0]) {
-      const ailin = this.state.companions[0];
-      var aAttrs = ailin.attributes || {};
-      ailin.maxHp = 80 + (aAttrs.vit || 7) * 10;
-      ailin.hp = ailin.maxHp;
-      ailin.maxMp = 20 + (aAttrs.spi || 5) * 5;
-      ailin.mp = ailin.maxMp;
-    }
-
+    this.state.player.location = '酒馆';
     SaveManager.save(this.state);
+    this.uiRenderer._closePopup();
     this.startGame();
+  }
+
+  _checkExpLockGuidance() {
+    const state = this.state;
+    if (!StateUtils.isExpLocked(state)) return;
+    const cap = StateUtils.getLevelCap(state);
+    const flagKey = 'exp_lock_guided_' + cap;
+    if (!state.world.flags) state.world.flags = {};
+    if (state.world.flags[flagKey]) return;
+    state.world.flags[flagKey] = true;
+    this.uiRenderer.addGameLog(`🔒 等级已达上限 Lv.${cap} — ${StateUtils.getLockMessage(state)}`);
+    SaveManager.save(state);
+  }
+
+  _processOfflineGather() {
+    const state = this.state;
+    if (!state.world.lastSave) return;
+    const lastSave = new Date(state.world.lastSave);
+    const now = new Date();
+    const offlineMs = now.getTime() - lastSave.getTime();
+    if (offlineMs < 5 * 60 * 1000) return;
+    const offlineHours = Math.min(24, offlineMs / (1000 * 60 * 60));
+    const idleGather = state.world.idleGather;
+    if (!idleGather || !idleGather.target) return;
+    const totalCycles = Math.floor(offlineHours * 2);
+    if (totalCycles < 1) return;
+    const target = idleGather.target;
+    let itemsGathered = 0;
+    let goldFound = 0;
+    for (let i = 0; i < totalCycles; i++) {
+      const roll = Math.random();
+      if (roll < 0.75) {
+        const amount = 1 + Math.floor(Math.random() * 3);
+        StateUtils.addToInventory(state, { name: target, type: 'material', rarity: 'white', level: 1, stack: amount, stackable: true });
+        itemsGathered += amount;
+      } else if (roll < 0.88) {
+        goldFound += 2 + Math.floor(Math.random() * 8);
+      }
+    }
+    if (goldFound > 0) StateUtils.addGold(state, goldFound);
+    state.world.idleGather = null;
+    if (itemsGathered > 0 || goldFound > 0) {
+      this.uiRenderer.addGameLog(`⏰ 离线${offlineHours.toFixed(1)}小时，采集${target}×${itemsGathered}，金币+${goldFound}`);
+    }
+  }
+
+  _processOfflineExp() {
+    const state = this.state;
+    if (!state.world.lastSave) return;
+    const lastSave = new Date(state.world.lastSave);
+    const now = new Date();
+    const offlineMs = now.getTime() - lastSave.getTime();
+    if (offlineMs < 60 * 60 * 1000) return;
+    const offlineHours = Math.min(24, offlineMs / (1000 * 60 * 60));
+    const offlineExp = Math.floor(offlineHours * (5 + state.player.level * 2));
+    if (offlineExp <= 0) return;
+    const result = StateUtils.addExp(state, offlineExp);
+    if (result.gained > 0) {
+      this.uiRenderer.addGameLog(`⏰ 离线修炼获得经验 +${result.gained}${result.leveled ? '（升级了！）' : ''}`);
+    }
+  }
+
+  _startAutoSave() {
+    if (this._autoSaveTimer) clearInterval(this._autoSaveTimer);
+    const interval = (this.state.settings.autoSaveInterval || 300) * 1000;
+    if (this.state.settings.autoSave !== false) {
+      this._autoSaveTimer = setInterval(() => this.saveGame(), interval);
+    }
+  }
+
+  saveGame() {
+    if (this.state) SaveManager.save(this.state);
+  }
+
+  _onCombatEnd(result) {
+    const state = this.state;
+    const c = this.combatEngine;
+    if (!c) return;
+    if (result === 'player_victory') {
+      const aliveEnemies = c.enemyUnits.filter(e => e.hp <= 0);
+      let totalExp = 0, totalGold = 0;
+      const lootItems = [];
+      aliveEnemies.forEach(e => {
+        const monsterData = DATA.monsters[e.monsterKey];
+        if (monsterData) {
+          totalExp += monsterData.exp;
+          totalGold += monsterData.gold;
+          if (monsterData.drops) {
+            monsterData.drops.forEach(drop => {
+              if (Math.random() < drop.chance) {
+                const count = Utils.randInt(drop.min, drop.max);
+                const itemDef = DATA.items[drop.item];
+                if (itemDef) {
+                  lootItems.push({ ...itemDef, id: itemDef.id + '_' + Date.now() + '_' + Math.random().toString(36).substr(2,4), stack: count });
+                }
+              }
+            });
+          }
+        } else {
+          totalExp += e.level * 10;
+          totalGold += e.level * 3;
+        }
+      });
+      const expResult = StateUtils.addExp(state, totalExp);
+      StateUtils.addGold(state, totalGold);
+      this.uiRenderer.addGameLog(`🏆 胜利！获得经验+${expResult.gained}，金币+${totalGold}`);
+      lootItems.forEach(item => {
+        const r = InventorySystem.addItem(state, item);
+        if (r.ok) {
+          this.uiRenderer.addGameLog(`📦 获得 ${item.name} ×${item.stack}`);
+        } else {
+          this.uiRenderer.addGameLog(`📦 ${item.name} 因背包已满无法拾取`);
+        }
+      });
+      if (expResult.leveled) this.uiRenderer.addGameLog(`⭐ 升级到 Lv.${state.player.level}！`);
+      if (c.enemyUnits.length === 1 && DATA.gatekeepers[c.enemyUnits[0].monsterKey]) {
+        const gkId = c.enemyUnits[0].monsterKey;
+        if (gkId) {
+          StateUtils.defeatGatekeeper(state, gkId);
+          this.uiRenderer.addGameLog(`🎖️ 击败了 ${DATA.gatekeepers[gkId].name}！`);
+        }
+      }
+    } else if (result === 'player_defeat') {
+      const zone = state.world.currentZone;
+      const deathResult = StateUtils.handleDeath(state, zone);
+      this.uiRenderer.addGameLog(deathResult.message);
+      if (deathResult.mode === 'epitaph' || deathResult.mode === 'retired') {
+        this.uiRenderer.showPanel('碑文模式', '<p>存档已锁定，进入碑文模式。</p>');
+      }
+    }
+    if (c.allyUnits) {
+      c.allyUnits.forEach(au => {
+        if (au.hp <= 0) {
+          const comp = state.companions.find(c => c.id === au.unitId);
+          if (comp) comp.alive = false;
+        }
+      });
+    }
+    state.player.hp = c.playerUnit ? c.playerUnit.hp : state.player.hp;
+    state.player.mp = c.playerUnit ? c.playerUnit.mp : state.player.mp;
+    this.combatEngine = null;
+    this.saveGame();
+    this.uiRenderer.updatePlayerInfo(state.player);
+    this.sceneManager.enterScene(state.world.currentLocation || '灰烟村');
   }
 }
 
-// 页面加载完成后启动
 document.addEventListener('DOMContentLoaded', () => {
-  const app = new GameApp();
+  new GameApp();
 });
