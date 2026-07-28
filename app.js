@@ -48,12 +48,27 @@ class GameApp {
     if (classKey === 'warrior') {
       attrs.str = 12; attrs.vit = 10; attrs.ten = 10;
       attrs.agi = 6; attrs.int = 5; attrs.spi = 5;
+      // 战士起始武器：剑
+      this.state.equipment.weapon = {
+        id: 'starter_sword', name: "父亲的旧短剑", type: "sword", rarity: "blue",
+        level: 1, affixes: [], baseStats: { physAtk: 12, speed: 0.5 }
+      };
     } else if (classKey === 'ranger') {
       attrs.agi = 14; attrs.str = 10;
       attrs.int = 5; attrs.vit = 7; attrs.ten = 6; attrs.spi = 6;
+      // 游侠起始武器：弓
+      this.state.equipment.weapon = {
+        id: 'starter_bow', name: "父亲的旧弓", type: "bow", rarity: "blue",
+        level: 1, affixes: [], baseStats: { physAtk: 10, speed: 1.0 }
+      };
     } else if (classKey === 'mage') {
       attrs.int = 14; attrs.spi = 12;
       attrs.str = 5; attrs.agi = 6; attrs.vit = 6; attrs.ten = 5;
+      // 法师起始武器：法杖
+      this.state.equipment.weapon = {
+        id: 'starter_staff', name: "师父的旧法杖", type: "staff", rarity: "blue",
+        level: 1, affixes: [], baseStats: { magAtk: 12, mp: 10 }
+      };
     }
     this.recalcPlayerStats();
 
@@ -64,9 +79,36 @@ class GameApp {
   recalcPlayerStats() {
     const p = this.state.player;
     const attrs = p.attributes;
+    // 基础HP/MP（不含装备）
     p.maxHp = 100 + (attrs.vit - 8) * 10;
-    p.hp = Math.min(p.hp, p.maxHp);
     p.maxMp = 30 + (attrs.spi - 8) * 5;
+    // 叠加装备属性（含基础属性、词条、附魔、宝石）
+    if (typeof StateUtils !== 'undefined' && StateUtils.getCombatStats) {
+      const stats = StateUtils.getCombatStats(this.state, 'player');
+      if (stats) {
+        const oldMaxHp = p.maxHp;
+        const oldMaxMp = p.maxMp;
+        p.maxHp = Math.floor(stats.hp || p.maxHp);
+        p.maxMp = Math.floor(stats.mp || p.maxMp);
+        p.attack = Math.floor(stats.physAtk || 0);
+        p.defense = Math.floor(stats.physDef || 0);
+        p.speed = Math.round((stats.speed || 0) * 10) / 10;
+        p.physAtk = Math.floor(stats.physAtk || 0);
+        p.physDef = Math.floor(stats.physDef || 0);
+        p.magAtk = Math.floor(stats.magAtk || 0);
+        p.magDef = Math.floor(stats.magDef || 0);
+        p.critRate = stats.critRate || 0.05;
+        p.critDmg = stats.critDmg || 1.5;
+        // HP/MP 按比例调整（升级时maxHp增加，当前hp也增加同量）
+        if (oldMaxHp > 0 && p.maxHp > oldMaxHp) {
+          p.hp = Math.min(p.maxHp, p.hp + (p.maxHp - oldMaxHp));
+        }
+        if (oldMaxMp > 0 && p.maxMp > oldMaxMp) {
+          p.mp = Math.min(p.maxMp, p.mp + (p.maxMp - oldMaxMp));
+        }
+      }
+    }
+    p.hp = Math.min(p.hp, p.maxHp);
     p.mp = Math.min(p.mp, p.maxMp);
   }
 

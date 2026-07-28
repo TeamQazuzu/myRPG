@@ -17,6 +17,7 @@ class CombatEngine {
     this.cooldowns = {}; // skillId -> remaining turns
     this.defenseBoosts = {}; // unitId -> {base, boost}
     this.selectedSkill = null;
+    this.autoMode = false; // 自动战斗开关
   }
 
   // ========== 战斗启动 ==========
@@ -35,6 +36,10 @@ class CombatEngine {
     this.defenseBoosts = {};
     this.selectedSkill = null;
     this.turnQueue = [];
+
+    // 从游戏状态读取自动战斗设置
+    const gameState = window.gameApp ? window.gameApp.state : null;
+    this.autoMode = gameState && gameState.player && gameState.player.combatMode === 'auto';
 
     const allyNames = [this.player.name, ...this.companions.map(c => c.name)].join('、');
     this.log(`⚔️ 战斗开始！${allyNames} VS ${this.enemies.map(e => e.name).join('、')}`);
@@ -85,7 +90,18 @@ class CombatEngine {
         this.isPlayerTurn = true;
         const event = new CustomEvent('combat-player-turn', { detail: { combat: this } });
         document.dispatchEvent(event);
-        return; // 等待玩家输入
+        // 自动战斗模式：自动攻击
+        if (this.autoMode) {
+          setTimeout(() => {
+            if (this.active && this.isPlayerTurn) {
+              const target = this.getFirstAliveEnemy();
+              if (target) {
+                this.playerAction('attack', target);
+              }
+            }
+          }, 500);
+        }
+        return; // 等待玩家输入（手动模式）或自动行动
       } else if (unit.isCompanion) {
         this.isPlayerTurn = false;
         const logBefore = this.combatLog.length;
@@ -170,6 +186,16 @@ class CombatEngine {
   // ========== 玩家行动入口 ==========
   selectSkill(skillId) {
     this.selectedSkill = skillId;
+  }
+
+  // ========== 切换自动战斗 ==========
+  toggleAutoMode() {
+    this.autoMode = !this.autoMode;
+    const gameState = window.gameApp ? window.gameApp.state : null;
+    if (gameState && gameState.player) {
+      gameState.player.combatMode = this.autoMode ? 'auto' : 'manual';
+    }
+    return this.autoMode;
   }
 
   playerAction(action, target) {

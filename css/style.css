@@ -505,6 +505,25 @@ body {
 }
 .combat-title { font-size: 16px; color: var(--gold-dim); font-weight: bold; }
 .combat-turn { font-size: 12px; color: var(--text-dim); }
+.combat-header-right { display: flex; align-items: center; gap: 8px; }
+
+/* 自动战斗开关 */
+.auto-toggle {
+  padding: 4px 10px;
+  background: var(--bg-card-inner);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.auto-toggle.on {
+  background: rgba(0,230,138,0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.auto-toggle:active { transform: scale(0.95); }
 
 .combat-section-label {
   color: var(--text-dim);
@@ -514,34 +533,85 @@ body {
   letter-spacing: 1px;
 }
 
-.enemy-unit, .player-unit, .companion-unit {
+/* 敌方紧凑方块 */
+.enemy-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+}
+.enemy-tile {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  margin-bottom: 6px;
+  padding: 6px 6px 4px;
+  text-align: center;
   cursor: pointer;
   transition: all 0.15s;
+  min-height: 48px;
 }
+.enemy-tile:active { transform: scale(0.96); }
+.enemy-tile.selected { border-color: var(--gold); box-shadow: 0 0 8px rgba(255,215,0,0.2); background: rgba(255,215,0,0.05); }
+.enemy-tile.dead { opacity: 0.3; pointer-events: none; }
+.enemy-tile-name {
+  font-size: 12px; font-weight: bold; margin-bottom: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.enemy-tile-hp-bar {
+  height: 5px; background: var(--bg-input); border-radius: 3px; overflow: hidden; margin-bottom: 2px;
+}
+.enemy-tile-hp-text { font-size: 10px; color: var(--text-dim); }
 
-.enemy-unit:active, .player-unit:active, .companion-unit:active { transform: scale(0.98); }
-.enemy-unit.selected { border-color: var(--gold); box-shadow: 0 0 10px rgba(255,215,0,0.15); }
-.enemy-unit.dead, .companion-unit.dead { opacity: 0.35; pointer-events: none; }
+/* 我方紧凑显示 */
+.player-unit, .companion-unit {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 5px;
+  cursor: default;
+  transition: all 0.15s;
+}
 .companion-unit { border-color: rgba(192,132,252,0.3); }
+.player-unit.dead, .companion-unit.dead { opacity: 0.35; }
 
-.enemy-name, .player-name { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
-
-.enemy-hp span, .player-hp span { font-size: 11px; color: var(--text-secondary); }
-
-.hp-bar {
-  height: 8px;
-  background: var(--bg-input);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-top: 4px;
+.ally-info {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;
 }
-.hp-fill { height: 100%; border-radius: 4px; transition: width 0.3s ease; }
-.player-stats { margin-top: 4px; font-size: 12px; color: var(--text-dim); }
+.ally-name { font-size: 13px; font-weight: bold; }
+.ally-hp-text { font-size: 11px; color: var(--text-secondary); }
+.ally-stats { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+
+/* 我方/敌方容器 */
+.enemy-container, .player-container {
+  margin-bottom: 10px;
+}
+
+/* 玩家/随从 内部元素 */
+.player-name {
+  font-size: 13px; font-weight: bold; margin-bottom: 4px;
+  display: flex; align-items: center; gap: 4px;
+}
+.player-hp, .player-mp {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+  font-size: 11px; color: var(--text-secondary);
+}
+.player-hp span:first-child, .player-mp span:first-child {
+  min-width: 18px; font-size: 10px; color: var(--text-dim);
+}
+.player-hp .hp-bar, .player-mp .hp-bar { flex: 1; }
+.hp-num { font-size: 10px; color: var(--text-dim); min-width: 50px; text-align: right; }
+.player-stats {
+  font-size: 11px; color: var(--text-dim); margin-top: 2px;
+}
+
+/* 全局HP条 */
+.hp-bar {
+  height: 6px; background: var(--bg-input); border-radius: 3px; overflow: hidden;
+}
+.hp-fill {
+  height: 100%; border-radius: 3px; transition: width 0.3s, background 0.3s;
+}
+.player-unit .hp-bar, .companion-unit .hp-bar { height: 6px; }
 
 /* 战斗按钮 - 底部固定 */
 #action-buttons {
@@ -780,6 +850,27 @@ body {
 .equip-slot-card.empty { opacity: 0.5; }
 .equip-slot-name { color: var(--text-dim); font-size: 12px; min-width: 44px; }
 .equip-item-name { font-size: 13px; font-weight: bold; text-align: right; }
+.equip-slot-card.clickable { cursor: pointer; transition: background 0.15s; }
+.equip-slot-card.clickable:active { background: var(--bg-card-inner); }
+
+/* 装备详情面板 */
+.eq-detail-section { margin-bottom: 10px; }
+.eq-detail-section strong { display: block; color: var(--text-dim); font-size: 11px; margin-bottom: 4px; }
+.eq-detail-stats { display: flex; flex-wrap: wrap; gap: 4px; }
+.eq-stat {
+  display: inline-block; padding: 3px 8px; background: var(--bg-input);
+  border: 1px solid var(--border); border-radius: 4px; font-size: 11px; color: var(--text-primary);
+}
+.eq-stat.affix { color: var(--accent-blue); border-color: rgba(77,166,255,0.3); }
+.eq-stat.enchant { color: var(--accent-purple); border-color: rgba(192,132,252,0.3); }
+.eq-stat.gem { color: var(--gold); border-color: rgba(255,215,0,0.3); }
+.eq-stat.empty-socket { color: var(--text-dim); }
+
+/* 背包装备提示 */
+.item-equip-hint { color: var(--accent); font-size: 10px; margin-top: 2px; }
+.item-card.equippable { cursor: pointer; }
+.item-card.equippable:active { background: var(--bg-card-inner); }
+.equip-target-btn { margin-bottom: 6px; }
 
 /* 随从卡片 */
 .companion-card {
@@ -1039,6 +1130,10 @@ body {
   }
   .nav-item .nav-icon { font-size: 20px; }
   .nav-item { font-size: 9px; min-width: 56px; }
+  .enemy-tile-grid { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 4px; }
+  .enemy-tile { padding: 4px 4px 3px; min-height: 42px; }
+  .enemy-tile-name { font-size: 11px; }
+  .enemy-tile-hp-text { font-size: 9px; }
 }
 
 /* ========== 触摸优化 ========== */

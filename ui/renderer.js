@@ -66,7 +66,17 @@ class UIRenderer {
             }, 3000);
         });
         document.addEventListener('combat-player-turn', () => {
-            this.enableButtons(true);
+            const combat = this.combatEngine;
+            if (combat && combat.autoMode) {
+                this.enableButtons(false);
+                const autoBtn = document.getElementById('auto-toggle-btn');
+                if (autoBtn) {
+                    autoBtn.textContent = '🤖 自动';
+                    autoBtn.classList.add('on');
+                }
+            } else {
+                this.enableButtons(true);
+            }
         });
         document.addEventListener('scene-change', (e) => {
             if (!this.isCombatActive) {
@@ -391,12 +401,12 @@ class UIRenderer {
             const label = slotNames[slot] || slot;
             if (item) {
                 const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
-                equipHtml += `<div class="equip-slot-card" style="border-left:3px solid ${rarityColor}">
+                equipHtml += `<div class="equip-slot-card clickable" style="border-left:3px solid ${rarityColor}" data-eq-slot="${slot}" data-eq-target="player">
                     <span class="equip-slot-name">${label}</span>
                     <span class="equip-item-name" style="color:${rarityColor}">${item.name}</span>
                 </div>`;
             } else {
-                equipHtml += `<div class="equip-slot-card empty">
+                equipHtml += `<div class="equip-slot-card empty" data-eq-slot="${slot}" data-eq-target="player">
                     <span class="equip-slot-name">${label}</span>
                     <span class="equip-item-name" style="color:var(--text-dim)">空</span>
                 </div>`;
@@ -498,6 +508,17 @@ class UIRenderer {
             if (!panel) return;
             // 填充派生属性
             updateDerivedStats();
+            // 装备槽点击：查看详情/卸下
+            panel.querySelectorAll('.equip-slot-card[data-eq-slot]').forEach(card => {
+                card.addEventListener('click', () => {
+                    const slot = card.dataset.eqSlot;
+                    const target = card.dataset.eqTarget;
+                    const item = state.equipment[slot];
+                    if (item) {
+                        this.showEquipmentDetail(state, slot, target);
+                    }
+                });
+            });
             // 随从点击
             panel.querySelectorAll('.companion-card').forEach(card => {
                 card.addEventListener('click', () => {
@@ -675,37 +696,73 @@ class UIRenderer {
         container.innerHTML = `
             <div class="combat-header">
                 <span class="combat-title">⚔️ 战斗</span>
-                <span class="combat-turn">回合 ${combat.currentTurn + 1}/${combat.maxTurns}</span>
+                <div class="combat-header-right">
+                    <button class="auto-toggle ${combat.autoMode ? 'on' : ''}" id="auto-toggle-btn">${combat.autoMode ? '🤖 自动' : '✋ 手动'}</button>
+                    <span class="combat-turn">回合 ${combat.currentTurn + 1}/${combat.maxTurns}</span>
+                </div>
             </div>
         `;
+        // 绑定自动战斗切换
+        const autoBtn = document.getElementById('auto-toggle-btn');
+        if (autoBtn) {
+            autoBtn.addEventListener('click', () => {
+                const isAuto = combat.toggleAutoMode();
+                autoBtn.textContent = isAuto ? '🤖 自动' : '✋ 手动';
+                autoBtn.classList.toggle('on', isAuto);
+                // 如果刚开启自动模式且当前是玩家回合，立即触发自动攻击
+                if (isAuto && combat.isPlayerTurn && combat.active) {
+                    setTimeout(() => {
+                        if (combat.active && combat.isPlayerTurn) {
+                            const target = combat.getFirstAliveEnemy();
+                            if (target) combat.playerAction('attack', target);
+                        }
+                    }, 300);
+                }
+                this.enableButtons(!isAuto && combat.isPlayerTurn);
+            });
+        }
         const enemies = combat.getEnemyUnits ? combat.getEnemyUnits() : [];
         if (enemies.length > 0) {
+            // 统计同名敌人数量，用于编号
+            const nameCount = {};
+            const nameIndex = {};
+            enemies.forEach(e => {
+                const n = e.name || '敌人';
+                nameCount[n] = (nameCount[n] || 0) + 1;
+            });
             const eDiv = document.createElement('div');
             eDiv.className = 'enemy-container';
             eDiv.innerHTML = '<div class="combat-section-label">🐺 敌方</div>';
+            const tileGrid = document.createElement('div');
+            tileGrid.className = 'enemy-tile-grid';
             enemies.forEach((enemy, i) => {
                 const el = document.createElement('div');
-                el.className = 'enemy-unit';
+                el.className = 'enemy-tile';
                 el.dataset.index = i;
                 const maxHp = enemy.maxHp || enemy.hp || 30;
                 const hp = Math.max(0, enemy.hp || 0);
                 const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
+                const hpColor = hpPct > 50 ? '#4CAF50' : hpPct > 25 ? '#FF9800' : '#f44336';
+                // 同名敌人添加编号
+                const baseName = enemy.name || '敌人';
+                let displayName = baseName;
+                if (nameCount[baseName] > 1) {
+                    nameIndex[baseName] = (nameIndex[baseName] || 0) + 1;
+                    displayName = `${baseName}${nameIndex[baseName]}`;
+                }
                 el.innerHTML = `
-                    <div class="enemy-name">${enemy.name} ${hp <= 0 ? '💀' : ''}</div>
-                    <div class="enemy-hp">
-                        <span>HP: ${hp}/${maxHp}</span>
-                        <div class="hp-bar">
-                            <div class="hp-fill" style="width:${Math.max(0, hpPct)}%;background:${hpPct > 50 ? '#4CAF50' : hpPct > 25 ? '#FF9800' : '#f44336'}"></div>
-                        </div>
-                    </div>
+                    <div class="enemy-tile-name">${displayName} ${hp <= 0 ? '💀' : ''}</div>
+                    <div class="enemy-tile-hp-bar"><div class="hp-fill" style="width:${Math.max(0, hpPct)}%;background:${hpColor}"></div></div>
+                    <div class="enemy-tile-hp-text">${hp}/${maxHp}</div>
                 `;
                 el.addEventListener('click', () => {
-                    document.querySelectorAll('.enemy-unit').forEach(e => e.classList.remove('selected'));
+                    document.querySelectorAll('.enemy-tile').forEach(e => e.classList.remove('selected'));
                     if (hp > 0) el.classList.add('selected');
                 });
                 if (hp <= 0) el.classList.add('dead');
-                eDiv.appendChild(el);
+                tileGrid.appendChild(el);
             });
+            eDiv.appendChild(tileGrid);
             container.appendChild(eDiv);
         }
         // 渲染玩家与随从
@@ -723,17 +780,29 @@ class UIRenderer {
                 const maxHp = ally.maxHp || ally.hp || 100;
                 const hp = Math.max(0, ally.hp || 0);
                 const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
-                const barColor = isCompanion ? '#9c27b0' : '#2196F3';
+                const maxMp = ally.maxMp || ally.mp || 0;
+                const mp = Math.max(0, ally.mp || 0);
+                const mpPct = maxMp > 0 ? (mp / maxMp) * 100 : 0;
+                const hpColor = isCompanion ? '#9c27b0' : '#2196F3';
+                const mpColor = '#00b8d4';
                 el.innerHTML = `
                     <div class="player-name">${ally.name} ${isCompanion ? '🏹' : ''} ${hp <= 0 ? '💀' : ''}</div>
                     <div class="player-hp">
-                        <span>HP: ${hp}/${maxHp}</span>
+                        <span>HP</span>
                         <div class="hp-bar">
-                            <div class="hp-fill" style="width:${Math.max(0, hpPct)}%;background:${barColor}"></div>
+                            <div class="hp-fill" style="width:${Math.max(0, hpPct)}%;background:${hpColor}"></div>
                         </div>
+                        <span class="hp-num">${hp}/${maxHp}</span>
                     </div>
+                    ${maxMp > 0 ? `<div class="player-mp">
+                        <span>MP</span>
+                        <div class="hp-bar">
+                            <div class="hp-fill" style="width:${Math.max(0, mpPct)}%;background:${mpColor}"></div>
+                        </div>
+                        <span class="hp-num">${mp}/${maxMp}</span>
+                    </div>` : ''}
                     <div class="player-stats">
-                        ⚔️${ally.attack || 0} 🛡️${ally.defense || 0} 💨${ally.speed || 0}
+                        ⚔️${ally.attack || 0} 🛡️${ally.defense || 0} 💨${Math.round((ally.speed || 0) * 10) / 10}
                     </div>
                 `;
                 if (hp <= 0) el.classList.add('dead');
@@ -802,7 +871,7 @@ class UIRenderer {
         this.enableButtons(combat.isPlayerTurn);
     }
     getTarget(combat) {
-        const selected = document.querySelector('.enemy-unit.selected');
+        const selected = document.querySelector('.enemy-tile.selected');
         const enemies = combat.getEnemyUnits ? combat.getEnemyUnits() : [];
         if (selected) {
             const idx = parseInt(selected.dataset.index);
@@ -818,17 +887,31 @@ class UIRenderer {
     updateCombat(combat, log) {
         if (!combat) return;
         const enemies = combat.getEnemyUnits ? combat.getEnemyUnits() : [];
-        const enemyEls = document.querySelectorAll('.enemy-unit');
+        // 统计同名敌人用于编号
+        const nameCount = {};
+        const nameIndex = {};
+        enemies.forEach(e => {
+            const n = e.name || '敌人';
+            nameCount[n] = (nameCount[n] || 0) + 1;
+        });
+        const enemyEls = document.querySelectorAll('.enemy-tile');
         enemies.forEach((enemy, i) => {
             if (enemyEls[i]) {
                 const maxHp = enemy.maxHp || enemy.hp || 30;
                 const hp = Math.max(0, enemy.hp || 0);
                 const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
-                const nameEl = enemyEls[i].querySelector('.enemy-name');
-                const hpText = enemyEls[i].querySelector('.enemy-hp span');
+                const nameEl = enemyEls[i].querySelector('.enemy-tile-name');
+                const hpText = enemyEls[i].querySelector('.enemy-tile-hp-text');
                 const hpFill = enemyEls[i].querySelector('.hp-fill');
-                if (nameEl) nameEl.innerHTML = `${enemy.name} ${hp <= 0 ? '💀' : ''}`;
-                if (hpText) hpText.textContent = `HP: ${hp}/${maxHp}`;
+                // 保持编号显示
+                const baseName = enemy.name || '敌人';
+                let displayName = baseName;
+                if (nameCount[baseName] > 1) {
+                    nameIndex[baseName] = (nameIndex[baseName] || 0) + 1;
+                    displayName = `${baseName}${nameIndex[baseName]}`;
+                }
+                if (nameEl) nameEl.innerHTML = `${displayName} ${hp <= 0 ? '💀' : ''}`;
+                if (hpText) hpText.textContent = `${hp}/${maxHp}`;
                 if (hpFill) {
                     hpFill.style.width = Math.max(0, hpPct) + '%';
                     hpFill.style.background = hpPct > 50 ? '#4CAF50' : hpPct > 25 ? '#FF9800' : '#f44336';
@@ -836,7 +919,7 @@ class UIRenderer {
                 if (hp <= 0) enemyEls[i].classList.add('dead');
             }
         });
-        // 同步玩家与随从血条
+        // 同步玩家与随从血条和蓝条
         const allies = [combat.getPlayerUnit ? combat.getPlayerUnit() : null,
                         ...(combat.getCompanionUnits ? combat.getCompanionUnits() : [])].filter(Boolean);
         const allyEls = document.querySelectorAll('.player-unit, .companion-unit');
@@ -845,15 +928,22 @@ class UIRenderer {
                 const maxHp = ally.maxHp || ally.hp || 100;
                 const hp = Math.max(0, ally.hp || 0);
                 const hpPct = maxHp > 0 ? (hp / maxHp) * 100 : 0;
+                const maxMp = ally.maxMp || ally.mp || 0;
+                const mp = Math.max(0, ally.mp || 0);
+                const mpPct = maxMp > 0 ? (mp / maxMp) * 100 : 0;
                 const nameEl = allyEls[i].querySelector('.player-name');
-                const hpText = allyEls[i].querySelector('.player-hp span');
-                const hpFill = allyEls[i].querySelector('.hp-fill');
                 if (nameEl) {
                     const icon = ally.isCompanion ? '🏹' : '';
                     nameEl.innerHTML = `${ally.name} ${icon} ${hp <= 0 ? '💀' : ''}`;
                 }
-                if (hpText) hpText.textContent = `HP: ${hp}/${maxHp}`;
-                if (hpFill) hpFill.style.width = Math.max(0, hpPct) + '%';
+                // 更新HP数值和血条
+                const hpNums = allyEls[i].querySelectorAll('.hp-num');
+                const hpFills = allyEls[i].querySelectorAll('.hp-fill');
+                if (hpNums[0]) hpNums[0].textContent = `${hp}/${maxHp}`;
+                if (hpFills[0]) hpFills[0].style.width = Math.max(0, hpPct) + '%';
+                // 更新MP数值和蓝条
+                if (hpNums[1]) hpNums[1].textContent = `${mp}/${maxMp}`;
+                if (hpFills[1]) hpFills[1].style.width = Math.max(0, mpPct) + '%';
                 if (hp <= 0) allyEls[i].classList.add('dead');
             }
         });
@@ -866,7 +956,7 @@ class UIRenderer {
                 logContainer.scrollTop = logContainer.scrollHeight;
             }
         }
-        this.enableButtons(combat.isPlayerTurn);
+        this.enableButtons(!combat.autoMode && combat.isPlayerTurn);
         const turnEl = document.querySelector('.combat-turn');
         if (turnEl) {
             turnEl.textContent = `回合 ${combat.currentTurn + 1}/${combat.maxTurns}`;
@@ -973,13 +1063,15 @@ class UIRenderer {
             for (const item of state.inventory.items) {
                 const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
                 const isUsable = item.type === 'consumable' || item.type === 'potion' || item.subtype === 'heal' || item.subtype === 'mana' || item.subtype === 'exp' || (item.type === 'consumable' && (item.heal || item.healHp || item.healMp || item.expValue));
-                const isViewable = !isUsable && (item.description || item.type === 'treasure' || item.type === 'quest');
+                const isEquipment = this._isEquipment(item);
+                const isViewable = !isUsable && !isEquipment && (item.description || item.type === 'treasure' || item.type === 'quest');
                 html += `
-                    <div class="item-card ${isUsable ? 'usable' : ''} ${isViewable ? 'viewable' : ''}" style="border-color:${rarityColor}" data-item-id="${item.id}" data-usable="${isUsable ? '1' : '0'}">
+                    <div class="item-card ${isUsable ? 'usable' : ''} ${isViewable ? 'viewable' : ''} ${isEquipment ? 'equippable' : ''}" style="border-color:${rarityColor}" data-item-id="${item.id}" data-usable="${isUsable ? '1' : '0'}" data-equipment="${isEquipment ? '1' : '0'}">
                         <div class="item-rarity" style="color:${rarityColor}">${DATA.rarity[item.rarity]?.name || item.rarity || ''}</div>
                         <div class="item-name">${item.name}</div>
                         <div class="item-level">Lv.${item.level || 1}${item.stack > 1 ? ' x' + item.stack : ''}</div>
                         ${isUsable ? '<div class="item-use-hint">点击使用</div>' : ''}
+                        ${isEquipment ? '<div class="item-equip-hint">点击装备</div>' : ''}
                         ${isViewable ? '<div class="item-view-hint">点击查看</div>' : ''}
                     </div>
                 `;
@@ -1026,8 +1118,15 @@ class UIRenderer {
                         this.showItemUseTarget(state, itemId);
                     });
                 });
-                // 非使用物品但有描述/宝箱类型：点击查看详情
-                panel.querySelectorAll('.item-card[data-usable="0"]').forEach(card => {
+                // 装备类物品：弹出装备目标选择
+                panel.querySelectorAll('.item-card[data-equipment="1"]').forEach(card => {
+                    card.addEventListener('click', () => {
+                        const itemId = card.dataset.itemId;
+                        this.showEquipTarget(state, itemId);
+                    });
+                });
+                // 非使用非装备物品但有描述/宝箱类型：点击查看详情
+                panel.querySelectorAll('.item-card[data-usable="0"][data-equipment="0"]').forEach(card => {
                     const itemId = card.dataset.itemId;
                     const item = state.inventory.items.find(i => i.id === itemId);
                     if (item && (item.description || item.type === 'treasure' || item.type === 'quest')) {
@@ -1385,9 +1484,9 @@ class UIRenderer {
             const item = eq[slot];
             if (item) {
                 const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
-                equipHtml += `<div class="equip-slot-card" style="border-left:3px solid ${rarityColor}"><span class="equip-slot-name">${slotNames[slot]}</span><span class="equip-item-name" style="color:${rarityColor}">${item.name}</span></div>`;
+                equipHtml += `<div class="equip-slot-card clickable" style="border-left:3px solid ${rarityColor}" data-eq-slot="${slot}" data-eq-target="${comp.id}"><span class="equip-slot-name">${slotNames[slot]}</span><span class="equip-item-name" style="color:${rarityColor}">${item.name}</span></div>`;
             } else {
-                equipHtml += `<div class="equip-slot-card empty"><span class="equip-slot-name">${slotNames[slot]}</span><span class="equip-item-name" style="color:var(--text-dim)">空</span></div>`;
+                equipHtml += `<div class="equip-slot-card empty" data-eq-slot="${slot}" data-eq-target="${comp.id}"><span class="equip-slot-name">${slotNames[slot]}</span><span class="equip-item-name" style="color:var(--text-dim)">空</span></div>`;
             }
         }
         const skillsHtml = (comp.skills || []).map(sid => {
@@ -1404,6 +1503,7 @@ class UIRenderer {
                     <div>HP: ${comp.hp}/${comp.maxHp} | MP: ${comp.mp}/${comp.maxMp}</div>
                 </div>
                 <div class="char-section"><strong class="char-section-title">六维属性</strong><div class="char-stats-grid">${attrsHtml}</div></div>
+                <div class="char-section"><strong class="char-section-title">战斗属性</strong><div class="derived-stats-grid" id="comp-derived-stats"></div></div>
                 <div class="char-section"><strong class="char-section-title">装备</strong><div class="equip-grid">${equipHtml}</div></div>
                 <div class="char-section"><strong class="char-section-title">技能</strong><div class="comp-skills">${skillsHtml || '无'}</div></div>
                 <div class="comp-detail-actions">
@@ -1417,6 +1517,39 @@ class UIRenderer {
         if (existing) existing.remove();
         container.insertAdjacentHTML('beforeend', html);
         setTimeout(() => {
+            // 填充随从战斗属性
+            const compStats = StateUtils.getCombatStats(state, comp.id);
+            if (compStats) {
+                const grid = document.getElementById('comp-derived-stats');
+                if (grid) {
+                    const rows = [
+                        ['⚔️ 物理攻击', compStats.physAtk, 'var(--danger)'],
+                        ['🔮 法术攻击', compStats.magAtk, 'var(--accent-blue)'],
+                        ['🛡️ 物理防御', compStats.physDef, 'var(--text-secondary)'],
+                        ['🔷 法术防御', compStats.magDef, 'var(--accent-purple)'],
+                        ['⚡ 速度', (Math.round(compStats.speed * 10) / 10), 'var(--gold)'],
+                        ['💥 暴击率', (compStats.critRate * 100).toFixed(1) + '%', 'var(--danger)'],
+                        ['💥 暴伤', (compStats.critDmg * 100).toFixed(0) + '%', 'var(--danger)'],
+                    ];
+                    grid.innerHTML = rows.map(([label, val, color]) =>
+                        `<div class="derived-stat-row"><span class="ds-label">${label}</span><span class="ds-value" style="color:${color}">${val}</span></div>`
+                    ).join('');
+                }
+            }
+            // 装备槽点击：查看详情/卸下
+            const compPanel = document.getElementById('companion-panel');
+            if (compPanel) {
+                compPanel.querySelectorAll('.equip-slot-card[data-eq-slot]').forEach(card => {
+                    card.addEventListener('click', () => {
+                        const slot = card.dataset.eqSlot;
+                        const target = card.dataset.eqTarget;
+                        const item = comp.equipment && comp.equipment[slot];
+                        if (item) {
+                            this.showEquipmentDetail(state, slot, target);
+                        }
+                    });
+                });
+            }
             document.getElementById('comp-close-btn')?.addEventListener('click', () => {
                 document.getElementById('companion-panel')?.remove();
             });
@@ -1507,40 +1640,287 @@ class UIRenderer {
         }, 0);
     }
 
-    // ========== 修改锻造菜单以支持强化 ==========
+    // ========== 判断是否为装备 ==========
+    _isEquipment(item) {
+        if (!item) return false;
+        if (item.type === 'consumable' || item.type === 'potion' || item.type === 'gem' ||
+            item.type === 'quest' || item.type === 'treasure' || item.type === 'material') return false;
+        if (DATA.equipTypeToSlot && DATA.equipTypeToSlot[item.type]) return true;
+        if (item.baseStats && item.type) return true;
+        return false;
+    }
+
+    // ========== 获取装备槽位 ==========
+    _getEquipSlot(item) {
+        if (DATA.equipTypeToSlot && DATA.equipTypeToSlot[item.type]) {
+            return DATA.equipTypeToSlot[item.type];
+        }
+        return null;
+    }
+
+    // ========== 格式化装备属性文本 ==========
+    _formatEquipStats(item) {
+        let html = '';
+        // 基础属性
+        if (item.baseStats) {
+            const statNames = {
+                physAtk: '物理攻击', magAtk: '法术攻击', physDef: '物理防御',
+                magDef: '法术防御', hp: '生命值', mp: '法力值',
+                speed: '速度', critRate: '暴击率', critDmg: '暴击伤害'
+            };
+            html += '<div class="eq-detail-section"><strong>基础属性</strong><div class="eq-detail-stats">';
+            for (const [key, val] of Object.entries(item.baseStats)) {
+                const name = statNames[key] || key;
+                const display = (key === 'critRate' || key === 'critDmg') ? (val * 100).toFixed(1) + '%' : val;
+                html += `<span class="eq-stat">+${display} ${name}</span>`;
+            }
+            html += '</div></div>';
+        }
+        // 词条
+        if (item.affixes && item.affixes.length > 0) {
+            html += '<div class="eq-detail-section"><strong>词条</strong><div class="eq-detail-stats">';
+            item.affixes.forEach(a => {
+                html += `<span class="eq-stat affix">${a.name || a.id || '词条'}</span>`;
+            });
+            html += '</div></div>';
+        }
+        // 附魔
+        if (item.enchant && item.enchant.v) {
+            html += `<div class="eq-detail-section"><strong>附魔</strong><div class="eq-detail-stats">`;
+            html += `<span class="eq-stat enchant">✨ ${item.enchant.desc || item.enchant.t + '+' + item.enchant.v}</span>`;
+            html += '</div></div>';
+        }
+        // 镶嵌宝石
+        if (item.sockets && item.sockets.length > 0) {
+            html += '<div class="eq-detail-section"><strong>镶嵌</strong><div class="eq-detail-stats">';
+            item.sockets.forEach((s, i) => {
+                if (typeof s === 'string' && typeof GemSystem !== 'undefined' && GemSystem.gems[s]) {
+                    const g = GemSystem.gems[s];
+                    html += `<span class="eq-stat gem">${g.icon || '💎'} ${g.name}</span>`;
+                } else if (s && s.gem && s.gem.name) {
+                    html += `<span class="eq-stat gem">💎 ${s.gem.name}</span>`;
+                } else {
+                    html += `<span class="eq-stat empty-socket">⚪ 空孔</span>`;
+                }
+            });
+            html += '</div></div>';
+        }
+        return html || '<div style="color:var(--text-dim);font-size:12px;">无附加属性</div>';
+    }
+
+    // ========== 背包装备：选择装备目标（主角/随从） ==========
+    showEquipTarget(state, itemId) {
+        const item = state.inventory.items.find(i => i.id === itemId);
+        if (!item) return;
+        const slot = this._getEquipSlot(item);
+        if (!slot) {
+            this.showToast('无法识别装备类型');
+            return;
+        }
+        const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+        const rarityName = DATA.rarity[item.rarity]?.name || '';
+        // 显示装备详情和目标选择
+        let html = `<div style="color:${rarityColor};font-weight:bold;font-size:15px;margin-bottom:4px;">${item.name}</div>`;
+        html += `<div style="color:var(--text-secondary);font-size:11px;margin-bottom:8px;">${rarityName} | Lv.${item.level || 1}</div>`;
+        html += this._formatEquipStats(item);
+        html += '<div style="margin-top:14px;"><strong style="color:var(--gold-dim);font-size:13px;">选择装备目标</strong></div>';
+        html += '<div class="equip-target-list" style="margin-top:8px;">';
+        // 主角
+        const playerSlotItem = state.equipment[slot];
+        // 戒指特殊处理：如果ring1已占用，检查ring2
+        let actualSlot = slot;
+        let currentName = playerSlotItem ? playerSlotItem.name : '空';
+        if (item.type === 'ring') {
+            if (!state.equipment.ring1) {
+                actualSlot = 'ring1';
+                currentName = '空';
+            } else if (!state.equipment.ring2) {
+                actualSlot = 'ring2';
+                currentName = '空';
+            } else {
+                actualSlot = 'ring1';
+                currentName = state.equipment.ring1.name;
+            }
+        }
+        html += `<button class="target-select-btn equip-target-btn" data-target="player" data-slot="${actualSlot}">
+            👤 ${state.player.name} (当前: ${currentName})
+        </button>`;
+        // 随从
+        state.companions.forEach(comp => {
+            if (!comp.alive) return;
+            const compEq = comp.equipment || {};
+            let compSlot = slot;
+            let compCurrent = compEq[slot] ? compEq[slot].name : '空';
+            if (item.type === 'ring') {
+                if (!compEq.ring1) { compSlot = 'ring1'; compCurrent = '空'; }
+                else if (!compEq.ring2) { compSlot = 'ring2'; compCurrent = '空'; }
+                else { compSlot = 'ring1'; compCurrent = compEq.ring1.name; }
+            }
+            const classIcon = comp.class === 'warrior' ? '⚔️' : comp.class === 'ranger' ? '🏹' : '🔮';
+            html += `<button class="target-select-btn equip-target-btn" data-target="${comp.id}" data-slot="${compSlot}">
+                ${classIcon} ${comp.name} (当前: ${compCurrent})
+            </button>`;
+        });
+        html += '<button class="item-cancel-btn" id="equip-cancel">取消</button>';
+        html += '</div>';
+        this.showPanel('⚔️ 装备', html);
+        setTimeout(() => {
+            const panel = document.getElementById('dynamic-panel');
+            if (!panel) return;
+            panel.querySelectorAll('.equip-target-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const targetId = btn.dataset.target;
+                    const targetSlot = btn.dataset.slot;
+                    this._performEquip(state, itemId, targetId, targetSlot);
+                });
+            });
+            document.getElementById('equip-cancel')?.addEventListener('click', () => this.closePanel());
+        }, 0);
+    }
+
+    // ========== 执行装备操作 ==========
+    _performEquip(state, itemId, targetId, slot) {
+        const item = state.inventory.items.find(i => i.id === itemId);
+        if (!item) { this.showToast('物品不存在'); return; }
+        let oldItem = null;
+        if (targetId === 'player') {
+            // 装备到主角
+            const check = StateUtils.checkEquipLimit(state, item);
+            if (!check.ok) {
+                this.showToast(check.reason);
+                return;
+            }
+            oldItem = state.equipment[slot];
+            state.equipment[slot] = item;
+            // 从背包移除
+            StateUtils.removeFromInventory(state, itemId, 1);
+            // 旧装备放回背包
+            if (oldItem) {
+                StateUtils.addToInventory(state, oldItem);
+            }
+            // 重算属性
+            if (window.gameApp) {
+                window.gameApp.recalcPlayerStats();
+                window.gameApp.renderTopBar();
+            }
+        } else {
+            // 装备到随从
+            const comp = state.companions.find(c => c.id === targetId);
+            if (!comp) { this.showToast('随从不存在'); return; }
+            if (!comp.equipment) {
+                comp.equipment = { weapon: null, offhand: null, helmet: null, chest: null, legs: null, boots: null, gloves: null, necklace: null, ring1: null, ring2: null };
+            }
+            oldItem = comp.equipment[slot];
+            comp.equipment[slot] = item;
+            StateUtils.removeFromInventory(state, itemId, 1);
+            if (oldItem) {
+                StateUtils.addToInventory(state, oldItem);
+            }
+        }
+        this.closePanel();
+        this.showToast(oldItem ? `装备了 ${item.name}，${oldItem.name} 已放回背包` : `装备了 ${item.name}`);
+        // 刷新背包
+        this.renderInventory(state);
+    }
+
+    // ========== 装备详情查看（角色面板用） ==========
+    showEquipmentDetail(state, slot, targetId) {
+        const isPlayer = targetId === 'player';
+        const eq = isPlayer ? state.equipment : (state.companions.find(c => c.id === targetId)?.equipment || {});
+        const item = eq[slot];
+        if (!item) return;
+        const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+        const rarityName = DATA.rarity[item.rarity]?.name || '';
+        const slotNames = {
+            weapon: '武器', offhand: '副手', helmet: '头盔', chest: '胸甲',
+            legs: '腿甲', boots: '靴子', gloves: '手套', necklace: '项链',
+            ring1: '戒指1', ring2: '戒指2'
+        };
+        let html = `<div style="color:${rarityColor};font-weight:bold;font-size:15px;margin-bottom:4px;">${item.name}</div>`;
+        html += `<div style="color:var(--text-secondary);font-size:11px;margin-bottom:8px;">${rarityName} | ${slotNames[slot] || slot} | Lv.${item.level || 1}</div>`;
+        html += this._formatEquipStats(item);
+        html += `<div style="margin-top:14px;">
+            <button class="menu-btn danger" id="unequip-btn" style="width:100%;">卸下装备</button>
+        </div>`;
+        this.showPanel('📋 装备详情', html);
+        setTimeout(() => {
+            const btn = document.getElementById('unequip-btn');
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    // 检查背包空间
+                    if (state.inventory.items.length >= state.inventory.capacity) {
+                        this.showToast('背包已满，无法卸下');
+                        return;
+                    }
+                    if (isPlayer) {
+                        state.equipment[slot] = null;
+                        StateUtils.addToInventory(state, item);
+                        if (window.gameApp) {
+                            window.gameApp.recalcPlayerStats();
+                            window.gameApp.renderTopBar();
+                        }
+                    } else {
+                        const comp = state.companions.find(c => c.id === targetId);
+                        if (comp && comp.equipment) {
+                            comp.equipment[slot] = null;
+                            StateUtils.addToInventory(state, item);
+                        }
+                    }
+                    this.closePanel();
+                    this.showToast(`已卸下 ${item.name}`);
+                    // 刷新面板
+                    if (isPlayer) {
+                        this.renderCharacter(state);
+                    } else {
+                        const idx = state.companions.findIndex(c => c.id === targetId);
+                        if (idx >= 0) this.renderCompanionDetail(state, idx);
+                    }
+                });
+            }
+        }, 0);
+    }
+
+    // ========== 铁匠铺菜单：锻造（品质提升） ==========
     showForgeMenu(state) {
         const eq = state.equipment;
         let html = '<div class="forge-container"><h4>🔨 铁匠铺</h4>';
-        html += '<div class="forge-section"><strong>锻造/强化</strong><div class="forge-list">';
+        html += '<div class="forge-section"><strong>品质锻造</strong><div class="forge-list">';
         let hasItem = false;
         for (const slot in eq) {
             const item = eq[slot];
             if (!item) continue;
-            hasItem = true;
             const rarityColor = DATA.rarity[item.rarity]?.color || '#ccc';
+            const maxForge = NPCSystem._getMaxForgeCount ? NPCSystem._getMaxForgeCount(item) : '?';
+            const forgeCount = item.forgeCount || 0;
+            const cost = 10 + forgeCount * 10;
+            const canForge = forgeCount < maxForge;
             html += `<div class="forge-item">
                 <span style="color:${rarityColor}">${item.name} (Lv.${item.level})</span>
+                <div class="forge-sub">锻造 ${forgeCount}/${maxForge} | 费用 ${cost}金</div>
                 <div class="forge-actions">
-                    <button class="forge-btn" data-slot="${slot}" data-type="forge">🔨 锻造 (10金)</button>
-                    <button class="forge-btn" data-slot="${slot}" data-type="enhance">⬆️ 强化 (20金)</button>
+                    <button class="forge-btn" data-slot="${slot}" data-type="forge" ${!canForge ? 'disabled style="opacity:0.4;pointer-events:none;"' : ''}>🔨 锻造 (${cost}金)</button>
                 </div>
             </div>`;
+            hasItem = true;
         }
         if (!hasItem) html += '<p style="color:var(--text-dim)">当前没有可锻造的装备。</p>';
         html += '</div></div></div>';
-        this.showPanel('🔨 锻造铺', html);
+        this.showPanel('🔨 铁匠铺', html);
         setTimeout(() => {
             const panel = document.getElementById('dynamic-panel');
             if (!panel) return;
             panel.querySelectorAll('.forge-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const slot = btn.dataset.slot;
-                    const type = btn.dataset.type;
-                    const res = type === 'forge' ? NPCSystem.forgeEquipment(state, slot) : NPCSystem.enhanceEquipment(state, slot);
+                    const res = NPCSystem.forgeEquipment(state, slot);
                     const msgEl = document.createElement('p');
                     msgEl.style.color = res.ok ? '#a5d6a7' : '#ef9a9a';
                     msgEl.textContent = res.msg;
                     btn.parentNode.appendChild(msgEl);
+                    if (res.ok) {
+                        // 刷新锻造面板以更新次数和费用
+                        setTimeout(() => this.showForgeMenu(state), 300);
+                    }
                     if (window.gameApp) window.gameApp.renderTopBar();
                 });
             });

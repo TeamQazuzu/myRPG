@@ -67,7 +67,7 @@ function createDefaultState() {
       upgradeLevel: 0,
     },
     equipment: {
-      weapon:   { name: "父亲的旧短剑", type: "sword", rarity: "blue", level: 10, affixes: [] },
+      weapon:   null,
       offhand:  null,
       helmet:   null,
       chest:    null,
@@ -95,7 +95,7 @@ function createDefaultState() {
       },
       heirloom: {
         slot1: { equipped: true,  item: { name: "父亲的旧短剑", type: "sword", rarity: "gold", level: 10, affixes: [] } },
-        slot2: { equipped: true,  item: { name: "艾琳的旧弓",   type: "bow",   rarity: "gold", level: 10, affixes: [] } },
+        slot2: { equipped: true,  item: { name: "父亲的旧弓",   type: "bow",   rarity: "gold", level: 10, affixes: [] } },
         slot3: { equipped: false, item: null },
         unlockedSlots: 2,
       },
@@ -354,8 +354,8 @@ const StateUtils = {
     if (!unit) return null;
     const base = { ...unit.attributes };
     const stats = {
-      hp: unit.maxHp,
-      mp: unit.maxMp,
+      hp: 100 + (base.vit - 8) * 10,
+      mp: 30 + (base.spi - 8) * 5,
       physAtk: base.str * 2,
       physDef: base.str * 1 + base.ten * 3,
       magAtk: base.int * 2,
@@ -374,15 +374,29 @@ const StateUtils = {
       for (const slot of Object.keys(eq)) {
         const item = eq[slot];
         if (!item) continue;
+        // 基础属性
         if (item.baseStats) {
           for (const [stat, val] of Object.entries(item.baseStats)) {
-            if (stats[stat] !== undefined) stats[stat] += val;
+            if (stats[stat] !== undefined) {
+              stats[stat] += val;
+            } else {
+              stats[stat] = val;
+            }
           }
         }
+        // 词条属性
         if (item.affixes) {
           for (const affix of item.affixes) {
             this.applyAffix(stats, affix);
           }
+        }
+        // 附魔属性
+        if (item.enchant && item.enchant.v) {
+          this.applyEnchant(stats, item.enchant);
+        }
+        // 镶嵌宝石属性
+        if (item.sockets && item.sockets.length > 0) {
+          this.applyGemBonuses(stats, item);
         }
       }
     }
@@ -441,6 +455,63 @@ const StateUtils = {
       case "firstTurnDmg": stats.firstTurnDmg = (stats.firstTurnDmg || 0) + v; break;
     }
   },
+  // ========== 附魔属性应用 ==========
+  applyEnchant(stats, enchant) {
+    if (!enchant || !enchant.v) return;
+    const v = enchant.v;
+    switch (enchant.t) {
+      case '物理': stats.physAtk = (stats.physAtk || 0) + v; break;
+      case '魔法': stats.magAtk = (stats.magAtk || 0) + v; break;
+      case '生命': stats.hp = (stats.hp || 0) + v * 10; break;
+      case '功能': stats.speed = (stats.speed || 0) + v * 0.5; stats.dodge = (stats.dodge || 0) + v; break;
+      case '特殊': stats.critRate = (stats.critRate || 0) + v * 0.005; stats.critDmg = (stats.critDmg || 0) + v * 0.01; break;
+    }
+  },
+  // ========== 镶嵌宝石属性应用 ==========
+  applyGemBonuses(stats, item) {
+    if (!item.sockets) return;
+    for (let i = 0; i < item.sockets.length; i++) {
+      const s = item.sockets[i];
+      if (!s) continue;
+      // 兼容两种格式：字符串gemId 或 { gem: {...} } 对象
+      let gemData = null;
+      if (typeof s === 'string') {
+        gemData = (typeof GemSystem !== 'undefined') ? GemSystem.gems[s] : null;
+      } else if (s && s.gem) {
+        // 对象格式：尝试通过gemId查找
+        if (s.gem.gemId && typeof GemSystem !== 'undefined') {
+          gemData = GemSystem.gems[s.gem.gemId];
+        } else if (s.gem.effect) {
+          gemData = s.gem;
+        }
+      }
+      if (!gemData || !gemData.effect) continue;
+      const eff = gemData.effect;
+      // 映射宝石效果到stats
+      if (eff.attack) stats.physAtk = (stats.physAtk || 0) + eff.attack;
+      if (eff.defense) stats.physDef = (stats.physDef || 0) + eff.defense;
+      if (eff.speed) stats.speed = (stats.speed || 0) + eff.speed;
+      if (eff.maxHp) stats.hp = (stats.hp || 0) + eff.maxHp;
+      if (eff.lifeSteal) stats.lifeSteal = (stats.lifeSteal || 0) + eff.lifeSteal;
+      if (eff.critRate) stats.critRate = (stats.critRate || 0) + eff.critRate;
+      if (eff.critDmg) stats.critDmg = (stats.critDmg || 0) + eff.critDmg;
+      if (eff.pierce) stats.pierce = (stats.pierce || 0) + eff.pierce;
+      if (eff.fireDmg) stats.fireAtk = (stats.fireAtk || 0) + eff.fireDmg;
+      if (eff.frostDmg) stats.frostAtk = (stats.frostAtk || 0) + eff.frostDmg;
+      if (eff.lightDmg) stats.lightAtk = (stats.lightAtk || 0) + eff.lightDmg;
+      if (eff.frostRes) stats.frostRes = (stats.frostRes || 0) + eff.frostRes;
+      if (eff.fireRes) stats.fireRes = (stats.fireRes || 0) + eff.fireRes;
+      if (eff.lightRes) stats.lightRes = (stats.lightRes || 0) + eff.lightRes;
+      if (eff.allElemRes) {
+        stats.fireRes = (stats.fireRes || 0) + eff.allElemRes;
+        stats.frostRes = (stats.frostRes || 0) + eff.allElemRes;
+        stats.lightRes = (stats.lightRes || 0) + eff.allElemRes;
+      }
+      if (eff.burnOnHit) stats.burnOnHit = (stats.burnOnHit || 0) + eff.burnOnHit;
+      if (eff.slowOnHit) stats.slowOnHit = (stats.slowOnHit || 0) + eff.slowOnHit;
+      if (eff.stunOnHit) stats.stunOnHit = (stats.stunOnHit || 0) + eff.stunOnHit;
+    }
+  },
   checkEquipLimit(state, item) {
     const limits = DATA.equipLimits.find(l => state.player.level >= l.levelRange[0] && state.player.level <= l.levelRange[1]);
     if (!limits) return { ok: true };
@@ -475,6 +546,10 @@ const StateUtils = {
   addToInventory(state, item) {
     if (state.inventory.items.length >= state.inventory.capacity) {
       return { ok: false, reason: "背包已满" };
+    }
+    // 确保物品有id
+    if (!item.id) {
+      item.id = Utils.uuid();
     }
     // 尝试堆叠
     if (item.stackable) {

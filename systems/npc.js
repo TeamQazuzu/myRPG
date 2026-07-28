@@ -56,8 +56,6 @@ const NPCSystem = {
           { text: '我年轻的时候也想过出去闯荡...但现在，炉火就是我的全部。', condition: null },
         ],
         actions: [
-          { label: '锻造/强化装备', type: 'forge_menu' },
-          { label: '修理装备', type: 'repair' },
           { label: '对话', type: 'talk' },
         ],
         shopType: 'blacksmith',
@@ -163,7 +161,7 @@ const NPCSystem = {
       actions.push({ label: '交易', type: 'shop' });
     }
     if (npcId === 'blacksmith_old') {
-      actions.push({ label: '锻造', type: 'forge_menu' });
+      // 铁匠暂时只有对话和交易，锻造制作系统待实现
     }
     if (npcId === 'alchemist') {
       actions.push({ label: '附魔/镶嵌', type: 'alchemist_menu' });
@@ -360,10 +358,23 @@ const NPCSystem = {
   },
 
   // ========== 锻造系统 ==========
+  // 装备强化次数上限（每件装备独立的forgeCount）
+  _getMaxForgeCount(item) {
+    // 稀有度越高，可锻造次数越多
+    const tierMap = { white: 3, green: 5, blue: 8, purple: 10, orange: 12, red: 15, gold: 20 };
+    return tierMap[item.rarity] || 3;
+  },
   forgeEquipment(state, slot) {
     const item = state.equipment[slot];
     if (!item) return { ok: false, msg: '该槽位没有装备' };
-    const cost = 10;
+    // 初始化锻造次数
+    if (!item.forgeCount) item.forgeCount = 0;
+    const maxCount = this._getMaxForgeCount(item);
+    if (item.forgeCount >= maxCount) {
+      return { ok: false, msg: `锻造次数已满（${maxCount}次）` };
+    }
+    // 费用随次数递增
+    const cost = 10 + item.forgeCount * 10;
     if (!StateUtils.spendGold(state, cost)) {
       return { ok: false, msg: `锻造需要 ${cost} 金币` };
     }
@@ -374,24 +385,8 @@ const NPCSystem = {
         item.baseStats[key] = Math.floor(item.baseStats[key] * (1 + boost));
       }
     }
-    return { ok: true, msg: `${item.name} 锻造成功！属性提升 ${Math.floor(boost * 100)}%` };
-  },
-
-  enhanceEquipment(state, slot) {
-    const item = state.equipment[slot];
-    if (!item) return { ok: false, msg: '该槽位没有装备' };
-    const cost = 20;
-    if (!StateUtils.spendGold(state, cost)) {
-      return { ok: false, msg: `强化需要 ${cost} 金币` };
-    }
-    // 简化强化：提升等级并增加属性
-    item.level += 1;
-    if (item.baseStats) {
-      for (const key in item.baseStats) {
-        item.baseStats[key] = Math.floor(item.baseStats[key] * 1.1);
-      }
-    }
-    return { ok: true, msg: `${item.name} 强化成功！等级提升至 ${item.level}` };
+    item.forgeCount++;
+    return { ok: true, msg: `${item.name} 锻造成功！属性提升 ${Math.floor(boost * 100)}%（${item.forgeCount}/${maxCount}）` };
   },
 
   // ========== 附魔系统 ==========
